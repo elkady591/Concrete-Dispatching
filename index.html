@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000005">
+<meta name="app-build" content="20261010-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -111,8 +111,10 @@
 
   /* View tabs */
   .vtabs{display:flex;gap:6px;margin-top:18px;background:rgba(255,255,255,.04);border:1px solid var(--line);
-    border-radius:15px;padding:6px;width:fit-content;box-shadow:var(--shadow)}
-  .vtab{padding:10px 20px;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;color:var(--muted);border:1px solid transparent}
+    border-radius:15px;padding:6px;width:fit-content;box-shadow:var(--shadow);
+    max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain;scrollbar-width:none}
+  .vtabs::-webkit-scrollbar{display:none}
+  .vtab{flex:0 0 auto;white-space:nowrap;padding:10px 20px;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;color:var(--muted);border:1px solid transparent}
   .vtab:hover{color:var(--ink)}
   .vtab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 8px 18px rgba(124,131,255,.4)}
   .vtab .cnt{font-family:var(--mono);font-size:11px;margin-inline-start:7px;opacity:.8;font-weight:600}
@@ -1200,6 +1202,12 @@ function renderViewTabs(){
   box.querySelectorAll('.vtab').forEach(t=>t.addEventListener('click',async()=>{
     view=t.dataset.v; await saveCfg(); renderViewTabs(); applyView();
   }));
+  // narrow screens: the row scrolls sideways — keep the selected tab in sight
+  const act=box.querySelector('.vtab.active');
+  if(act && box.scrollWidth>box.clientWidth){
+    const l=act.offsetLeft-box.offsetLeft, r=l+act.offsetWidth;
+    if(l<box.scrollLeft) box.scrollLeft=l-6; else if(r>box.scrollLeft+box.clientWidth) box.scrollLeft=r-box.clientWidth+6;
+  }
 }
 function applyView(){
   const show=(id,on)=>{const e=el(id);if(e)e.style.display=on?'':'none';};
