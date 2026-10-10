@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000004">
+<meta name="app-build" content="20261010-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1269,7 +1269,7 @@ function renderTrucks(){
     body = t.available.length
       ? `<div class="trk-grid">${t.available.map(n=>`<span class="trk-chip">${esc(n)}</span>`).join('')}</div>`
       : '<div class="muted" style="font-size:13px;padding:10px 2px">No empty trucks at the plant right now.</div>';
-    if(t.breakdown.length) body += `<div style="margin-top:18px"><div class="section-title" style="font-size:13px;margin-bottom:8px">Breakdown · معطّلة (${t.breakdown.length})</div>
+    if(t.breakdown.length) body += `<div style="margin-top:18px"><div class="section-title" style="font-size:13px;margin-bottom:8px">Breakdown (${t.breakdown.length})</div>
        <div class="trk-grid">${t.breakdown.map(b=>`<span class="trk-chip down" title="${esc(b.note)}">${esc(b.truck)}</span>`).join('')}</div></div>`;
   }
   area.innerHTML=counts+tabs+body;
