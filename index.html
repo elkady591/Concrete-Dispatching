@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000006">
+<meta name="app-build" content="20261010-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -986,7 +986,10 @@ function carryPlan(dataRows,c,from,to){
     else { if(!before.has(E)) before.set(E,[]); before.get(E).push(t); }
   }
   const doneDay={};   // newest Done-marked day per pour id
-  for(const k in DONE){ const p=k.split('@@'); if(p[1]&&(!doneDay[p[0]]||p[1]>doneDay[p[0]])) doneDay[p[0]]=p[1]; }
+  // (marks dated before "From" only — a mark inside the filter belongs to the pour being shown, and its
+  //  closed-pour total must still include the earlier trucks)
+  const fromDk=CFG.fromDate||'';
+  for(const k in DONE){ const p=k.split('@@'); if(p[1]&&p[1]<fromDk&&(!doneDay[p[0]]||p[1]>doneDay[p[0]])) doneDay[p[0]]=p[1]; }
   for(const [E,times] of before){
     const inRange=first.has(E);
     if(!inRange && !liveNow) continue;
@@ -1196,7 +1199,7 @@ function rerender(){ render(build(LAST.matrix,LAST.header)); }
 function renderViewTabs(){
   const box=el('viewTabs'); if(!box)return;
   const mk=(id,label,cnt)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
-  box.innerHTML=mk('summary','Summary',null)+mk('pours','All Pours',VD.full.length)+mk('upcoming','Upcoming',VD.upcoming.length)
+  box.innerHTML=mk('summary','Summary',null)+mk('pours','All Pours',VD.started.length)+mk('upcoming','Upcoming',VD.upcoming.length)
     +mk('trucks','🚛 Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null);
   // the Admin entry is NOT a content tab — it lives up top next to the live pill (see #adminTabBtn)
   box.querySelectorAll('.vtab').forEach(t=>t.addEventListener('click',async()=>{
@@ -1501,7 +1504,8 @@ function renderSummary(){
 /* ---------- all pours view ---------- */
 function renderAllPours(){
   // use the plan-driven pour list (same-name pours split & numbered), started ones only
-  const pours=VD.summary.filter(g=>{const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0;});
+  // pours marked DONE are left out here, so the tab counts match the rows actually listed
+  const pours=VD.summary.filter(g=>{const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0&&!DONE[doneKey(g)];});
   const inStation=(g,st)=>(g.plant||'').split(/,\s*/).includes(st);
   const plants=[...new Set(pours.flatMap(g=>(g.plant||'').split(/,\s*/)))].filter(Boolean).sort();
   if(activeTab!=='ALL' && !plants.includes(activeTab)) activeTab='ALL';
