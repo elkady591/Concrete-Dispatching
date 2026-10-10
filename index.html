@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000003">
+<meta name="app-build" content="20261010-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1213,7 +1213,7 @@ function applyView(){
 }
 
 /* ---------- truck tracking view (Loaded / Empty sub-tabs) ---------- */
-let truckTab='loaded';   // 'loaded' | 'empty'
+let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
 function renderTrucks(){
   const area=el('trucksArea'); if(!area)return;
   const t=TRUCKS;
@@ -1227,11 +1227,34 @@ function renderTrucks(){
      <div class="trk-kpi"><div class="n" style="color:var(--rose)">${t.breakdown.length}</div><div class="l">Breakdown</div></div>
    </div>`;
   const tabs=`<div class="spot-tabs" style="margin:14px 0 10px">
-     <span class="spot-tab ${truckTab==='loaded'?'active':''}" data-tt="loaded">Loaded · محمّلة (${t.loaded.length})</span>
-     <span class="spot-tab ${truckTab==='empty'?'active':''}" data-tt="empty">Empty · فاضية (${t.available.length})</span>
+     <span class="spot-tab ${truckTab==='loaded'?'active':''}" data-tt="loaded">Loaded (${t.loaded.length})</span>
+     <span class="spot-tab ${truckTab==='empty'?'active':''}" data-tt="empty">Empty (${t.available.length})</span>
+     <span class="spot-tab ${truckTab==='prod'?'active':''}" data-tt="prod">Productivity</span>
    </div>`;
   let body;
-  if(truckTab==='loaded'){
+  if(truckTab==='prod'){
+    // month-to-date productivity per truck mixer, from the trucks sheet's own "Productivity" tab
+    const p=TRUCK_PROD, rows=p.rows||[];
+    if(!rows.length) body='<div class="muted" style="font-size:13px;padding:10px 2px">Productivity data not available — check the "Productivity" tab in the trucks sheet.</div>';
+    else{
+      const tot=k=>rows.reduce((s,r)=>s+(r[k]||0),0);
+      const month=new Date().toLocaleString('en-US',{month:'long',year:'numeric'});
+      body=`<div class="muted" style="font-size:12px;margin-bottom:8px">${month} · month to date · ${rows.length} truck mixers</div>
+        <div class="tbl-wrap"><table>
+        <thead><tr><th>#</th><th>TM</th><th>Loaded (m³)</th><th>Trips</th><th>Not fully loaded</th>${p.plants.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map((r,i)=>`<tr>
+          <td class="num muted">${i+1}</td>
+          <td style="font-family:var(--mono);font-weight:800">${esc(r.tm)}</td>
+          <td class="num" style="font-weight:800">${fmt(r.q,0)}</td>
+          <td class="num">${fmt(r.trips,0)}</td>
+          <td class="num" style="color:${r.partial>0?'var(--amber)':'var(--faint)'}">${fmt(r.partial,0)}</td>
+          ${p.plants.map((n,j)=>`<td class="num muted">${r.byPlant&&r.byPlant[j]!=null?fmt(r.byPlant[j],0):'—'}</td>`).join('')}
+        </tr>`).join('')}
+        <tr style="font-weight:800"><td></td><td>Total</td><td class="num">${fmt(tot('q'),0)}</td><td class="num">${fmt(tot('trips'),0)}</td><td class="num">${fmt(tot('partial'),0)}</td>
+          ${p.plants.map((n,j)=>`<td class="num">${fmt(rows.reduce((s,r)=>s+((r.byPlant&&r.byPlant[j])||0),0),0)}</td>`).join('')}</tr>
+        </tbody></table></div>`;
+    }
+  } else if(truckTab==='loaded'){
     // card layout (not a wide table) so it reads cleanly on a phone without horizontal scroll
     body = t.loaded.length ? `<div class="trk-cards">${t.loaded.map(x=>`
         <div class="trk-card">
@@ -1956,6 +1979,31 @@ async function loadTrucks(){
   }catch(e){}
 }
 
+/* ---------- truck mixer productivity (month to date) ----------
+   The trucks sheet keeps a "Productivity" tab: one table  TM | Loaded Quantity | Trips | Trips not fully
+   Loaded  ("Productivity of Truck Mixers ( MTD )"), and beside it  TM | trips per station. gviz folds the
+   title row into the column labels, so the columns are located by label and the two tables joined by TM no. */
+let TRUCK_PROD={rows:[],plants:[]};
+async function loadProductivity(){
+  try{
+    const id=el('sheetId').value.trim(); if(!id) return;
+    const r=await fetchTab(id,'Productivity'); if(!r||!r.ok) return;
+    const L=r.cols.map(x=>String(x||'').trim().toLowerCase());
+    const cQ=L.findIndex(x=>/loaded\s*quantity/.test(x)); if(cQ<1) return;
+    const cTM=cQ-1, cTr=L.findIndex(x=>x==='trips'), cPa=L.findIndex(x=>/not\s*fully/.test(x));
+    const tmNo=v=>{ const m=String(v==null?'':v).match(/\d{2,4}/); return m?m[0]:''; };
+    // second table: per-station trips
+    const c2=L.findIndex((x,i)=>i>cQ && x==='tm'); const plants=[], pc=[];
+    if(c2>=0) for(let j=c2+1;j<r.cols.length && String(r.cols[j]||'').trim();j++){ plants.push(String(r.cols[j]).trim()); pc.push(j); }
+    const byTm={};
+    if(c2>=0) for(const row of r.matrix){ const k=tmNo(row[c2]); if(k) byTm[k]=pc.map(j=>String(row[j]==null?'':row[j]).trim()===''?null:num(row[j])); }
+    const rows=[];
+    for(const row of r.matrix){ const k=tmNo(row[cTM]); if(!k) continue;
+      rows.push({tm:k, q:num(row[cQ]), trips:cTr>=0?num(row[cTr]):0, partial:cPa>=0?num(row[cPa]):0, byPlant:byTm[k]||null}); }
+    if(rows.length){ rows.sort((a,b)=>b.q-a.q); TRUCK_PROD={rows,plants}; }   // keep the last good table on a bad pull
+  }catch(e){}
+}
+
 async function loadLive(){
   const id=el('sheetId').value.trim();
   const tabs=el('tabs').value.split(',').map(t=>t.trim()).filter(Boolean);
@@ -1968,7 +2016,8 @@ async function loadLive(){
     fetchTab(planSid, ''),
     syncPull(),         // shared Done/Required/Rate from the sheet (no-op when Sync URL is empty)
     loadProduction(),   // MTD / today straight from the sheet's own daily production table
-    loadTrucks()        // live truck tracking (loaded / empty) from the "Trucks Tracking" tab
+    loadTrucks(),       // live truck tracking (loaded / empty) from the "Trucks Tracking" tab
+    loadProductivity()  // per-truck month-to-date productivity from the "Productivity" tab
   ]);
   if(planRes && planRes.ok){
     const parsed=parsePlanTab(planRes.cols, planRes.matrix) || parsePlanPositional(planRes.cols, planRes.matrix);
