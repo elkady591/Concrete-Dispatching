@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000009">
+<meta name="app-build" content="20261010-000010">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1139,7 +1139,14 @@ const stLabel={done:'Completed',active:'Active',wait:'Waiting',none:'Set target'
 function timeShort(t){ if(t==null)return'—'; const d=new Date(t); let h=d.getHours();const m=pad(d.getMinutes());const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${m} ${ap}`; }
 // Colour of the average-pace finish: green = on or ahead of the target finish, red = later than it
 // (the average rate is below the target). No target -> no colour.
-function finishAvgColor(g){ return (g.finishAvg!=null&&g.finishTgt!=null) ? (g.finishAvg<=g.finishTgt?'var(--green)':'var(--rose)') : ''; }
+function finishAvgColor(g){ return (g.finishAvg!=null&&g.finishTgt!=null) ? avgRateColor(g) : ''; }
+// Average rate vs target rate: green = at or above the target, red = below it. Compared at the one
+// decimal the screen shows, so a rate displayed as "4" against a target of 4 is never red.
+function avgRateColor(g){
+  const a=g.cumRate!=null?g.cumRate:g.rateCalc, t=g.rateManual!=null?g.rateManual:g.planRate;
+  if(!(a>0)||!(t>0)) return '';
+  return Math.round(a*10)>=Math.round(t*10) ? 'var(--green)' : 'var(--rose)';
+}
 // compact two-line finish cell (Active Pours list + All Pours table): "Avg 4:47 AM" over "Tgt 5:13 PM"
 function finishHtml(g){
   if(g.finishAvg==null&&g.finishTgt==null) return g.status==='done'?'✓':'—';
@@ -1477,7 +1484,7 @@ function renderSummary(){
           <div class="spot-cell hi"><div class="s-lab">Remaining</div><div class="s-val" style="color:${sp.remaining!=null&&sp.remaining>0?'var(--rose)':'var(--green)'}">${sp.remaining!=null?(sp.remaining>0?fmt(sp.remaining)+' <small>m³</small>':'✓ <small>done</small>'):'—'}</div></div>
           <div class="spot-cell"><div class="s-lab">Rejected</div><div class="s-val" style="color:${sp.rejected>0?'var(--amber)':'var(--faint)'}">${sp.rejected>0?fmt(sp.rejected)+' <small>m³</small>':'—'}</div></div>
           <div class="spot-cell"><div class="s-lab">Required</div><div class="s-val">${sp.required!=null?fmt(sp.required):'—'} <small>m³</small></div></div>
-          <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val">${sp.cumRate!=null?fmt(sp.cumRate):'—'} <small>m³/h</small></div></div>
+          <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val" style="${avgRateColor(sp)?`color:${avgRateColor(sp)}`:''}">${sp.cumRate!=null?fmt(sp.cumRate):'—'} <small>m³/h</small></div></div>
           <div class="spot-cell"><div class="s-lab">Target rate</div><div class="s-val">${sp.planRate!=null?fmt(sp.planRate):(sp.rateManual!=null?fmt(sp.rateManual):'—')} <small>m³/h</small></div></div>
           <div class="spot-cell"><div class="s-lab">Est. finish · average</div><div class="s-val" style="${finishAvgColor(sp)?`color:${finishAvgColor(sp)}`:''}">${sp.finishAvg?timeShort(sp.finishAvg):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
           <div class="spot-cell"><div class="s-lab">Est. finish · target</div><div class="s-val">${sp.finishTgt?timeShort(sp.finishTgt):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
