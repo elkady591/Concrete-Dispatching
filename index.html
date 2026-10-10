@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000007">
+<meta name="app-build" content="20261010-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -299,6 +299,13 @@
     box-shadow:0 0 0 0 rgba(34,197,94,.55);animation:onp 2s ease-out infinite}
   @keyframes onp{70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
   /* truck tracking view */
+  .prod-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+  @media(max-width:960px){ .prod-grid{grid-template-columns:1fr} }
+  .prod-tbl th,.prod-tbl td{padding:8px 10px;text-align:center}
+  .prod-tbl th:first-child,.prod-tbl td:first-child{text-align:start;white-space:nowrap}
+  .prod-tbl td.t{font-weight:800}
+  .prod-tbl tr.today td{background:rgba(34,211,238,.09)}
+  .prod-tbl tr.tot td{font-weight:800;background:rgba(124,131,255,.14);border-top:1px solid var(--line2)}
   .trk-counts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
   .trk-kpi{background:var(--glass,rgba(24,30,50,.5));border:1px solid var(--line2);border-radius:14px;padding:12px 10px;text-align:center}
   .trk-kpi .n{font-family:var(--mono);font-size:26px;font-weight:800;line-height:1}
@@ -524,6 +531,12 @@
   <section id="trucksView">
     <div class="section-title">Truck Tracking</div>
     <div id="trucksArea"></div>
+  </section>
+
+  <!-- PRODUCTION VIEW: the sheet's own two daily tables (8 AM : 8 AM and 12 AM : 12 AM) -->
+  <section id="productionView">
+    <div class="section-title">Production</div>
+    <div id="productionArea"></div>
   </section>
 
   <!-- ADMIN VIEW (only rendered for admin) -->
@@ -1200,7 +1213,8 @@ function renderViewTabs(){
   const box=el('viewTabs'); if(!box)return;
   const mk=(id,label,cnt)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
   box.innerHTML=mk('summary','Summary',null)+mk('pours','All Pours',VD.started.length)+mk('upcoming','Upcoming',VD.upcoming.length)
-    +mk('trucks','🚛 Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null);
+    +mk('trucks','🚛 Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null)
+    +mk('production','📊 Production',null);
   // the Admin entry is NOT a content tab — it lives up top next to the live pill (see #adminTabBtn)
   box.querySelectorAll('.vtab').forEach(t=>t.addEventListener('click',async()=>{
     view=t.dataset.v; await saveCfg(); renderViewTabs(); applyView();
@@ -1218,8 +1232,10 @@ function applyView(){
   show('poursView', view==='pours');
   show('upcomingView', view==='upcoming');
   show('trucksView', view==='trucks');
+  show('productionView', view==='production');
   show('adminView', view==='admin' && IS_ADMIN);
   if(view==='trucks') renderTrucks();
+  if(view==='production') renderProduction();
   if(view==='admin' && IS_ADMIN){ renderAdminWho(); loadAdminUsers(); loadAdminLog(); }
 }
 
@@ -1912,12 +1928,60 @@ function parseCsvLine(line){
     else cur+=ch; }
   out.push(cur); return out;
 }
+/* One of the sheet's daily production tables, found by its title cell (e.g. "Production MTD ( 8 AM : 8AM )").
+   Under the title: a header row  Date | L1 | L2 | V3 | V4 | V5 | Total , one row per day, then a TOTAL row.
+   Returned as the sheet shows it — nothing is recomputed here. */
+let PRODTBL=[null,null];   // [8 AM : 8 AM, 12 AM : 12 AM]
+function parseProdTable(rows, titleRe){
+  let r0=-1,c0=-1;
+  for(let i=0;i<Math.min(rows.length,6)&&r0<0;i++)
+    for(let j=0;j<rows[i].length;j++)
+      if(titleRe.test(rows[i][j]||'')){ r0=i; c0=j; break; }
+  if(r0<0) return null;
+  const hdr=rows[r0+1]||[]; if(!/date/i.test(hdr[c0]||'')) return null;
+  let totCol=-1;
+  for(let j=c0+1;j<Math.min(hdr.length,c0+12);j++) if(/total/i.test(hdr[j]||'')){ totCol=j; break; }
+  if(totCol<0) return null;
+  const cols=hdr.slice(c0+1,totCol+1).map(h=>String(h||'').trim());
+  const val=s=>{ const x=String(s==null?'':s).replace(/[^0-9.]/g,''); return x===''?null:parseFloat(x); };
+  const days=[]; let total=null;
+  for(let i=r0+2;i<rows.length;i++){
+    const cells=rows[i]||[]; const label=String(cells[c0]||'').trim();
+    if(!label) break;                                    // the table ends at the first blank date cell
+    const vals=cols.map((_,k)=>val(cells[c0+1+k]));
+    if(/^total$/i.test(label)){ total=vals; break; }
+    const m=label.match(/^(\d{1,2})\s*-\s*([A-Za-z]{3})/);
+    if(m) days.push({label, day:+m[1], mon:m[2].toLowerCase(), vals});
+  }
+  return days.length ? {title:String(rows[r0][c0]||'').trim(), cols, days, total} : null;
+}
+function renderProduction(){
+  const area=el('productionArea'); if(!area)return;
+  if(!PRODTBL[0]&&!PRODTBL[1]){ area.innerHTML='<div class="muted" style="font-size:13px;padding:10px 2px">Production tables not available yet — pull the sheet.</div>'; return; }
+  const now=new Date();
+  const MON=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][now.getMonth()];
+  const cell=(v,cls)=>`<td class="num${cls?' '+cls:''}">${v==null?'<span class="muted">—</span>':fmt(v,0)}</td>`;
+  const one=(t,name)=>{
+    if(!t) return `<div class="card"><h3>${name}</h3><div class="muted" style="font-size:13px">Table not found in the sheet.</div></div>`;
+    const last=t.cols.length-1;
+    return `<div class="card"><h3>${name}</h3>
+      <div class="tbl-wrap"><table class="prod-tbl">
+        <thead><tr><th>Date</th>${t.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+        <tbody>${t.days.map(d=>`<tr${d.mon===MON&&d.day===now.getDate()?' class="today"':''}><td>${esc(d.label)}</td>${d.vals.map((v,k)=>cell(v,k===last?'t':'')).join('')}</tr>`).join('')}
+          ${t.total?`<tr class="tot"><td>TOTAL</td>${t.total.map(v=>cell(v)).join('')}</tr>`:''}</tbody>
+      </table></div></div>`;
+  };
+  area.innerHTML=`<div class="prod-grid">${one(PRODTBL[0],'Production MTD · 8 AM : 8 AM')}${one(PRODTBL[1],'Production MTD · 12 AM : 12 AM')}</div>`;
+}
 async function loadProduction(){
   try{
     const id=el('sheetId').value.trim(); if(!id) return;
     const r=await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${PROD_GID}&_=${Date.now()}`,{cache:'no-store'});
     if(!r.ok) return;
     const rows=(await r.text()).split(/\r?\n/).map(parseCsvLine);
+    // the two daily tables, as they are in the sheet, for the Production tab
+    const pt=[parseProdTable(rows,/production.*\b8\s*AM\s*:\s*8\s*AM/i), parseProdTable(rows,/production.*\b12\s*AM\s*:\s*12\s*AM/i)];
+    if(pt[0]||pt[1]){ PRODTBL=pt; if(view==='production') renderProduction(); }   // keep the last good tables if the sheet moved
     let r0=-1,c0=-1;                                     // find the "12 AM : 12 AM" block (calendar day)
     for(let i=0;i<Math.min(rows.length,6)&&r0<0;i++)
       for(let j=0;j<rows[i].length;j++)
@@ -2195,7 +2259,7 @@ function requireAuth(){
   // restore identity + admin mode BEFORE the first render, so the right controls show from the start
   loadMe();
   try{ IS_ADMIN = localStorage.getItem(KEY_ADMIN)===ADMIN_HASH; }catch(e){ IS_ADMIN=false; }
-  if(['summary','pours','upcoming','trucks','admin'].indexOf(view)<0)view='summary';
+  if(['summary','pours','upcoming','trucks','production','admin'].indexOf(view)<0)view='summary';
   if(view==='admin' && !IS_ADMIN) view='summary';
   document.querySelectorAll('#quickRange .chip').forEach(c=>c.classList.toggle('active',
     c.dataset.r==='today' && el('fromDate').value===todayStr(0) && el('toDate').value===todayStr(0)));
