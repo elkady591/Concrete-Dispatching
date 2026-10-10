@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000002">
+<meta name="app-build" content="20261010-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -186,6 +186,8 @@
     border:1px solid var(--line2);box-shadow:var(--shadow)}
   .carry{display:inline-block;font-size:10.5px;font-weight:800;font-family:var(--mono);white-space:nowrap;color:var(--amber);
     border:1px solid var(--amber);border-radius:99px;padding:1px 7px;margin-inline-start:6px;vertical-align:middle;cursor:help}
+  .carry-line{margin:3px 0 1px;line-height:1}
+  .carry-line .carry{margin-inline-start:0;font-size:10px;padding:1px 6px}
   tr.carry-row td:first-child,.apy.carry-row{box-shadow:inset 3px 0 0 var(--amber)}
   tr.carry-row td{background:rgba(245,158,11,.07)}
   .apy.carry-row{background:rgba(245,158,11,.07)}
@@ -998,9 +1000,11 @@ function carryPlan(dataRows,c,from,to){
   return out;
 }
 // badge for a pour that carries trucks from before the "From" date
-function carryBadge(g){
+function carryBadge(g, compact){
   if(!(g&&g.carried>0)) return '';
   const d=String(g.carriedFrom||'').slice(5);
+  // compact = the narrow name column of the Active Pours list: short text on its own line
+  if(compact) return `<div class="carry-line"><span class="carry" title="Still running since ${g.carriedFrom}: ${fmt(g.carried)} m³ (${g.carriedTrucks||0} trucks) were poured before the From date and are included here">&#8618; ${d} · ${fmt(g.carried,0)} m³</span></div>`;
   return ` <span class="carry" title="Still running since ${g.carriedFrom}: ${fmt(g.carried)} m³ (${g.carriedTrucks||0} trucks) were poured before the From date and are included here">&#8618; Started ${d} · ${fmt(g.carried,0)} m³ before</span>`;
 }
 
@@ -1437,7 +1441,7 @@ function renderSummary(){
   el('activeList').innerHTML = list.length ? list.map(g=>{
     const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
     return `<div class="apy${g.carried>0?' carry-row':''}">
-      <div class="apy-el">${g.elem||'—'}<span class="p">${g.plant||''}</span>${carryBadge(g)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div class="apy-el">${g.elem||'—'}<span class="p">${g.plant||''}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
       <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
       <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc)+' m³/h':'—'}</div>
