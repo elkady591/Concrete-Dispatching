@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000010">
+<meta name="app-build" content="20261010-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -303,6 +303,14 @@
   @media(max-width:960px){ .prod-grid{grid-template-columns:1fr} }
   .prod-tbl th,.prod-tbl td{padding:8px 10px;text-align:center}
   .prod-tbl th:first-child,.prod-tbl td:first-child{text-align:start;white-space:nowrap}
+  .prod-grid>*{min-width:0}   /* let the card shrink to the screen; a table that is still too wide scrolls inside it */
+  .prod-tbl{width:100%}
+  @media(max-width:560px){    /* phones: tighten so Date + 5 stations + Total fit without sideways scrolling */
+    .prod-grid>.card{padding:12px 8px}
+    .prod-tbl th,.prod-tbl td{padding:8px 3px;font-size:12px;letter-spacing:0}
+    .prod-tbl th:first-child,.prod-tbl td:first-child{padding-inline-start:8px}
+    .prod-tbl th:last-child,.prod-tbl td:last-child{padding-inline-end:8px}
+  }
   .prod-tbl td.t{font-weight:800}
   .prod-tbl tr.today td{background:rgba(34,211,238,.09)}
   .prod-tbl tr.tot td{font-weight:800;background:rgba(124,131,255,.14);border-top:1px solid var(--line2)}
