@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261009-000006">
+<meta name="app-build" content="20261010-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -184,6 +184,8 @@
   .spot{margin-top:14px;border-radius:20px;padding:18px 20px;
     background:linear-gradient(135deg,rgba(124,131,255,.16),rgba(34,211,238,.08),var(--panel2));
     border:1px solid var(--line2);box-shadow:var(--shadow)}
+  .carry{display:inline-block;font-size:10.5px;font-weight:800;font-family:var(--mono);white-space:nowrap;color:var(--amber);
+    border:1px solid var(--amber);border-radius:99px;padding:1px 7px;margin-inline-start:6px;vertical-align:middle;cursor:help}
   .spot-head{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
   .spot-head .tag{font-size:11px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));
     padding:5px 11px;border-radius:99px;box-shadow:0 6px 14px rgba(124,131,255,.4)}
@@ -700,7 +702,10 @@ function doneKey(g){ const id=(g&&g.esId)?String(g.esId):(g&&g.elem?String(g.ele
 function pruneDone(){
   const from=CFG.fromDate||''; if(!from) return false;
   let changed=false;
-  for(const k in DONE){ const at=k.split('@@')[1]||''; if(at && at<from){ delete DONE[k]; changed=true; } }
+  // kept 30 days past "From": the carry-over (carryPlan) needs older marks to know where a closed pour ended
+  const d=new Date(from+'T00:00:00'); d.setDate(d.getDate()-30);
+  const keep=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  for(const k in DONE){ const at=k.split('@@')[1]||''; if(at && at<keep){ delete DONE[k]; changed=true; } }
   return changed;
 }
 
@@ -834,6 +839,7 @@ function aggregateByElement(full){
       reqManualSum:0, rateManualSum:0, loads:[]});
     const a=m.get(ek);
     a.delivered+=g.delivered; a.trucks+=g.trucks;
+    if(g.carried>0){ a.carried=(a.carried||0)+g.carried; a.carriedTrucks=(a.carriedTrucks||0)+(g.carriedTrucks||0); if(!a.carriedFrom||g.carriedFrom<a.carriedFrom)a.carriedFrom=g.carriedFrom; }
     if(g.loads&&g.loads.length)a.loads=a.loads.concat(g.loads);
     a.reqManualSum += (g.reqManual||0);
     a.rateManualSum += (g.rateManual||0);
@@ -882,6 +888,8 @@ function buildPours(full, now){
       depMin:times.length?Math.min(...times):null, endMax:times.length?Math.max(...times):null,
       planReqPre:row.req>0?row.req:null, planRatePre:row.rate>0?row.rate:null,
       ldDep:null, ldEnd:null, ldDeliv:0 };
+    for(const l of p.loads){ if(!l.prev) continue;   // trucks carried over from before the From date
+      p.carried=(p.carried||0)+(l.q||0); p.carriedTrucks=(p.carriedTrucks||0)+1; if(!p.carriedFrom||l.prev<p.carriedFrom)p.carriedFrom=l.prev; }
     enrichGroup(p, now);
     p.mix=row.mix; p.client=row.client;   // keep the plan row's grade/client (planLookup can't find the starred code)
     return p;
@@ -938,6 +946,61 @@ function buildPours(full, now){
   return out;
 }
 
+/* ---------- carry-over: a pour that started BEFORE the "From" date and is still running ----------
+   With the filter on today, a pour that began yesterday used to show today's trucks only. Its earlier
+   trucks are now pulled in too (and the pour is badged), so Delivered / Remaining cover the whole pour:
+     • ES-tagged pour (unique id; the plan sheet only lists today's requests, so ES_MODE covers
+       yesterday's ids too) with trucks inside the filter -> every earlier truck of that ES.
+     • plain element code -> walk back truck by truck while the gap stays under ACTIVE_WINDOW (a code
+       can be re-used on another day, so only an unbroken run counts as the same pour).
+     • no truck inside the filter yet (just after midnight) -> same walk back, starting from NOW.
+   A Done mark on an earlier day ends the carry: nothing from that day or before comes back. */
+let ES_MODE=false;   // the station tabs carry an "ES" column -> every truck's element IS a unique pour id
+function rowElemKey(elem){ return planKey(elem)||(elem?elem.replace(/\s+/g,' ').trim().toUpperCase():NOEL); }
+function rowLoadTime(row,c,dObj,rt){
+  const dep=c.dep>=0?parseTime(row[c.dep]):null, end=c.end>=0?parseTime(row[c.end]):null;
+  const t=ts(dObj,dep!=null?dep:end);
+  return t!=null?t:rt+86399000;   // no time on the row -> count it at the end of its day
+}
+function carryPlan(dataRows,c,from,to){
+  const out=new Map();
+  const gb=CFG.groupBy||'e';
+  if(!isFinite(from) || (gb!=='e'&&gb!=='pe')) return out;   // "All", or a per-day grouping
+  const now=Date.now(), liveNow=now>=from&&now<=to;
+  const esIds=new Set(PLAN_ROWS.filter(r=>r.es).map(r=>String(r.es).trim().toUpperCase()));
+  const first=new Map(), before=new Map();
+  for(const row of dataRows){
+    if(!row||row.length===0)continue;
+    const dObj=parseDate(row[c.date]); if(!dObj)continue;
+    const rt=new Date(dObj.y,dObj.mo-1,dObj.d).getTime(); if(rt>to)continue;
+    const elem=c.elem>=0?String(row[c.elem]||'').trim():''; if(!elem)continue;
+    const E=rowElemKey(elem), t=rowLoadTime(row,c,dObj,rt);
+    if(rt>=from){ if(!first.has(E)||t<first.get(E)) first.set(E,t); }
+    else { if(!before.has(E)) before.set(E,[]); before.get(E).push(t); }
+  }
+  const doneDay={};   // newest Done-marked day per pour id
+  for(const k in DONE){ const p=k.split('@@'); if(p[1]&&(!doneDay[p[0]]||p[1]>doneDay[p[0]])) doneDay[p[0]]=p[1]; }
+  for(const [E,times] of before){
+    const inRange=first.has(E);
+    if(!inRange && !liveNow) continue;
+    const whole=inRange && (ES_MODE || esIds.has(String(E).toUpperCase()));
+    times.sort((a,b)=>b-a);
+    let last=inRange?first.get(E):now, minT=null;
+    for(const t of times){
+      if(!whole && last-t>ACTIVE_WINDOW) break;
+      minT=t; if(t<last) last=t;
+    }
+    if(minT!=null) out.set(E,{minT,doneDk:doneDay[E]||''});
+  }
+  return out;
+}
+// badge for a pour that carries trucks from before the "From" date
+function carryBadge(g){
+  if(!(g&&g.carried>0)) return '';
+  const d=String(g.carriedFrom||'').slice(5);
+  return ` <span class="carry" title="Still running since ${g.carriedFrom}: ${fmt(g.carried)} m³ (${g.carriedTrucks||0} trucks) were poured before the From date and are included here">&#8618; ${fmt(g.carried,0)} m³ from ${d}</span>`;
+}
+
 function build(matrix, colHeader){
   let header=null, dataRows=null;
   if(colHeader && looksHeader(colHeader)){ header=colHeader; dataRows=matrix; }
@@ -968,6 +1031,7 @@ function build(matrix, colHeader){
   const from=CFG.fromDate?new Date(CFG.fromDate+'T00:00:00').getTime():-Infinity;
   const to=CFG.toDate?new Date(CFG.toDate+'T23:59:59').getTime():Infinity;
   const groups=new Map();
+  const carry=carryPlan(dataRows,c,from,to);   // pours that started before "From" and are still running
   let nRows=0,nDated=0,nUsed=0; const sampleDate=[],sampleQ=[];
   for(const row of dataRows){
     if(!row||row.length===0)continue;
@@ -976,16 +1040,21 @@ function build(matrix, colHeader){
     const dObj=parseDate(row[c.date]); if(!dObj)continue;
     nDated++;
     const rt=new Date(dObj.y,dObj.mo-1,dObj.d).getTime();
-    if(rt<from||rt>to)continue;
+    if(rt>to)continue;
     const q=num(row[c.q]);
     const plant=c.plant>=0?String(row[c.plant]||'').trim():'';
     const elem=c.elem>=0?String(row[c.elem]||'').trim():'';
     if(q<=0 && !plant && !elem)continue;
-    nUsed++;
     const dk=dateKey(dObj);
     const P=plant||'—';
-    const pk=planKey(elem);
-    const E=pk||(elem?elem.replace(/\s+/g,' ').trim().toUpperCase():NOEL);
+    const E=rowElemKey(elem);
+    let prev=false;
+    if(rt<from){   // before the filter: kept only as the earlier part of a pour that is still running
+      const cf=carry.get(E);
+      if(!cf || rowLoadTime(row,c,dObj,rt)<cf.minT || (cf.doneDk && dk<=cf.doneDk)) continue;
+      prev=true;
+    }
+    nUsed++;
     let key;
     if(gb==='e')key=E;
     else if(gb==='pe')key=P+' | '+E;
@@ -1005,7 +1074,8 @@ function build(matrix, colHeader){
     if(endT!=null&&depT!=null&&endT<depT)endT+=86400000;
     // hourly-rate breakdown buckets by LOAD time = Departure (when the truck left the plant), NOT END/arrival —
     // so each window shows the m³ actually LOADED in that hour. Fall back to END only if departure is blank.
-    g.loads.push({t:(depT!=null?depT:endT), q});
+    g.loads.push({t:(depT!=null?depT:endT), q, prev:prev?dk:''});
+    if(prev){ g.carried=(g.carried||0)+q; g.carriedTrucks=(g.carriedTrucks||0)+1; if(!g.carriedFrom||dk<g.carriedFrom)g.carriedFrom=dk; }
     if(depT!=null&&(g.depMin==null||depT<g.depMin))g.depMin=depT;
     if(endT!=null&&(g.endMax==null||endT>g.endMax))g.endMax=endT;
     if(depT!=null&&(g.endMax==null||depT>g.endMax))g.endMax=depT;
@@ -1304,7 +1374,7 @@ function renderSummary(){
 
   // Plant breakdown (from station-level groups)
   const pm=new Map();
-  for(const g of full){ const p=g.plant||'—'; if(!pm.has(p))pm.set(p,{p,deliv:0,trucks:0,active:0}); const o=pm.get(p); o.deliv+=g.delivered; o.trucks+=g.trucks; if(g.status==='active')o.active++; }
+  for(const g of full){ const p=g.plant||'—'; if(!pm.has(p))pm.set(p,{p,deliv:0,trucks:0,active:0}); const o=pm.get(p); o.deliv+=g.delivered-(g.carried||0); o.trucks+=g.trucks-(g.carriedTrucks||0); if(g.status==='active')o.active++; }
   const parr=[...pm.values()].sort((a,b)=>b.deliv-a.deliv);
   const maxD=Math.max(1,...parr.map(x=>x.deliv));
   el('plants').innerHTML = parr.length ? parr.map(o=>`
@@ -1345,7 +1415,7 @@ function renderSummary(){
         <div class="spot-head">
           <span class="tag">${isActive?'● Active now':'Pour'}</span>
           <select id="spotSel" class="spot-sel">${opts}</select>
-          <span class="when">${dateCell(sp)} · last activity ${timeShort(sp.endMax)}</span>
+          <span class="when">${dateCell(sp)} · last activity ${timeShort(sp.endMax)}${carryBadge(sp)}</span>
           <div class="spot-tabs" style="margin-inline-start:auto">
             <span class="spot-tab ${spotTab==='overview'?'active':''}" data-st="overview">Overview</span>
             <span class="spot-tab ${spotTab==='hourly'?'active':''}" data-st="hourly">Hourly rate</span>
@@ -1364,7 +1434,7 @@ function renderSummary(){
   el('activeList').innerHTML = list.length ? list.map(g=>{
     const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
     return `<div class="apy">
-      <div class="apy-el">${g.elem||'—'}<span class="p">${g.plant||''}</span>${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div class="apy-el">${g.elem||'—'}<span class="p">${g.plant||''}</span>${carryBadge(g)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
       <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
       <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc)+' m³/h':'—'}</div>
@@ -1427,7 +1497,7 @@ function renderAllPours(){
       <td style="text-align:center"><input type="checkbox" class="done-chk" data-e="${encodeURIComponent(doneKey(g))}" ${DONE[doneKey(g)]?'checked':''} title="Mark this pour completed"></td>
       <td class="num muted" style="white-space:nowrap">${dateCell(g)}</td>
       <td class="pour-name">${g.plant||'<span class="muted">—</span>'}</td>
-      <td>${g.elem?g.elem:'<span class="muted">—</span>'}${(g.mix||g.client)?`<div class="pour-sub">${[g.mix,g.client].filter(Boolean).join(' · ')}</div>`:''}</td>
+      <td>${g.elem?g.elem:'<span class="muted">—</span>'}${carryBadge(g)}${(g.mix||g.client)?`<div class="pour-sub">${[g.mix,g.client].filter(Boolean).join(' · ')}</div>`:''}</td>
       <td class="num">${fmt(g.delivered)}</td>
       <td><input class="req-in" dir="ltr" data-k="${encodeURIComponent(g.key)}" value="${g.reqManual!=null?g.reqManual:''}" placeholder="${g.planReq!=null?fmt(g.planReq,0):'—'}"></td>
       <td class="num" style="color:${g.remaining!=null?(g.remaining>0?'var(--amber)':'var(--green)'):'var(--faint)'}">${g.remaining!=null?(g.remaining>0?fmt(g.remaining):'✓'):'—'}</td>
@@ -1752,6 +1822,7 @@ function normalizeTab(cols, matrix, plantName){
   // grouping key = the "ES" column (unique pour ID) if present, else the old "Element" column.
   // esMode = the sheet uses ES ids: a truck with a BLANK ES is untagged -> we drop it entirely (never read/shown).
   const esCol=header.findIndex(h=>/^\s*es\s*$/i.test(String(h||''))); const esMode=esCol>=0;
+  if(esMode) ES_MODE=true;
   const c={ date:findCol(header,['date','تاريخ']),
     elem: esMode?esCol:findCol(header,['element','عنصر','بند','kks']),
     q:findCol(header,['qm3','concrete','m3','كمي','quantity','qty','volume']), dep:findCol(header,['departure','خروج','load']),
