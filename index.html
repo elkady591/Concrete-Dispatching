@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000012">
+<meta name="app-build" content="20261010-000013">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1115,7 +1115,7 @@ function build(matrix, colHeader){
     if(endT!=null&&depT!=null&&endT<depT)endT+=86400000;
     // hourly-rate breakdown buckets by LOAD time = Departure (when the truck left the plant), NOT END/arrival —
     // so each window shows the m³ actually LOADED in that hour. Fall back to END only if departure is blank.
-    g.loads.push({t:(depT!=null?depT:endT), q, prev:prev?dk:''});
+    g.loads.push({t:(depT!=null?depT:endT), q, prev:prev?dk:'', p:plant});
     if(prev){ g.carried=(g.carried||0)+q; g.carriedTrucks=(g.carriedTrucks||0)+1; if(!g.carriedFrom||dk<g.carriedFrom)g.carriedFrom=dk; }
     if(depT!=null&&(g.depMin==null||depT<g.depMin))g.depMin=depT;
     if(endT!=null&&(g.endMax==null||endT>g.endMax))g.endMax=endT;
@@ -1556,8 +1556,12 @@ function renderAllPours(){
   // use the plan-driven pour list (same-name pours split & numbered), started ones only
   // pours marked DONE are left out here, so the tab counts match the rows actually listed
   const pours=VD.summary.filter(g=>{const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0&&!DONE[doneKey(g)];});
-  const inStation=(g,st)=>(g.plant||'').split(/,\s*/).includes(st);
-  const plants=[...new Set(pours.flatMap(g=>(g.plant||'').split(/,\s*/)))].filter(Boolean).sort();
+  // a pour's stations = the stations its trucks were actually loaded from (each load carries its station)
+  const stationsOf=g=>{ const s=new Set((g.loads||[]).map(l=>l.p).filter(Boolean)); return s.size?[...s]:(g.plant||'').split(/,\s*/).filter(Boolean); };
+  const inStation=(g,st)=>stationsOf(g).includes(st);
+  // what ONE station loaded on a pour: trucks + m³
+  const fromStation=(g,st)=>{ let n=0,q=0; for(const l of (g.loads||[])) if(l.p===st){ n++; q+=(l.q||0); } return {n,q}; };
+  const plants=[...new Set(pours.flatMap(stationsOf))].sort();
   if(activeTab!=='ALL' && !plants.includes(activeTab)) activeTab='ALL';
   // plant tabs (filter pours that involved that station)
   const mk=(id,label,count)=>`<div class="ptab ${activeTab===id?'active':''}" data-tab="${encodeURIComponent(id)}">${label}<span class="cnt">${count}</span></div>`;
@@ -1565,9 +1569,11 @@ function renderAllPours(){
   for(const p of plants){ ph+=mk(p,p,pours.filter(g=>inStation(g,p)).length); }
   el('plantTabs').innerHTML=ph;
   el('plantTabs').querySelectorAll('.ptab').forEach(t=>t.addEventListener('click',async()=>{
-    activeTab=decodeURIComponent(t.dataset.tab); await saveCfg(); rerender();
+    // picking a station (or All) shows everything it is working on — drop a leftover Active/Completed filter
+    activeTab=decodeURIComponent(t.dataset.tab); statusFilter=null; await saveCfg(); rerender();
   }));
 
+  const st=activeTab==='ALL'?null:activeTab;   // a station tab adds two columns: that station's own trucks + m³ per element
   let list = activeTab==='ALL' ? pours : pours.filter(g=>inStation(g,activeTab));
   if(statusFilter==='active') list=list.filter(g=>g.status==='active'||g.status==='none');
   else if(statusFilter==='completed') list=list.filter(g=>g.status==='done'||g.status==='over');
@@ -1585,11 +1591,13 @@ function renderAllPours(){
   let rows='';
   for(const g of list){
     const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
+    const fs=st?fromStation(g,st):null;
     rows+=`<tr${g.carried>0?' class="carry-row"':''}>
       <td style="text-align:center"><input type="checkbox" class="done-chk" data-e="${encodeURIComponent(doneKey(g))}" ${DONE[doneKey(g)]?'checked':''} title="Mark this pour completed"></td>
       <td class="num muted" style="white-space:nowrap">${dateCell(g)}</td>
       <td class="pour-name">${g.plant||'<span class="muted">—</span>'}</td>
       <td>${g.elem?g.elem:'<span class="muted">—</span>'}${carryBadge(g)}${(g.mix||g.client)?`<div class="pour-sub">${[g.mix,g.client].filter(Boolean).join(' · ')}</div>`:''}</td>
+      ${fs?`<td class="num" style="font-weight:800;color:var(--cyan)">${fs.n}</td><td class="num" style="font-weight:800;color:var(--cyan)">${fmt(fs.q)}</td>`:''}
       <td class="num">${fmt(g.delivered)}</td>
       <td><input class="req-in" dir="ltr" data-k="${encodeURIComponent(g.key)}" value="${g.reqManual!=null?g.reqManual:''}" placeholder="${g.planReq!=null?fmt(g.planReq,0):'—'}"></td>
       <td class="num" style="${g.remaining!=null?(g.remaining>0?'':'color:var(--green)'):'color:var(--faint)'}">${g.remaining!=null?(g.remaining>0?fmt(g.remaining):'✓'):'—'}</td>
@@ -1606,7 +1614,7 @@ function renderAllPours(){
   }
   el('tableArea').innerHTML=banner+`<div class="tbl-wrap"><table>
     <thead><tr>
-      <th>Done</th><th>Date</th><th>Station</th><th>Element</th><th>Delivered (m³)</th><th>Required (m³)</th><th>Remaining (m³)</th>
+      <th>Done</th><th>Date</th><th>Station</th><th>Element</th>${st?`<th>${esc(st)} trucks</th><th>${esc(st)} m³</th>`:''}<th>${st?'Total delivered':'Delivered'} (m³)</th><th>Required (m³)</th><th>Remaining (m³)</th>
       <th>Actual rate (m³/h)</th><th>Rate (target/manual) ✎</th><th>Trucks</th><th>Finish</th><th>Progress</th><th>Status</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 
