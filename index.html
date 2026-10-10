@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000008">
+<meta name="app-build" content="20261010-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -201,7 +201,7 @@
   .spot-sel:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,131,255,.25);outline:none}
   .spot-head .when{color:var(--muted);font-size:12.5px;font-family:var(--mono)}
   .spot-meta{margin-top:10px;font-size:12.5px;color:var(--muted);font-weight:500}
-  .spot-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:14px;margin-top:16px}
+  .spot-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:14px;margin-top:16px}
   .spot-cell .s-lab{font-size:11px;color:var(--muted);font-weight:700}
   .spot-cell .s-val{font-family:var(--mono);font-weight:700;font-size:22px;margin-top:4px}
   .spot-cell .s-val small{font-size:11px;color:var(--faint);font-family:var(--sans)}
@@ -840,6 +840,14 @@ function enrichGroup(g, now){
   const recent=g.endMax!=null&&(now-g.endMax)<ACTIVE_WINDOW;
   g.eta=null;g.finishAt=null;
   if(g.remaining!=null&&g.remaining>0&&g.rate&&g.rate>0){g.eta=g.remaining/g.rate;g.finishAt=now+g.eta*3600000;}
+  // Two finish estimates for what is left: at the pour's own AVERAGE pace, and at the TARGET rate
+  // (manual rate if typed, else the plan's). Shown side by side — see finishHtml().
+  const avgR=g.cumRate!=null?g.cumRate:g.rateCalc, tgtR=g.rateManual!=null?g.rateManual:g.planRate;
+  g.finishAvg=null; g.finishTgt=null;
+  if(g.remaining!=null&&g.remaining>0){
+    if(avgR>0) g.finishAvg=now+g.remaining/avgR*3600000;
+    if(tgtR>0) g.finishTgt=now+g.remaining/tgtR*3600000;
+  }
   if(g.required==null) g.status = recent ? 'none' : 'closed';
   else if(recent) g.status='active';        // still pouring — STAYS active even past target (extra counts on the same request)
   else if(g.remaining<=0) g.status='over';  // reached/passed target but idle — an "over" badge, NEVER auto-closed
@@ -1129,6 +1137,16 @@ function build(matrix, colHeader){
 const barClass=s=>s==='done'?'g':s==='active'?'b':s==='over'?'v':s==='closed'?'n':'a';
 const stLabel={done:'Completed',active:'Active',wait:'Waiting',none:'Set target',over:'Over',closed:'Closed'};
 function timeShort(t){ if(t==null)return'—'; const d=new Date(t); let h=d.getHours();const m=pad(d.getMinutes());const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${m} ${ap}`; }
+// Colour of the average-pace finish: green = on or ahead of the target finish, red = later than it
+// (the average rate is below the target). No target -> no colour.
+function finishAvgColor(g){ return (g.finishAvg!=null&&g.finishTgt!=null) ? (g.finishAvg<=g.finishTgt?'var(--green)':'var(--rose)') : ''; }
+// compact two-line finish cell (Active Pours list + All Pours table): "Avg 4:47 AM" over "Tgt 5:13 PM"
+function finishHtml(g){
+  if(g.finishAvg==null&&g.finishTgt==null) return g.status==='done'?'✓':'—';
+  const c=finishAvgColor(g);
+  const line=(lab,t,col)=>`<div style="white-space:nowrap"><span style="color:var(--faint);font-size:10.5px">${lab}</span> <span style="${col?`color:${col};font-weight:800`:''}">${t!=null?timeShort(t):'—'}</span></div>`;
+  return line('Avg',g.finishAvg,c)+line('Tgt',g.finishTgt,'');
+}
 function setDiag(s){ const d=el('diag'); if(!d)return; d.style.display='block'; d.innerHTML=s; }
 function dateCell(g){ if(g.dates&&g.dates.size>1){const a=[...g.dates].sort();return `${a[0].slice(5)} → ${a[a.length-1].slice(5)} <span class="muted">(${g.dates.size}d)</span>`;} return g.dk; }
 function ringSvg(pct){
@@ -1461,7 +1479,8 @@ function renderSummary(){
           <div class="spot-cell"><div class="s-lab">Required</div><div class="s-val">${sp.required!=null?fmt(sp.required):'—'} <small>m³</small></div></div>
           <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val">${sp.cumRate!=null?fmt(sp.cumRate):'—'} <small>m³/h</small></div></div>
           <div class="spot-cell"><div class="s-lab">Target rate</div><div class="s-val">${sp.planRate!=null?fmt(sp.planRate):(sp.rateManual!=null?fmt(sp.rateManual):'—')} <small>m³/h</small></div></div>
-          <div class="spot-cell"><div class="s-lab">Est. finish</div><div class="s-val">${sp.finishAt?timeShort(sp.finishAt):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
+          <div class="spot-cell"><div class="s-lab">Est. finish · average</div><div class="s-val" style="${finishAvgColor(sp)?`color:${finishAvgColor(sp)}`:''}">${sp.finishAvg?timeShort(sp.finishAvg):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
+          <div class="spot-cell"><div class="s-lab">Est. finish · target</div><div class="s-val">${sp.finishTgt?timeShort(sp.finishTgt):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
         </div>
         <div class="spot-bar">
           <div class="bar bar-lg"><i class="${bc}" style="width:${pct}%"></i></div>
@@ -1495,7 +1514,7 @@ function renderSummary(){
       <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
       <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
       <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc)+' m³/h':'—'}</div>
-      <div class="apy-eta">${g.finishAt?timeShort(g.finishAt):(g.status==='done'?'✓':'—')}</div>
+      <div class="apy-eta">${finishHtml(g)}</div>
       <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end"><span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span><input type="checkbox" class="done-chk" data-e="${encodeURIComponent(doneKey(g))}" ${DONE[doneKey(g)]?'checked':''} title="Close this pour — same as the Done box in All Pours"></div>
     </div>`;
   }).join('') : '<div class="muted" style="font-size:13px;padding:8px 4px">No active pours right now.</div>';
@@ -1562,7 +1581,7 @@ function renderAllPours(){
       <td class="num" style="font-weight:800">${g.rateCalc!=null?fmt(g.rateCalc):'<span class="muted">—</span>'}</td>
       <td><input class="req-in rate-in" dir="ltr" data-k="${encodeURIComponent(g.key)}" value="${g.rateManual!=null?g.rateManual:''}" placeholder="${g.planRate!=null?fmt(g.planRate,0):'—'}"></td>
       <td class="num muted">${g.trucks}</td>
-      <td class="num muted">${g.finishAt?timeShort(g.finishAt):(g.status==='done'?'✓':'—')}</td>
+      <td class="num muted">${finishHtml(g)}</td>
       <td style="min-width:130px">
         <div class="bar"><i class="${bc}" style="width:${pct}%"></i></div>
         <div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':''}</div>
