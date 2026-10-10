@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000011">
+<meta name="app-build" content="20261010-000012">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1489,7 +1489,7 @@ function renderSummary(){
     const body = spotTab==='hourly' ? hourlyHtml(sp) : `
         <div class="spot-grid">
           <div class="spot-cell hi"><div class="s-lab">Delivered</div><div class="s-val">${fmt(sp.delivered)} <small>m³</small></div></div>
-          <div class="spot-cell hi"><div class="s-lab">Remaining</div><div class="s-val" style="color:${sp.remaining!=null&&sp.remaining>0?'var(--rose)':'var(--green)'}">${sp.remaining!=null?(sp.remaining>0?fmt(sp.remaining)+' <small>m³</small>':'✓ <small>done</small>'):'—'}</div></div>
+          <div class="spot-cell hi"><div class="s-lab">Remaining</div><div class="s-val" style="${sp.remaining!=null&&sp.remaining<=0?'color:var(--green)':''}">${sp.remaining!=null?(sp.remaining>0?fmt(sp.remaining)+' <small>m³</small>':'✓ <small>done</small>'):'—'}</div></div>
           <div class="spot-cell"><div class="s-lab">Rejected</div><div class="s-val" style="color:${sp.rejected>0?'var(--amber)':'var(--faint)'}">${sp.rejected>0?fmt(sp.rejected)+' <small>m³</small>':'—'}</div></div>
           <div class="spot-cell"><div class="s-lab">Required</div><div class="s-val">${sp.required!=null?fmt(sp.required):'—'} <small>m³</small></div></div>
           <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val" style="${avgRateColor(sp)?`color:${avgRateColor(sp)}`:''}">${sp.cumRate!=null?fmt(sp.cumRate):'—'} <small>m³/h</small></div></div>
@@ -1592,7 +1592,7 @@ function renderAllPours(){
       <td>${g.elem?g.elem:'<span class="muted">—</span>'}${carryBadge(g)}${(g.mix||g.client)?`<div class="pour-sub">${[g.mix,g.client].filter(Boolean).join(' · ')}</div>`:''}</td>
       <td class="num">${fmt(g.delivered)}</td>
       <td><input class="req-in" dir="ltr" data-k="${encodeURIComponent(g.key)}" value="${g.reqManual!=null?g.reqManual:''}" placeholder="${g.planReq!=null?fmt(g.planReq,0):'—'}"></td>
-      <td class="num" style="color:${g.remaining!=null?(g.remaining>0?'var(--amber)':'var(--green)'):'var(--faint)'}">${g.remaining!=null?(g.remaining>0?fmt(g.remaining):'✓'):'—'}</td>
+      <td class="num" style="${g.remaining!=null?(g.remaining>0?'':'color:var(--green)'):'color:var(--faint)'}">${g.remaining!=null?(g.remaining>0?fmt(g.remaining):'✓'):'—'}</td>
       <td class="num" style="font-weight:800">${g.rateCalc!=null?fmt(g.rateCalc):'<span class="muted">—</span>'}</td>
       <td><input class="req-in rate-in" dir="ltr" data-k="${encodeURIComponent(g.key)}" value="${g.rateManual!=null?g.rateManual:''}" placeholder="${g.planRate!=null?fmt(g.planRate,0):'—'}"></td>
       <td class="num muted">${g.trucks}</td>
