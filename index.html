@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261010-000001">
+<meta name="app-build" content="20261010-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -186,6 +186,9 @@
     border:1px solid var(--line2);box-shadow:var(--shadow)}
   .carry{display:inline-block;font-size:10.5px;font-weight:800;font-family:var(--mono);white-space:nowrap;color:var(--amber);
     border:1px solid var(--amber);border-radius:99px;padding:1px 7px;margin-inline-start:6px;vertical-align:middle;cursor:help}
+  tr.carry-row td:first-child,.apy.carry-row{box-shadow:inset 3px 0 0 var(--amber)}
+  tr.carry-row td{background:rgba(245,158,11,.07)}
+  .apy.carry-row{background:rgba(245,158,11,.07)}
   .spot-head{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
   .spot-head .tag{font-size:11px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));
     padding:5px 11px;border-radius:99px;box-shadow:0 6px 14px rgba(124,131,255,.4)}
@@ -998,7 +1001,7 @@ function carryPlan(dataRows,c,from,to){
 function carryBadge(g){
   if(!(g&&g.carried>0)) return '';
   const d=String(g.carriedFrom||'').slice(5);
-  return ` <span class="carry" title="Still running since ${g.carriedFrom}: ${fmt(g.carried)} m³ (${g.carriedTrucks||0} trucks) were poured before the From date and are included here">&#8618; ${fmt(g.carried,0)} m³ from ${d}</span>`;
+  return ` <span class="carry" title="Still running since ${g.carriedFrom}: ${fmt(g.carried)} m³ (${g.carriedTrucks||0} trucks) were poured before the From date and are included here">&#8618; Started ${d} · ${fmt(g.carried,0)} m³ before</span>`;
 }
 
 function build(matrix, colHeader){
@@ -1433,7 +1436,7 @@ function renderSummary(){
   const list=open.slice().sort((a,b)=>(b.endMax||0)-(a.endMax||0));
   el('activeList').innerHTML = list.length ? list.map(g=>{
     const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
-    return `<div class="apy">
+    return `<div class="apy${g.carried>0?' carry-row':''}">
       <div class="apy-el">${g.elem||'—'}<span class="p">${g.plant||''}</span>${carryBadge(g)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
       <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
@@ -1493,7 +1496,7 @@ function renderAllPours(){
   let rows='';
   for(const g of list){
     const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
-    rows+=`<tr>
+    rows+=`<tr${g.carried>0?' class="carry-row"':''}>
       <td style="text-align:center"><input type="checkbox" class="done-chk" data-e="${encodeURIComponent(doneKey(g))}" ${DONE[doneKey(g)]?'checked':''} title="Mark this pour completed"></td>
       <td class="num muted" style="white-space:nowrap">${dateCell(g)}</td>
       <td class="pour-name">${g.plant||'<span class="muted">—</span>'}</td>
