@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000011">
+<meta name="app-build" content="20261011-000012">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -678,6 +678,7 @@ async function stSet(k,v){
 
 const KEY_REQ='cmpour:req';
 const KEY_RATE='cmpour:rate';
+const BOT=/[?&]bot=1(&|$)/.test(location.search);   // opened by the notifier job, not by a person (see window.__notifyItems)
 const KEY_DONE='cmpour:done';
 const KEY_DONE_ORDER='cmpour:doneorder';   // order pours were closed on THIS device, for Undo
 const KEY_CFG='cmpour:cfg';
@@ -1636,6 +1637,7 @@ function renderSummary(){
      • entry flags — no ES (such a truck is dropped from every pour), odd quantity, no load time,
                      the same truck entered twice within minutes.
    Nothing here changes the numbers; it only points at rows worth a second look. */
+const mins=ms=>Math.round(ms/60000)+' min';
 let NOES=[];            // trucks typed without an ES id (collected by normalizeTab on every pull)
 let REJLIST=[];         // rejected / wasted trucks, one entry each (same pull)
 const rejId=l=>`rej|${l.p}|${l.k}|${l.dk}|${l.t}`;
@@ -1705,7 +1707,6 @@ function flagLoads(groups){
 function renderChecks(pours){
   const lg=el('truckLog'), cb=el('checkBox'); if(!lg||!cb) return;
   flagLoads(VD.summary.filter(g=>g.trucks>0));   // duplicates are looked for across every pour, closed ones too
-  const mins=ms=>Math.round(ms/60000)+' min';
   // ---- truck log of the selected element ----
   const g=logKey?pours.find(x=>x.key===logKey):null;
   if(!g){ logKey=null; lg.innerHTML=''; }
@@ -1737,6 +1738,13 @@ function renderChecks(pours){
     });
   }
   // ---- list of things to review ----
+  const items=collectChecks(pours);
+  renderCheckList(cb, items);
+}
+// Everything worth a second look on the open pours: [{id | ids, kind, cls, k(pour key), txt(html), skipped}].
+// Used by the Data checks box AND by the notifier (window.__notifyItems) — one list, one set of rules.
+// flagLoads() must have run first.
+function collectChecks(pours){
   const from=CFG.fromDate||'', to=CFG.toDate||'';
   const items=[];
   for(const x of NOES){ const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
@@ -1761,6 +1769,9 @@ function renderChecks(pours){
     }
     for(const r of rows){ for(const f of (r.l.f||[])) items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${esc(p.elem)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`}); }
   }
+  return items;
+}
+function renderCheckList(cb, items){
   // "Skip" = I looked at this one, it is fine: it leaves the list (and stops being marked in the truck log)
   // on this device until Undo. Kept in local storage; entries older than a week are dropped.
   const isSk=it=>it.ids?!!it.skipped:!!SKIP[it.id];
@@ -2433,6 +2444,7 @@ async function loadLive(){
   LAST={matrix:allRows,header:UNI_HEADER.slice()};
   render(build(allRows,UNI_HEADER.slice()));
   setLive('on','Live');
+  window.__ready=Date.now();   // the notifier waits for this (first complete pull)
   el('footL').textContent='Last update: '+timeShort(Date.now());
   try{ console.log('Tab diagnostics:\n'+report.join('\n')); }catch(e){}
   el('fallback').innerHTML='';
@@ -2617,6 +2629,7 @@ function requireAuth(){
   applyRole();
   applyView();
   loadLive(); reschedule();
+  if(BOT) return;   // the notifier's headless visit: pull the data, nothing else (no name prompt, no presence, no self-update)
   checkForUpdate(); setInterval(checkForUpdate,300000);   // self-update: on open, then every 5 min
   // Identity: get our IP, then ask the server for our remembered name / blocked status before prompting.
   await getClientIP();
@@ -2635,6 +2648,18 @@ function requireAuth(){
 })();
 // Register the service worker so the installed PWA opens offline (network-first — see sw.js).
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('./sw.js').then(()=>notifRefresh()).catch(()=>notifRefresh()); }); }
+
+/* ---------- the notifier's view of the app ----------
+   A scheduled job (notifier/watch.mjs in the repo) opens this page as  …/?bot=1  in a headless browser,
+   waits for window.__ready and reads window.__notifyItems(): the same Data checks the screen shows, as
+   plain text. It then pushes the ones it has not sent before. Nothing here runs for normal visitors. */
+window.__notifyItems=function(){
+  if(!VD||!VD.summary) return [];
+  const pours=VD.summary.filter(g=>{const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0&&!DONE[doneKey(g)];});
+  flagLoads(VD.summary.filter(g=>g.trucks>0));
+  const plain=h=>{ const d=document.createElement('div'); d.innerHTML=h; return d.textContent; };
+  return collectChecks(pours).map(it=>({ids:it.ids||[it.id], kind:it.kind, text:plain(it.txt)}));
+};
 
 /* ---------- notifications (web push) ----------
    "Enable notifications" subscribes THIS device with the browser's push service and hands the subscription
