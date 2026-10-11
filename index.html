@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000012">
+<meta name="app-build" content="20261011-000013">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2445,6 +2445,7 @@ async function loadLive(){
   render(build(allRows,UNI_HEADER.slice()));
   setLive('on','Live');
   window.__ready=Date.now();   // the notifier waits for this (first complete pull)
+  applyPendingCheck();         // opened from a tapped notification before the data was in
   el('footL').textContent='Last update: '+timeShort(Date.now());
   try{ console.log('Tab diagnostics:\n'+report.join('\n')); }catch(e){}
   el('fallback').innerHTML='';
@@ -2658,8 +2659,39 @@ window.__notifyItems=function(){
   const pours=VD.summary.filter(g=>{const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0&&!DONE[doneKey(g)];});
   flagLoads(VD.summary.filter(g=>g.trucks>0));
   const plain=h=>{ const d=document.createElement('div'); d.innerHTML=h; return d.textContent; };
-  return collectChecks(pours).map(it=>({ids:it.ids||[it.id], kind:it.kind, text:plain(it.txt)}));
+  return collectChecks(pours).map(it=>({ids:it.ids||[it.id], kind:it.kind, k:it.k||'', text:plain(it.txt)}));
 };
+
+/* ---------- arriving from a tapped notification ----------
+   sw.js leaves {k:<pour key>, at} in the 'pt-intent' cache (and posts it to a running page). The app then
+   jumps to All Pours, opens that element's truck log and scrolls to it — inside Concrete Management it
+   also switches the hub to Dispatching. An ordinary start has no intent and stays on Summary. */
+let pendingCheck=null;
+function applyPendingCheck(){
+  if(pendingCheck==null||!VD||!VD.summary) return;
+  const k=pendingCheck; pendingCheck=null;
+  try{ if(parent!==window && /\/Concrete-Management\//.test(parent.location.pathname) && parent.location.hash!=='#dispatching') parent.location.hash='#dispatching'; }catch(e){}
+  view='pours'; activeTab='ALL'; statusFilter=null; logKey=k||null;
+  renderViewTabs(); applyView(); renderAllPours();
+  const t=(logKey&&el('truckLog')&&el('truckLog').firstElementChild)?el('truckLog'):el('checkBox');
+  setTimeout(()=>{ if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'start'}); },150);
+}
+async function consumeIntent(){
+  try{
+    if(!('caches' in window)) return;
+    const c=await caches.open('pt-intent'), r=await c.match('intent'); if(!r) return;
+    await c.delete('intent');
+    const j=await r.json();
+    if(j && Date.now()-(j.at||0) < 10*60000){ pendingCheck=j.k||''; applyPendingCheck(); }
+  }catch(e){}
+}
+if(!BOT){
+  if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message',ev=>{
+    const m=ev.data||{}; if(m.type==='open-check'){ pendingCheck=m.k||''; applyPendingCheck(); consumeIntent(); } });
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) consumeIntent(); });
+  window.addEventListener('focus',consumeIntent);
+  consumeIntent();
+}
 
 /* ---------- notifications (web push) ----------
    "Enable notifications" subscribes THIS device with the browser's push service and hands the subscription

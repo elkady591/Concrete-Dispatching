@@ -5,7 +5,7 @@
      (so the built-in self-update keeps working), and fall back to the cached shell only when offline.
    - Static assets (icons/manifest) are cache-first for speed.
    Bump CACHE only when this file itself changes. */
-const CACHE = 'pourtracker-v2';
+const CACHE = 'pourtracker-v3';
 const SHELL = [
   './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png',
@@ -59,19 +59,26 @@ self.addEventListener('push', e => {
     badge: './icons/favicon-32.png',
     tag: d.tag || undefined,          // same tag = replaces the earlier note instead of stacking
     renotify: !!d.tag,
-    data: { url: d.url || '' }
+    data: { url: d.url || '', k: d.k || '' }
   }));
 });
 
-// Tapping the note: bring an already-open app window to the front, else open the app.
+// Tapping the note: go straight to the problem — All Pours with that element's truck log open.
+// The "where to go" is left in a tiny cache entry (INTENT) that the app reads when it opens or comes back
+// to the front, and is also posted to any app page that is already running. Then an open window is
+// focused, or the app is opened. (A normal start of the app has no intent and still lands on Summary.)
+const INTENT = 'pt-intent';
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const want = (e.notification.data && e.notification.data.url) || self.registration.scope;
-  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-    const origin = new URL(self.registration.scope).origin;
-    const open = cs.find(c => c.url.indexOf('/Concrete-Management/') > 0 && c.url.startsWith(origin))
-              || cs.find(c => c.url.startsWith(self.registration.scope));
+  const d = e.notification.data || {};
+  const scope = self.registration.scope, origin = new URL(scope).origin;
+  e.waitUntil((async () => {
+    try { const c = await caches.open(INTENT); await c.put('intent', new Response(JSON.stringify({ k: d.k || '', at: Date.now() }))); } catch (_) {}
+    const cs = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    cs.filter(c => c.url.startsWith(scope)).forEach(c => { try { c.postMessage({ type: 'open-check', k: d.k || '' }); } catch (_) {} });
+    const open = cs.find(c => c.url.startsWith(origin) && c.url.indexOf('/Concrete-Management/') > 0)
+              || cs.find(c => c.url.startsWith(scope));
     if (open && 'focus' in open) return open.focus();
-    return clients.openWindow(want);
-  }));
+    return clients.openWindow(d.url || scope);
+  })());
 });
