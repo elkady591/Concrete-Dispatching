@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000008">
+<meta name="app-build" content="20261011-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2462,6 +2462,7 @@ async function checkForUpdate(){
     if(!live||!APP_BUILD||live===APP_BUILD)return;
     if(sessionStorage.getItem('pt_upd')===live)return;   // already reloaded for this build — never loop
     sessionStorage.setItem('pt_upd',live);
+    sessionStorage.setItem('pt_keepview',JSON.stringify({view,activeTab}));   // a self-update reload stays on the tab you were on
     location.replace(base+'?v='+encodeURIComponent(live));
   }catch(e){}
 }
@@ -2537,8 +2538,10 @@ function requireAuth(){
     if(savedCfg.interval)el('interval').value=savedCfg.interval;
     if(num(el('interval').value)>30)el('interval').value=10;   // force new 10s default over the old 60s
     if(savedCfg.groupBy)el('groupBy').value=savedCfg.groupBy;
-    if(savedCfg.activeTab)activeTab=savedCfg.activeTab;
-    if(savedCfg.view)view=savedCfg.view;
+    // ALWAYS open on Summary with every station shown (the last tab is not remembered between openings).
+    // The one exception: the app reloading ITSELF to pick up a new build keeps you where you were.
+    try{ const kv=sessionStorage.getItem('pt_keepview'); sessionStorage.removeItem('pt_keepview');
+      if(kv){ const o=JSON.parse(kv); if(o.view)view=o.view; if(o.activeTab)activeTab=o.activeTab; } }catch(e){}
     el('fromDate').value=todayStr(0);   // ALWAYS open on today (ignore the saved date); user changes it manually
     el('toDate').value=todayStr(0);
   } else {
