@@ -1,0 +1,51 @@
+# Concrete Dispatching notifier: every few minutes, read the app's Data checks and push the new ones
+# to the devices that pressed "Enable notifications". Needs the repo secret VAPID_PRIVATE_KEY.
+name: Notifier
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'        # GitHub runs this "about" every 5 min; busy hours can delay it
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Send a test notification to every device'
+        type: boolean
+        default: false
+
+concurrency:
+  group: notifier
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Restore the list of alerts already sent
+        uses: actions/cache/restore@v4
+        with:
+          path: notifier/state
+          key: notifier-state-${{ github.run_id }}
+          restore-keys: notifier-state-
+      - name: Install
+        working-directory: notifier
+        run: npm install --no-audit --no-fund --omit=dev
+      - name: Check and notify
+        working-directory: notifier
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          NOTIFY_TEST: ${{ inputs.test && '1' || '0' }}
+        run: node watch.mjs
+      - name: Save the list of alerts already sent
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: notifier/state
+          key: notifier-state-${{ github.run_id }}
