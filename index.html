@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000010">
+<meta name="app-build" content="20261011-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -568,6 +568,11 @@
     <div class="cfg-note" style="justify-content:space-between">
       <span>👤 <b id="meName">—</b> <button class="btn ghost" id="changeName" style="padding:3px 9px;font-size:11.5px">تغيير الاسم</button></span>
       <button class="btn ghost" id="adminBtn" title="Admin mode">🔑 Admin</button>
+    </div>
+    <!-- Notifications on THIS device (data-check alerts arrive even when the app is closed) -->
+    <div class="cfg-note" style="justify-content:space-between">
+      <span id="notifState" style="font-size:12.5px">🔔 Notifications</span>
+      <span style="display:flex;gap:8px"><button class="btn ghost" id="notifTest" style="padding:3px 10px;font-size:11.5px" hidden>Test</button><button class="btn ghost" id="notifBtn">Enable notifications</button></span>
     </div>
   </div>
 
@@ -2629,7 +2634,48 @@ function requireAuth(){
   pingPresence(); setInterval(pingPresence,30000);        // "N people viewing" heartbeat
 })();
 // Register the service worker so the installed PWA opens offline (network-first — see sw.js).
-if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }); }
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('./sw.js').then(()=>notifRefresh()).catch(()=>notifRefresh()); }); }
+
+/* ---------- notifications (web push) ----------
+   "Enable notifications" subscribes THIS device with the browser's push service and hands the subscription
+   to the sync script (action pushsub, keyed by device id). A notifier outside the app then sends the alerts,
+   so they arrive with the app closed; sw.js shows them. The key below is the PUBLIC half — safe to publish. */
+const VAPID_PUB='BNkjRt73PZvPzps_8XHXpdkUlIQN3YDQC_61OCwZWqqEhB4WwXEGpgZXifVCqq20jAWqEQiRF0Uz-BhR-2ztFVQ';
+function b64uToU8(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; const b=atob(s); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+const pushSupported=()=>('serviceWorker' in navigator)&&('PushManager' in window)&&('Notification' in window);
+async function pushSub(){ try{ const reg=await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); }catch(e){ return null; } }
+async function notifRefresh(){
+  const b=el('notifBtn'), s=el('notifState'), t=el('notifTest'); if(!b||!s) return;
+  if(!pushSupported()){ s.textContent='🔔 Notifications are not supported in this browser'; b.hidden=true; if(t)t.hidden=true; return; }
+  if(!syncBase()){ s.textContent='🔔 Notifications need the Sync URL to be set'; b.hidden=true; if(t)t.hidden=true; return; }
+  if(Notification.permission==='denied'){ s.textContent='🔕 Notifications are blocked for this site — allow them in the browser settings'; b.hidden=true; if(t)t.hidden=true; return; }
+  const sub=(Notification.permission==='granted')?await pushSub():null;
+  b.hidden=false; b.disabled=false;
+  if(sub){ s.textContent='🔔 Notifications are ON for this device'; b.textContent='Turn off'; b.dataset.on='1'; if(t)t.hidden=false;
+    syncCall({action:'pushsub', dev:deviceId(), sub:JSON.stringify(sub)}); }      // keep the server copy fresh
+  else   { s.textContent='🔔 Get an alert on this device for new data checks'; b.textContent='Enable notifications'; b.dataset.on=''; if(t)t.hidden=true; }
+}
+async function notifToggle(){
+  const b=el('notifBtn'), s=el('notifState'); b.disabled=true;
+  try{
+    if(b.dataset.on==='1'){
+      const sub=await pushSub(); if(sub) await sub.unsubscribe();
+      await syncCall({action:'pushdel', dev:deviceId()});
+    } else {
+      const perm=await Notification.requestPermission();
+      if(perm==='granted'){
+        const reg=await navigator.serviceWorker.ready;
+        const sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uToU8(VAPID_PUB)});
+        const r=await syncCall({action:'pushsub', dev:deviceId(), sub:JSON.stringify(sub)});
+        if(!r||!r.ok){ s.textContent='⚠ Could not register this device — try again'; b.disabled=false; return; }
+      }
+    }
+  }catch(e){ s.textContent='⚠ Could not change notifications: '+(e&&e.message||e); b.disabled=false; return; }
+  notifRefresh();
+}
+{ const nb=el('notifBtn'); if(nb) nb.addEventListener('click',notifToggle);
+  const nt=el('notifTest'); if(nt) nt.addEventListener('click',async()=>{   // local test: proves this device can SHOW a notification
+    try{ const reg=await navigator.serviceWorker.ready; await reg.showNotification('Concrete Dispatching',{body:'Test — notifications work on this device.',icon:'./icons/icon-192.png',badge:'./icons/favicon-32.png',tag:'test'}); }catch(e){} }); }
 </script>
 </body>
 </html>
