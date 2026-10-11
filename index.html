@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000009">
+<meta name="app-build" content="20261011-000010">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -286,6 +286,9 @@
   .chk-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 2px;font-size:12.5px;padding:5px 0;border-top:1px solid var(--line)}
   .chk-row.clk{cursor:pointer} .chk-row.clk:hover{color:#fff}
   .tl-flag.rev{color:var(--faint);border-color:var(--line2)}
+  .tl-flag.rejd{color:#fff;background:var(--rose);border-color:var(--rose)}
+  .tl-tbl tbody tr.rej td{background:rgba(251,113,133,.07)}
+  .tl-tbl tbody tr.rej td.tl-q{text-decoration:line-through;color:var(--rose)}
   .chk-box.clear{border-color:var(--line2);background:rgba(255,255,255,.03)} .chk-box.clear .chk-head{color:var(--green)}
   .chk-txt{flex:1;min-width:160px}
   .chk-skip{margin-inline-start:auto;background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--ink);border-radius:99px;
@@ -1629,6 +1632,8 @@ function renderSummary(){
                      the same truck entered twice within minutes.
    Nothing here changes the numbers; it only points at rows worth a second look. */
 let NOES=[];            // trucks typed without an ES id (collected by normalizeTab on every pull)
+let REJLIST=[];         // rejected / wasted trucks, one entry each (same pull)
+const rejId=l=>`rej|${l.p}|${l.k}|${l.dk}|${l.t}`;
 let logKey=null;        // the pour whose truck log is open
 const MAX_LOAD=12;      // m³ — one truck above this is flagged
 const DUP_WINDOW=10*60000;
@@ -1642,6 +1647,19 @@ let showSkipped=false;
 const gapId=(p,r)=>`gap|${p.key}|${r.l.t}`;
 const flagId=(p,l,f)=>`f|${f}|${p.key}|${l.k}|${l.t}`;
 function loadWhen(l){ if(l.t==null||l.nt) return '—'; return (l.prev?l.prev.slice(5)+' ':'')+timeShort(l.t); }
+// The rejected trucks (Waste / Rejected & Transferred in the sheet's Follow Up / Action column) of one pour,
+// shaped like loads: {t,q,p,k,rej:<the sheet's note>}. Same days as the pour's own trucks.
+function rejLoads(g){
+  const keys=new Set([rejKey(g.esId||''),rejKey(g.elem||'')].filter(Boolean));
+  const from=g.carriedFrom||CFG.fromDate||'', to=CFG.toDate||'', out=[];
+  for(const x of REJLIST){
+    if(!keys.has(rejKey(x.elem))) continue;
+    const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
+    const tm=parseTime(x.dep);
+    out.push({t:tm!=null?ts(d,tm):null, q:x.q, p:x.plant, k:x.truck, nt:tm==null, prev:(CFG.fromDate&&dk<CFG.fromDate)?dk:'', f:[], rej:x.note||'Rejected', dk});
+  }
+  return out;
+}
 // How often a truck SHOULD load on this pour, from its target rate (manual rate if typed, else the plan's):
 //   target m³/h ÷ average m³ per truck = trucks per hour  ->  one truck every (60 ÷ that) minutes.
 // Returns {every(ms), rate, load} or null when the pour has no target rate.
@@ -1656,7 +1674,8 @@ function expectedEvery(g){
 // A truck is LATE when it loaded more than LATE_TOL × the expected interval after the one before it.
 // Without a target rate it falls back to the pour's own usual interval (2 × median, at least 30 min).
 function gapRows(g){
-  const ls=(g.loads||[]).slice().sort((a,b)=>(a.t||0)-(b.t||0));
+  // rejected trucks sit in the timeline too (they DID load, so they close a gap) but are never counted as delivered
+  const ls=(g.loads||[]).concat(rejLoads(g)).sort((a,b)=>(a.t||0)-(b.t||0));
   const rows=ls.map((l,i)=>({l, gap:(i>0&&l.t!=null&&ls[i-1].t!=null)?l.t-ls[i-1].t:null, flag:false, late:null}));
   const ex=expectedEvery(g);
   if(ex){ const thr=Math.max(ex.every*LATE_TOL, ex.every+LATE_MIN);
@@ -1690,21 +1709,23 @@ function renderChecks(pours){
     rows.forEach(r=>{ r.rev=r.flag&&!!SKIP[gapId(g,r)]; if(r.rev) r.flag=false;   // skipped checks show as "reviewed"
       r.fl=(r.l.f||[]).map(f=>({f,rev:!!SKIP[flagId(g,r.l,f)]})); });
     const nGap=rows.filter(r=>r.flag).length, nFl=rows.filter(r=>r.fl.some(x=>!x.rev)).length;
+    const rj=rows.filter(r=>r.l.rej), rjQ=rj.reduce((s,r)=>s+(r.l.q||0),0);
+    let no=0; rows.forEach(r=>{ r.no=r.l.rej?'R':String(++no); });   // rejected trucks are listed but not numbered / counted
     lg.innerHTML=`<div class="card tl-card">
       <div class="tl-head"><h3 style="margin:0">Trucks — ${esc(g.elem||'—')}</h3>
-        <span class="muted" style="font-size:12px">${rows.length} trucks · ${fmt(g.delivered,0)} m³${nGap?` · <b style="color:var(--rose)">${nGap} gap${nGap>1?'s':''} to check</b>`:''}${nFl?` · <b style="color:var(--amber)">${nFl} flagged</b>`:''}${rows.ex?`<br>Target ${fmt(rows.ex.rate)} m³/h ÷ ${fmt(rows.ex.load)} m³ per truck = a truck every <b style="color:var(--ink)">${mins(rows.ex.every)}</b>`:'<br>No target rate on this element — gaps are judged against its own usual interval'}</span>
+        <span class="muted" style="font-size:12px">${no} trucks · ${fmt(g.delivered,0)} m³${rj.length?` · <b style="color:var(--rose)">${rj.length} rejected (${fmt(rjQ)} m³, not counted)</b>`:''}${nGap?` · <b style="color:var(--rose)">${nGap} gap${nGap>1?'s':''} to check</b>`:''}${nFl?` · <b style="color:var(--amber)">${nFl} flagged</b>`:''}${rows.ex?`<br>Target ${fmt(rows.ex.rate)} m³/h ÷ ${fmt(rows.ex.load)} m³ per truck = a truck every <b style="color:var(--ink)">${mins(rows.ex.every)}</b>`:'<br>No target rate on this element — gaps are judged against its own usual interval'}</span>
         <span style="margin-inline-start:auto;display:flex;gap:8px"><button class="btn ghost" id="tlCopy" style="padding:4px 12px;font-size:12px">Copy</button><button class="btn ghost" id="tlClose" style="padding:4px 10px;font-size:12px">✕</button></span></div>
       <div class="tbl-wrap"><table class="tl-tbl">
         <thead><tr><th>#</th><th>Loaded</th><th>Truck</th><th>Station</th><th>m³</th><th>Since previous</th><th>Check</th></tr></thead>
-        <tbody>${rows.map((r,i)=>`<tr class="${r.flag?'gap':''}${r.l.prev?' prev':''}">
-          <td class="num muted">${i+1}</td><td class="num">${loadWhen(r.l)}</td><td class="num" style="font-weight:800">${esc(r.l.k||'—')}</td>
-          <td>${esc(r.l.p||'—')}</td><td class="num">${fmt(r.l.q)}</td>
+        <tbody>${rows.map((r,i)=>`<tr class="${r.flag?'gap':''}${r.l.prev?' prev':''}${r.l.rej?' rej':''}">
+          <td class="num muted">${r.no}</td><td class="num">${loadWhen(r.l)}</td><td class="num" style="font-weight:800">${esc(r.l.k||'—')}</td>
+          <td>${esc(r.l.p||'—')}</td><td class="num tl-q">${fmt(r.l.q)}</td>
           <td class="num ${r.flag?'':'muted'}">${r.gap!=null?mins(r.gap):'—'}</td>
-          <td>${r.flag?`<span class="tl-flag gap">${r.late!=null?'late '+mins(r.late)+' · room for '+r.room+' truck'+(r.room>1?'s':''):'long gap — check'}</span>`:''}${r.rev?'<span class="tl-flag rev">gap reviewed</span>':''}${r.fl.map(x=>`<span class="tl-flag${x.rev?' rev':''}">${esc(x.f)}${x.rev?' ✓':''}</span>`).join('')}</td></tr>`).join('')}
+          <td>${r.l.rej?`<span class="tl-flag rejd" title="${esc(r.l.rej)}">Rejected</span>`:''}${r.flag?`<span class="tl-flag gap">${r.late!=null?'late '+mins(r.late)+' · room for '+r.room+' truck'+(r.room>1?'s':''):'long gap — check'}</span>`:''}${r.rev?'<span class="tl-flag rev">gap reviewed</span>':''}${r.fl.map(x=>`<span class="tl-flag${x.rev?' rev':''}">${esc(x.f)}${x.rev?' ✓':''}</span>`).join('')}</td></tr>`).join('')}
         </tbody></table></div></div>`;
     el('tlClose').addEventListener('click',()=>{ logKey=null; renderAllPours(); });
     el('tlCopy').addEventListener('click',async()=>{
-      const txt=`${g.elem} — ${rows.length} trucks, ${fmt(g.delivered,0)} m3\n`+rows.map((r,i)=>`${i+1}\t${loadWhen(r.l)}\tTM ${r.l.k||'-'}\t${r.l.p||'-'}\t${fmt(r.l.q)} m3${r.flag?'\t<< gap '+mins(r.gap):''}${(r.l.f||[]).length?'\t<< '+r.l.f.join(', '):''}`).join('\n');
+      const txt=`${g.elem} — ${no} trucks, ${fmt(g.delivered,0)} m3${rj.length?`, ${rj.length} rejected`:''}\n`+rows.map((r,i)=>`${r.no}\t${loadWhen(r.l)}\tTM ${r.l.k||'-'}\t${r.l.p||'-'}\t${fmt(r.l.q)} m3${r.l.rej?'\t<< REJECTED':''}${r.flag?'\t<< gap '+mins(r.gap):''}${(r.l.f||[]).length?'\t<< '+r.l.f.join(', '):''}`).join('\n');
       let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){
         try{ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); ok=document.execCommand('copy'); ta.remove(); }catch(e2){} }
       el('tlCopy').textContent=ok?'Copied ✓':'Copy failed';
@@ -1717,6 +1738,8 @@ function renderChecks(pours){
     const tm=parseTime(x.dep); items.push({id:`noes|${x.plant}|${x.truck}|${dk}|${x.dep}`, kind:'No ES', cls:'noes', txt:`${esc(x.plant)} · TM ${esc(x.truck)} · ${tm!=null?timeShort(ts(d,tm)):'no time'} · ${fmt(x.q)} m³ — not counted on any element`}); }
   for(const p of pours){
     const rows=gapRows(p);
+    for(const r of rows){ if(r.l.rej) items.push({id:rejId(r.l), kind:'Rejected', cls:'rejd', k:p.key,
+      txt:`${esc(p.elem)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³ — not counted${r.l.rej&&!/^rejected$/i.test(r.l.rej)?' ('+esc(r.l.rej)+')':''}`}); }
     // gaps: ONE line per element (the truck log lists each of them); Skip marks every gap listed now as reviewed,
     // so a new late truck brings the line back
     const fl=rows.filter(r=>r.flag), flOpen=fl.filter(r=>!SKIP[gapId(p,r)]);
@@ -2188,6 +2211,9 @@ function normalizeTab(cols, matrix, plantName){
       const relem=c.elem>=0?String(row[c.elem]||''):''; const rq=num(row[c.q]); const rk=rejKey(relem);
       if(rk&&rq>0) REJECTED[rk]=(REJECTED[rk]||0)+rq;   // tally rejected m³ per element (shown in the spotlight)
       const rd=parseDate(c.date>=0?row[c.date]:''); if(rd&&rq>0){ const rt=new Date(rd.y,rd.mo-1,rd.d).getTime(); if(rt>=TODAY_START) REJECTED_TODAY+=rq; }
+      // keep the truck itself too: it is listed (marked Rejected) in its element's truck log and in Data checks
+      if(rk) REJLIST.push({date:row[c.date]||'', plant:plantName, elem:relem, truck:c.truck>=0?String(row[c.truck]||'').trim():'', q:rq,
+        dep:c.dep>=0?(row[c.dep]||''):'', note:(EXCL.test(fu)?fu:ac).trim()});
       continue; }
     const q=num(row[c.q]); if(q>0)nQ++;
     const dep=c.dep>=0?(row[c.dep]||''):''; const end=c.end>=0?(row[c.end]||''):'';
@@ -2390,7 +2416,7 @@ async function loadLive(){
     // so re-opening the app never forces the user to re-pick "Today". They change the date manually if needed.
   } else { try{console.log('Plan sheet not reachable — is it shared "Anyone with the link"?');}catch(e){} }
   let allRows=[]; const report=[]; let anyOk=false;
-  NOES=[];
+  NOES=[]; REJLIST=[];
   REJECTED={}; REJECTED_TODAY=0;   // recomputed fresh each pull from every station tab's Follow Up column
   for(const r of results){
     if(r.ok){ const nz=normalizeTab(r.cols,r.matrix,r.token);
