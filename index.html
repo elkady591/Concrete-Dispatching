@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000005">
+<meta name="app-build" content="20261011-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -266,6 +266,34 @@
   .sb-t{font-family:var(--sans);font-size:10.5px;opacity:.85;margin-top:2px;white-space:nowrap}
   .sb-rem{font-family:var(--sans);font-size:10.5px;font-weight:700;color:var(--muted);margin-top:3px;white-space:nowrap}
   .sb-rem.ok{color:var(--green)}
+  .sb-tbl tbody td.sb-el.clk{cursor:pointer}
+  .sb-tbl tbody td.sb-el.clk:hover,.sb-tbl tbody td.sb-el.open{background:rgba(124,131,255,.14)}
+  .sb-more{font-size:10px;color:var(--faint)}
+  /* data checks: truck log + review list */
+  #truckLog .tl-card{margin-top:12px}
+  .tl-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-bottom:10px}
+  .tl-tbl{width:100%}
+  .tl-tbl thead th,.tl-tbl tbody td{padding:7px 10px;white-space:nowrap}
+  .tl-tbl tbody tr.gap td{background:rgba(251,113,133,.10)}
+  .tl-tbl tbody tr.gap td:first-child{box-shadow:inset 3px 0 0 var(--rose)}
+  .tl-tbl tbody tr.prev td:nth-child(2){color:var(--amber)}
+  .tl-flag{display:inline-block;font-size:10.5px;font-weight:800;white-space:nowrap;color:var(--amber);border:1px solid var(--amber);
+    border-radius:99px;padding:1px 8px;margin-inline-end:6px}
+  .tl-flag.gap{color:var(--rose);border-color:var(--rose)}
+  .tl-flag.noes{color:var(--violet);border-color:var(--violet)}
+  .chk-box{margin-top:12px;border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.06);border-radius:14px;padding:10px 14px}
+  .chk-head{font-size:12px;font-weight:800;color:var(--amber);margin-bottom:6px}
+  .chk-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 2px;font-size:12.5px;padding:5px 0;border-top:1px solid var(--line)}
+  .chk-row.clk{cursor:pointer} .chk-row.clk:hover{color:#fff}
+  .tl-flag.rev{color:var(--faint);border-color:var(--line2)}
+  .chk-box.clear{border-color:var(--line2);background:rgba(255,255,255,.03)} .chk-box.clear .chk-head{color:var(--green)}
+  .chk-txt{flex:1;min-width:160px}
+  .chk-skip{margin-inline-start:auto;background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--ink);border-radius:99px;
+    padding:2px 12px;font-size:11.5px;font-weight:700;cursor:pointer}
+  .chk-skip:hover{background:rgba(255,255,255,.14)}
+  .chk-row.skipped .tl-flag,.chk-row.skipped .chk-txt{opacity:.45}
+  .chk-foot{padding-top:8px;border-top:1px solid var(--line);font-size:11.5px}
+  .chk-ok{margin:10px 2px 0;font-size:11.5px;color:var(--faint)}
   .sb-c.on{background:rgba(34,211,238,.13);color:var(--cyan)}
   .sb-c.old{background:rgba(255,255,255,.04);color:var(--muted)}
   .sb-c.cont{background:rgba(245,158,11,.14);color:var(--amber)}
@@ -561,6 +589,8 @@
   <!-- ALL POURS VIEW -->
   <section id="poursView">
     <div id="stationBoard"></div>
+    <div id="checkBox"></div>
+    <div id="truckLog"></div>
     <div id="plantTabs" class="ptabs"></div>
     <div class="section-title" id="tblTitle">All Pours</div>
     <div id="tableArea"></div>
@@ -1155,7 +1185,7 @@ function build(matrix, colHeader){
     if(endT!=null&&depT!=null&&endT<depT)endT+=86400000;
     // hourly-rate breakdown buckets by LOAD time = Departure (when the truck left the plant), NOT END/arrival —
     // so each window shows the m³ actually LOADED in that hour. Fall back to END only if departure is blank.
-    g.loads.push({t:(depT!=null?depT:endT), q, prev:prev?dk:'', p:plant});
+    g.loads.push({t:(depT!=null?depT:endT), q, prev:prev?dk:'', p:plant, k:c.truck>=0?String(row[c.truck]||'').trim():'', nt:depT==null});
     if(prev){ g.carried=(g.carried||0)+q; g.carriedTrucks=(g.carriedTrucks||0)+1; if(!g.carriedFrom||dk<g.carriedFrom)g.carriedFrom=dk; }
     if(depT!=null&&(g.depMin==null||depT<g.depMin))g.depMin=depT;
     if(endT!=null&&(g.endMax==null||endT>g.endMax))g.endMax=endT;
@@ -1591,6 +1621,135 @@ function renderSummary(){
   el('closedList').querySelectorAll('.reopen-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), false)));
 }
 
+/* ---------- data checks (All Pours view) ----------
+   Helps find a truck that was left out of the sheet, without walking the five station tabs:
+     • truck log   — tap an element in "Stations now": every truck on it, all stations, in time order.
+     • gaps        — a wait much longer than the pour's usual truck-to-truck interval is marked "check".
+     • entry flags — no ES (such a truck is dropped from every pour), odd quantity, no load time,
+                     the same truck entered twice within minutes.
+   Nothing here changes the numbers; it only points at rows worth a second look. */
+let NOES=[];            // trucks typed without an ES id (collected by normalizeTab on every pull)
+let logKey=null;        // the pour whose truck log is open
+const MAX_LOAD=12;      // m³ — one truck above this is flagged
+const DUP_WINDOW=10*60000;
+const GAP_MIN=30*60000; // no target rate: a gap is only flagged above this, however fast the pour runs
+const LATE_TOL=1.75;    // with a target rate: late = more than 1.75 × the expected truck-to-truck interval
+                        // (a pour simply running a bit under target is not flagged; a hole big enough for a whole truck is)…
+const LATE_MIN=10*60000;// …and at least 10 min past it (so a 6-min interval isn't flagged at 9 min)
+const KEY_SKIP='cmpour:chkskip';
+let SKIP={};            // checks the user marked as reviewed on this device: {id: when}
+let showSkipped=false;
+const gapId=(p,r)=>`gap|${p.key}|${r.l.t}`;
+const flagId=(p,l,f)=>`f|${f}|${p.key}|${l.k}|${l.t}`;
+function loadWhen(l){ if(l.t==null||l.nt) return '—'; return (l.prev?l.prev.slice(5)+' ':'')+timeShort(l.t); }
+// How often a truck SHOULD load on this pour, from its target rate (manual rate if typed, else the plan's):
+//   target m³/h ÷ average m³ per truck = trucks per hour  ->  one truck every (60 ÷ that) minutes.
+// Returns {every(ms), rate, load} or null when the pour has no target rate.
+function expectedEvery(g){
+  const rate=g.rateManual!=null?g.rateManual:g.planRate;
+  const qs=(g.loads||[]).map(l=>l.q).filter(q=>q>0);
+  if(!(rate>0)||!qs.length) return null;
+  const load=qs.reduce((a,b)=>a+b,0)/qs.length;
+  return {every:load/rate*3600000, rate, load};
+}
+// per-pour gap analysis: [{l,gap(ms)|null,flag,late(ms)}] in time order.
+// A truck is LATE when it loaded more than LATE_TOL × the expected interval after the one before it.
+// Without a target rate it falls back to the pour's own usual interval (2 × median, at least 30 min).
+function gapRows(g){
+  const ls=(g.loads||[]).slice().sort((a,b)=>(a.t||0)-(b.t||0));
+  const rows=ls.map((l,i)=>({l, gap:(i>0&&l.t!=null&&ls[i-1].t!=null)?l.t-ls[i-1].t:null, flag:false, late:null}));
+  const ex=expectedEvery(g);
+  if(ex){ const thr=Math.max(ex.every*LATE_TOL, ex.every+LATE_MIN);
+    rows.forEach(r=>{ if(r.gap!=null&&r.gap>thr){ r.flag=true; r.late=r.gap-ex.every; r.room=Math.max(1,Math.round(r.gap/ex.every)-1); } }); }   // room = trucks that would have fitted in the gap
+  else{ const gs=rows.map(r=>r.gap).filter(x=>x!=null&&x>0).sort((a,b)=>a-b);
+    if(gs.length>=3){ const med=gs[Math.floor(gs.length/2)], thr=Math.max(2*med,GAP_MIN); rows.forEach(r=>{ if(r.gap!=null&&r.gap>thr) r.flag=true; }); } }
+  rows.ex=ex;
+  return rows;
+}
+// entry flags per load, written onto the load itself (l.f = [labels])
+function flagLoads(groups){
+  const byTruck={};
+  for(const g of groups) for(const l of (g.loads||[])){
+    l.f=[];
+    if(!(l.q>0)) l.f.push('no quantity'); else if(l.q>MAX_LOAD) l.f.push('over '+MAX_LOAD+' m³');
+    if(l.nt) l.f.push('no load time');
+    if(l.k&&l.t!=null&&!l.nt) (byTruck[l.k]=byTruck[l.k]||[]).push(l);
+  }
+  for(const k in byTruck){ const a=byTruck[k].sort((x,y)=>x.t-y.t);
+    for(let i=1;i<a.length;i++) if(a[i].t-a[i-1].t<DUP_WINDOW){ for(const l of [a[i-1],a[i]]) if(!l.f.includes('entered twice?')) l.f.push('entered twice?'); } }
+}
+function renderChecks(pours){
+  const lg=el('truckLog'), cb=el('checkBox'); if(!lg||!cb) return;
+  flagLoads(VD.summary.filter(g=>g.trucks>0));   // duplicates are looked for across every pour, closed ones too
+  const mins=ms=>Math.round(ms/60000)+' min';
+  // ---- truck log of the selected element ----
+  const g=logKey?pours.find(x=>x.key===logKey):null;
+  if(!g){ logKey=null; lg.innerHTML=''; }
+  else{
+    const rows=gapRows(g);
+    rows.forEach(r=>{ r.rev=r.flag&&!!SKIP[gapId(g,r)]; if(r.rev) r.flag=false;   // skipped checks show as "reviewed"
+      r.fl=(r.l.f||[]).map(f=>({f,rev:!!SKIP[flagId(g,r.l,f)]})); });
+    const nGap=rows.filter(r=>r.flag).length, nFl=rows.filter(r=>r.fl.some(x=>!x.rev)).length;
+    lg.innerHTML=`<div class="card tl-card">
+      <div class="tl-head"><h3 style="margin:0">Trucks — ${esc(g.elem||'—')}</h3>
+        <span class="muted" style="font-size:12px">${rows.length} trucks · ${fmt(g.delivered,0)} m³${nGap?` · <b style="color:var(--rose)">${nGap} gap${nGap>1?'s':''} to check</b>`:''}${nFl?` · <b style="color:var(--amber)">${nFl} flagged</b>`:''}${rows.ex?`<br>Target ${fmt(rows.ex.rate)} m³/h ÷ ${fmt(rows.ex.load)} m³ per truck = a truck every <b style="color:var(--ink)">${mins(rows.ex.every)}</b>`:'<br>No target rate on this element — gaps are judged against its own usual interval'}</span>
+        <span style="margin-inline-start:auto;display:flex;gap:8px"><button class="btn ghost" id="tlCopy" style="padding:4px 12px;font-size:12px">Copy</button><button class="btn ghost" id="tlClose" style="padding:4px 10px;font-size:12px">✕</button></span></div>
+      <div class="tbl-wrap"><table class="tl-tbl">
+        <thead><tr><th>#</th><th>Loaded</th><th>Truck</th><th>Station</th><th>m³</th><th>Since previous</th><th>Check</th></tr></thead>
+        <tbody>${rows.map((r,i)=>`<tr class="${r.flag?'gap':''}${r.l.prev?' prev':''}">
+          <td class="num muted">${i+1}</td><td class="num">${loadWhen(r.l)}</td><td class="num" style="font-weight:800">${esc(r.l.k||'—')}</td>
+          <td>${esc(r.l.p||'—')}</td><td class="num">${fmt(r.l.q)}</td>
+          <td class="num ${r.flag?'':'muted'}">${r.gap!=null?mins(r.gap):'—'}</td>
+          <td>${r.flag?`<span class="tl-flag gap">${r.late!=null?'late '+mins(r.late)+' · room for '+r.room+' truck'+(r.room>1?'s':''):'long gap — check'}</span>`:''}${r.rev?'<span class="tl-flag rev">gap reviewed</span>':''}${r.fl.map(x=>`<span class="tl-flag${x.rev?' rev':''}">${esc(x.f)}${x.rev?' ✓':''}</span>`).join('')}</td></tr>`).join('')}
+        </tbody></table></div></div>`;
+    el('tlClose').addEventListener('click',()=>{ logKey=null; renderAllPours(); });
+    el('tlCopy').addEventListener('click',async()=>{
+      const txt=`${g.elem} — ${rows.length} trucks, ${fmt(g.delivered,0)} m3\n`+rows.map((r,i)=>`${i+1}\t${loadWhen(r.l)}\tTM ${r.l.k||'-'}\t${r.l.p||'-'}\t${fmt(r.l.q)} m3${r.flag?'\t<< gap '+mins(r.gap):''}${(r.l.f||[]).length?'\t<< '+r.l.f.join(', '):''}`).join('\n');
+      let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){
+        try{ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); ok=document.execCommand('copy'); ta.remove(); }catch(e2){} }
+      el('tlCopy').textContent=ok?'Copied ✓':'Copy failed';
+    });
+  }
+  // ---- list of things to review ----
+  const from=CFG.fromDate||'', to=CFG.toDate||'';
+  const items=[];
+  for(const x of NOES){ const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
+    const tm=parseTime(x.dep); items.push({id:`noes|${x.plant}|${x.truck}|${dk}|${x.dep}`, kind:'No ES', cls:'noes', txt:`${esc(x.plant)} · TM ${esc(x.truck)} · ${tm!=null?timeShort(ts(d,tm)):'no time'} · ${fmt(x.q)} m³ — not counted on any element`}); }
+  for(const p of pours){
+    const rows=gapRows(p);
+    // gaps: ONE line per element (the truck log lists each of them); Skip marks every gap listed now as reviewed,
+    // so a new late truck brings the line back
+    const fl=rows.filter(r=>r.flag), flOpen=fl.filter(r=>!SKIP[gapId(p,r)]);
+    if(fl.length){ const src=flOpen.length?flOpen:fl, worst=src.reduce((a,r)=>r.gap>a.gap?r:a,src[0]);
+      const room=src.reduce((s,r)=>s+(r.room||0),0);
+      items.push({ids:src.map(r=>gapId(p,r)), skipped:!flOpen.length, kind:rows.ex?'Late trucks':'Gaps', cls:'gap', k:p.key,
+        txt:`${esc(p.elem)} · ${src.length} gap${src.length>1?'s':''} longer than expected${rows.ex?` (a truck every ${mins(rows.ex.every)})`:''} · longest ${mins(worst.gap)} before ${loadWhen(worst.l)}${room?` · room for about ${room} truck${room>1?'s':''}`:''}`}); }
+    // still running and the NEXT truck is already overdue
+    const ex=rows.ex, lastT=rows.length?rows[rows.length-1].l.t:null;
+    if(ex && lastT!=null && (p.status==='active'||p.status==='none') && !(p.remaining<=0)){
+      const wait=Date.now()-lastT;
+      if(wait>Math.max(ex.every*LATE_TOL, ex.every+LATE_MIN)) items.push({id:`now|${p.key}|${lastT}`, kind:'Overdue now', cls:'gap', k:p.key,
+        txt:`${esc(p.elem)} · no truck for ${mins(wait)} (last ${timeShort(lastT)}) — expected every ${mins(ex.every)}`});
+    }
+    for(const r of rows){ for(const f of (r.l.f||[])) items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${esc(p.elem)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`}); }
+  }
+  // "Skip" = I looked at this one, it is fine: it leaves the list (and stops being marked in the truck log)
+  // on this device until Undo. Kept in local storage; entries older than a week are dropped.
+  const isSk=it=>it.ids?!!it.skipped:!!SKIP[it.id];
+  const open=items.filter(it=>!isSk(it)), skipped=items.filter(isSk);
+  const row=(it,sk)=>`<div class="chk-row${it.k?' clk':''}${sk?' skipped':''}" ${it.k?`data-k="${encodeURIComponent(it.k)}"`:''}><span class="tl-flag ${it.cls}">${esc(it.kind)}</span><span class="chk-txt">${it.txt}</span><button class="chk-skip" data-id="${encodeURIComponent((it.ids||[it.id]).join('\n'))}" data-on="${sk?0:1}">${sk?'Undo':'Skip'}</button></div>`;
+  const foot=skipped.length?`<div class="chk-foot"><span class="filter-clear" id="chkShow">${showSkipped?'Hide':'Show'} skipped (${skipped.length})</span></div>`:'';
+  cb.innerHTML = (open.length||skipped.length)
+    ? `<div class="chk-box${open.length?'':' clear'}"><div class="chk-head">${open.length?`&#9888; Data checks · ${open.length} to review`:'&#10003; Data checks · nothing left to review'}</div>
+        ${open.map(it=>row(it,false)).join('')}${showSkipped?skipped.map(it=>row(it,true)).join(''):''}${foot}</div>`
+    : `<div class="chk-ok">&#10003; Data checks: nothing to review on the open pours</div>`;
+  cb.querySelectorAll('.chk-skip').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
+    for(const id of decodeURIComponent(b.dataset.id).split('\n')){ if(b.dataset.on==='1') SKIP[id]=Date.now(); else delete SKIP[id]; }
+    stSet(KEY_SKIP,SKIP); renderAllPours(); }));
+  const cs=el('chkShow'); if(cs) cs.addEventListener('click',()=>{ showSkipped=!showSkipped; renderAllPours(); });
+  cb.querySelectorAll('.chk-row.clk').forEach(r=>r.addEventListener('click',()=>{ logKey=decodeURIComponent(r.dataset.k); renderAllPours(); const t=el('truckLog'); if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'nearest'}); }));
+}
+
 /* ---------- all pours view ---------- */
 function renderAllPours(){
   // use the plan-driven pour list (same-name pours split & numbered), started ones only
@@ -1636,7 +1795,7 @@ function renderAllPours(){
       <div class="tbl-wrap"><table class="sb-tbl">
         <thead><tr><th class="sb-elh">Element</th>${all.map((s,j)=>`<th class="sb-sth${activeTab===s?' sel':''}${plants.includes(s)?' clk':''}" data-st="${encodeURIComponent(s)}">${esc(s)}<div class="sb-stat${stActive[j]?' on':''}">${stActive[j]?'active':'idle'}</div></th>`).join('')}<th class="sb-toth">Total</th></tr></thead>
         <tbody>${rowsP.length ? rowsP.map(r=>`<tr>
-            <td class="sb-el">${esc(r.g.elem||'—')}${r.g.carried>0?`<div class="sb-from">&#8618; from ${String(r.g.carriedFrom||'').slice(5)}</div>`:''}</td>
+            <td class="sb-el clk${logKey===r.g.key?' open':''}" data-k="${encodeURIComponent(r.g.key)}" title="Show this element's trucks">${esc(r.g.elem||'—')} <span class="sb-more">&#9662;</span>${r.g.carried>0?`<div class="sb-from">&#8618; from ${String(r.g.carriedFrom||'').slice(5)}</div>`:''}</td>
             ${r.cells.map(cellHtml).join('')}
             <td class="sb-tot"><b>${r.g.trucks}</b> trk<div class="sb-q">${fmt(r.g.delivered,0)} m³</div>${r.g.remaining!=null?(r.g.remaining>0?`<div class="sb-rem">${fmt(r.g.remaining,0)} m³ left</div>`:'<div class="sb-rem ok">✓ done</div>'):''}</td>
           </tr>`).join('') : `<tr><td class="sb-el" colspan="${all.length+2}" style="color:var(--faint);font-weight:500">No open pours</td></tr>`}
@@ -1649,7 +1808,10 @@ function renderAllPours(){
       const s=decodeURIComponent(c.dataset.st);
       activeTab=(activeTab===s||!plants.includes(s))?'ALL':s; statusFilter=null; await saveCfg(); rerender();   // tap again = back to All
     }));
+    sb.querySelectorAll('.sb-el.clk').forEach(c=>c.addEventListener('click',()=>{   // element name -> its truck log
+      const k=decodeURIComponent(c.dataset.k); logKey=(logKey===k)?null:k; renderAllPours(); }));
   }
+  renderChecks(pours);
 
   const st=activeTab==='ALL'?null:activeTab;   // a station tab adds two columns: that station's own trucks + m³ per element
   let list = activeTab==='ALL' ? pours : pours.filter(g=>inStation(g,activeTab));
@@ -2016,7 +2178,11 @@ function normalizeTab(cols, matrix, plantName){
   for(const row of dataRows){
     if(!row||row.length===0)continue;
     // ES rule: a truck with no ES id is not attributed to any pour -> ignore it completely.
-    if(esMode && !String(row[esCol]==null?'':row[esCol]).trim()){ nNoEs++; continue; }
+    if(esMode && !String(row[esCol]==null?'':row[esCol]).trim()){ nNoEs++;
+      // …but keep a note of it for the Data checks list: a real truck typed without its ES is a truck missing from its pour
+      const tk=c.truck>=0?String(row[c.truck]||'').trim():'', nq=num(row[c.q]);
+      if(tk && nq>0) NOES.push({date:row[c.date]||'', plant:plantName, truck:tk, q:nq, dep:c.dep>=0?(row[c.dep]||''):''});
+      continue; }
     const fu=c.follow>=0?String(row[c.follow]||''):''; const ac=c.action>=0?String(row[c.action]||''):'';
     if(EXCL.test(fu)||EXCL.test(ac)){ nExcl++;
       const relem=c.elem>=0?String(row[c.elem]||''):''; const rq=num(row[c.q]); const rk=rejKey(relem);
@@ -2224,6 +2390,7 @@ async function loadLive(){
     // so re-opening the app never forces the user to re-pick "Today". They change the date manually if needed.
   } else { try{console.log('Plan sheet not reachable — is it shared "Anyone with the link"?');}catch(e){} }
   let allRows=[]; const report=[]; let anyOk=false;
+  NOES=[];
   REJECTED={}; REJECTED_TODAY=0;   // recomputed fresh each pull from every station tab's Follow Up column
   for(const r of results){
     if(r.ok){ const nz=normalizeTab(r.cols,r.matrix,r.token);
@@ -2359,6 +2526,8 @@ function requireAuth(){
   RATE=(await stGet(KEY_RATE))||{};
   DONE=(await stGet(KEY_DONE))||{};
   DONE_ORDER=(await stGet(KEY_DONE_ORDER))||[];
+  SKIP=(await stGet(KEY_SKIP))||{};
+  for(const k in SKIP){ if(Date.now()-SKIP[k]>7*86400000) delete SKIP[k]; }   // reviewed-check marks expire after a week
   const savedCfg=await stGet(KEY_CFG);
   if(savedCfg){
     if(savedCfg.sheetId)el('sheetId').value=savedCfg.sheetId;
