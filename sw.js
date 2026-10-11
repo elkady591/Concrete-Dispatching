@@ -5,7 +5,7 @@
      (so the built-in self-update keeps working), and fall back to the cached shell only when offline.
    - Static assets (icons/manifest) are cache-first for speed.
    Bump CACHE only when this file itself changes. */
-const CACHE = 'pourtracker-v3';
+const CACHE = 'pourtracker-v4';
 const SHELL = [
   './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png',
@@ -31,10 +31,14 @@ self.addEventListener('fetch', e => {
 
   const isNav = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
   if (isNav) {
-    // network-first: newest build wins; cache a clean copy under a stable key for the offline fallback
+    // network-first: newest build wins; cache a clean copy under a stable key for the offline fallback.
+    // 'no-cache' makes the browser re-check with the server instead of re-using its own 10-minute copy,
+    // so a new build is picked up on the very next open. Only the app page itself is kept as the offline
+    // shell (opening e.g. the manifest in a tab must not overwrite it).
+    const isShell = /\/(index\.html)?$/.test(url.pathname);
     e.respondWith(
-      fetch(req)
-        .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); return res; })
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
+        .then(res => { if (isShell && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); } return res; })
         .catch(() => caches.match('./index.html'))
     );
     return;
@@ -79,6 +83,8 @@ self.addEventListener('notificationclick', e => {
     const open = cs.find(c => c.url.startsWith(origin) && c.url.indexOf('/Concrete-Management/') > 0)
               || cs.find(c => c.url.startsWith(scope));
     if (open && 'focus' in open) return open.focus();
-    return clients.openWindow(d.url || scope);
+    // nothing open: start Concrete Management on Dispatching (on a phone this opens the installed app,
+    // not a browser tab) — also when the push carried no address of its own
+    return clients.openWindow(d.url || (origin + '/Concrete-Management/#dispatching'));
   })());
 });
