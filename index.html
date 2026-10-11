@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000013">
+<meta name="app-build" content="20261011-000014">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -261,6 +261,7 @@
   .sb-tbl tbody td.sb-el{text-align:start;padding-inline-start:14px;font-family:var(--sans);font-weight:800;font-size:13px;overflow-wrap:anywhere}
   .sb-tbl tbody td.sb-tot{text-align:end;padding-inline-end:14px}
   .sb-tbl tbody td.sb-e{color:var(--faint)}
+  .sb-cl{font-size:10.5px;font-weight:500;color:var(--faint);margin-top:1px;overflow-wrap:anywhere}
   .sb-from{font-size:10.5px;font-weight:700;color:var(--amber);margin-top:1px}
   .sb-q{font-size:11px;opacity:.85}
   .sb-t{font-family:var(--sans);font-size:10.5px;opacity:.85;margin-top:2px;white-space:nowrap}
@@ -310,7 +311,7 @@
     .sb-tbl thead th.sb-elh{width:22%;padding-inline-start:8px} .sb-tbl thead th.sb-toth{width:17%;padding-inline-end:8px}
     .sb-tbl tbody td{font-size:11px;padding:6px 1px}
     .sb-tbl tbody td.sb-el{font-size:11.5px;padding-inline-start:8px} .sb-tbl tbody td.sb-tot{padding-inline-end:8px}
-    .sb-q,.sb-t,.sb-stat,.sb-from,.sb-rem{font-size:10px} .sb-ck{display:none}
+    .sb-q,.sb-t,.sb-stat,.sb-from,.sb-rem,.sb-cl{font-size:10px} .sb-ck{display:none}
   }
 
   /* Plant tabs + table */
@@ -1638,6 +1639,8 @@ function renderSummary(){
                      the same truck entered twice within minutes.
    Nothing here changes the numbers; it only points at rows worth a second look. */
 const mins=ms=>Math.round(ms/60000)+' min';
+// an element's name the way every list shows it: code + whose it is, e.g. "10UJE (TREST)"
+const elName=g=>esc((g&&g.elem)||'—')+((g&&g.client)?' ('+esc(g.client)+')':'');
 let NOES=[];            // trucks typed without an ES id (collected by normalizeTab on every pull)
 let REJLIST=[];         // rejected / wasted trucks, one entry each (same pull)
 const rejId=l=>`rej|${l.p}|${l.k}|${l.dk}|${l.t}`;
@@ -1718,7 +1721,7 @@ function renderChecks(pours){
     const rj=rows.filter(r=>r.l.rej), rjQ=rj.reduce((s,r)=>s+(r.l.q||0),0);
     let no=0; rows.forEach(r=>{ r.no=r.l.rej?'R':String(++no); });   // rejected trucks are listed but not numbered / counted
     lg.innerHTML=`<div class="card tl-card">
-      <div class="tl-head"><h3 style="margin:0">Trucks — ${esc(g.elem||'—')}</h3>
+      <div class="tl-head"><h3 style="margin:0">Trucks — ${elName(g)}</h3>
         <span class="muted" style="font-size:12px">${no} trucks · ${fmt(g.delivered,0)} m³${rj.length?` · <b style="color:var(--rose)">${rj.length} rejected (${fmt(rjQ)} m³, not counted)</b>`:''}${nGap?` · <b style="color:var(--rose)">${nGap} gap${nGap>1?'s':''} to check</b>`:''}${nFl?` · <b style="color:var(--amber)">${nFl} flagged</b>`:''}${rows.ex?`<br>Target ${fmt(rows.ex.rate)} m³/h ÷ ${fmt(rows.ex.load)} m³ per truck = a truck every <b style="color:var(--ink)">${mins(rows.ex.every)}</b>`:'<br>No target rate on this element — gaps are judged against its own usual interval'}</span>
         <span style="margin-inline-start:auto;display:flex;gap:8px"><button class="btn ghost" id="tlCopy" style="padding:4px 12px;font-size:12px">Copy</button><button class="btn ghost" id="tlClose" style="padding:4px 10px;font-size:12px">✕</button></span></div>
       <div class="tbl-wrap"><table class="tl-tbl">
@@ -1731,7 +1734,7 @@ function renderChecks(pours){
         </tbody></table></div></div>`;
     el('tlClose').addEventListener('click',()=>{ logKey=null; renderAllPours(); });
     el('tlCopy').addEventListener('click',async()=>{
-      const txt=`${g.elem} — ${no} trucks, ${fmt(g.delivered,0)} m3${rj.length?`, ${rj.length} rejected`:''}\n`+rows.map((r,i)=>`${r.no}\t${loadWhen(r.l)}\tTM ${r.l.k||'-'}\t${r.l.p||'-'}\t${fmt(r.l.q)} m3${r.l.rej?'\t<< REJECTED':''}${r.flag?'\t<< gap '+mins(r.gap):''}${(r.l.f||[]).length?'\t<< '+r.l.f.join(', '):''}`).join('\n');
+      const txt=`${g.elem}${g.client?' ('+g.client+')':''} — ${no} trucks, ${fmt(g.delivered,0)} m3${rj.length?`, ${rj.length} rejected`:''}\n`+rows.map((r,i)=>`${r.no}\t${loadWhen(r.l)}\tTM ${r.l.k||'-'}\t${r.l.p||'-'}\t${fmt(r.l.q)} m3${r.l.rej?'\t<< REJECTED':''}${r.flag?'\t<< gap '+mins(r.gap):''}${(r.l.f||[]).length?'\t<< '+r.l.f.join(', '):''}`).join('\n');
       let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){
         try{ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); ok=document.execCommand('copy'); ta.remove(); }catch(e2){} }
       el('tlCopy').textContent=ok?'Copied ✓':'Copy failed';
@@ -1752,22 +1755,22 @@ function collectChecks(pours){
   for(const p of pours){
     const rows=gapRows(p);
     for(const r of rows){ if(r.l.rej) items.push({id:rejId(r.l), kind:'Rejected', cls:'rejd', k:p.key,
-      txt:`${esc(p.elem)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³ — not counted${r.l.rej&&!/^rejected$/i.test(r.l.rej)?' ('+esc(r.l.rej)+')':''}`}); }
+      txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³ — not counted${r.l.rej&&!/^rejected$/i.test(r.l.rej)?' ('+esc(r.l.rej)+')':''}`}); }
     // gaps: ONE line per element (the truck log lists each of them); Skip marks every gap listed now as reviewed,
     // so a new late truck brings the line back
     const fl=rows.filter(r=>r.flag), flOpen=fl.filter(r=>!SKIP[gapId(p,r)]);
     if(fl.length){ const src=flOpen.length?flOpen:fl, worst=src.reduce((a,r)=>r.gap>a.gap?r:a,src[0]);
       const room=src.reduce((s,r)=>s+(r.room||0),0);
       items.push({ids:src.map(r=>gapId(p,r)), skipped:!flOpen.length, kind:rows.ex?'Late trucks':'Gaps', cls:'gap', k:p.key,
-        txt:`${esc(p.elem)} · ${src.length} gap${src.length>1?'s':''} longer than expected${rows.ex?` (a truck every ${mins(rows.ex.every)})`:''} · longest ${mins(worst.gap)} before ${loadWhen(worst.l)}${room?` · room for about ${room} truck${room>1?'s':''}`:''}`}); }
+        txt:`${elName(p)} · ${src.length} gap${src.length>1?'s':''} longer than expected${rows.ex?` (a truck every ${mins(rows.ex.every)})`:''} · longest ${mins(worst.gap)} before ${loadWhen(worst.l)}${room?` · room for about ${room} truck${room>1?'s':''}`:''}`}); }
     // still running and the NEXT truck is already overdue
     const ex=rows.ex, lastT=rows.length?rows[rows.length-1].l.t:null;
     if(ex && lastT!=null && (p.status==='active'||p.status==='none') && !(p.remaining<=0)){
       const wait=Date.now()-lastT;
       if(wait>Math.max(ex.every*LATE_TOL, ex.every+LATE_MIN)) items.push({id:`now|${p.key}|${lastT}`, kind:'Overdue now', cls:'gap', k:p.key,
-        txt:`${esc(p.elem)} · no truck for ${mins(wait)} (last ${timeShort(lastT)}) — expected every ${mins(ex.every)}`});
+        txt:`${elName(p)} · no truck for ${mins(wait)} (last ${timeShort(lastT)}) — expected every ${mins(ex.every)}`});
     }
-    for(const r of rows){ for(const f of (r.l.f||[])) items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${esc(p.elem)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`}); }
+    for(const r of rows){ for(const f of (r.l.f||[])) items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`}); }
   }
   return items;
 }
@@ -1834,7 +1837,7 @@ function renderAllPours(){
       <div class="tbl-wrap"><table class="sb-tbl">
         <thead><tr><th class="sb-elh">Element</th>${all.map((s,j)=>`<th class="sb-sth${activeTab===s?' sel':''}${plants.includes(s)?' clk':''}" data-st="${encodeURIComponent(s)}">${esc(s)}<div class="sb-stat${stActive[j]?' on':''}">${stActive[j]?'active':'idle'}</div></th>`).join('')}<th class="sb-toth">Total</th></tr></thead>
         <tbody>${rowsP.length ? rowsP.map(r=>`<tr>
-            <td class="sb-el clk${logKey===r.g.key?' open':''}" data-k="${encodeURIComponent(r.g.key)}" title="Show this element's trucks">${esc(r.g.elem||'—')} <span class="sb-more">&#9662;</span>${r.g.carried>0?`<div class="sb-from">&#8618; from ${String(r.g.carriedFrom||'').slice(5)}</div>`:''}</td>
+            <td class="sb-el clk${logKey===r.g.key?' open':''}" data-k="${encodeURIComponent(r.g.key)}" title="Show this element's trucks">${esc(r.g.elem||'—')} <span class="sb-more">&#9662;</span>${r.g.client?`<div class="sb-cl">${esc(r.g.client)}</div>`:''}${r.g.carried>0?`<div class="sb-from">&#8618; from ${String(r.g.carriedFrom||'').slice(5)}</div>`:''}</td>
             ${r.cells.map(cellHtml).join('')}
             <td class="sb-tot"><b>${r.g.trucks}</b> trk<div class="sb-q">${fmt(r.g.delivered,0)} m³</div>${r.g.remaining!=null?(r.g.remaining>0?`<div class="sb-rem">${fmt(r.g.remaining,0)} m³ left</div>`:'<div class="sb-rem ok">✓ done</div>'):''}</td>
           </tr>`).join('') : `<tr><td class="sb-el" colspan="${all.length+2}" style="color:var(--faint);font-weight:500">No open pours</td></tr>`}
