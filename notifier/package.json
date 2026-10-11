@@ -1,0 +1,10 @@
+{
+  "name": "concrete-dispatching-notifier",
+  "private": true,
+  "type": "module",
+  "description": "Scheduled job: reads the app's Data checks and pushes the new ones to subscribed devices.",
+  "dependencies": {
+    "puppeteer-core": "22.15.0",
+    "web-push": "3.6.7"
+  }
+}
