@@ -92,5 +92,5 @@ if (fresh.length > MAX_SEPARATE) {
   await send(subs, { title: `${fresh.length} new checks`, body: kinds + ' — open the app to review.', tag: 'many-' + now, url: OPEN });
 } else {
   for (const it of fresh)
-    await send(subs, { title: TITLES[it.kind] || ('Check: ' + it.kind), body: it.text, tag: it.ids[0], url: OPEN });
+    await send(subs, { title: TITLES[it.kind] || ('Check: ' + it.kind), body: it.text, tag: it.ids[0], url: OPEN, k: it.k || '' });   // k = the pour to open on tap
 }
