@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000001">
+<meta name="app-build" content="20261011-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -248,23 +248,37 @@
   .sb-head{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:800;color:var(--muted);
     text-transform:uppercase;letter-spacing:.5px;margin:0 2px 8px}
   .sb-sum{font-family:var(--mono);font-weight:600;text-transform:none;letter-spacing:0;color:var(--faint)}
-  .sb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px;align-items:start}
-  .sb-card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line2);border-radius:14px;
-    padding:10px 12px;cursor:pointer;min-width:0}
-  .sb-card:hover{border-color:var(--accent)}
-  .sb-card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
-  .sb-card.idle{opacity:.6}
-  .sb-top{display:flex;justify-content:space-between;align-items:center}
-  .sb-top b{font-size:15px;font-weight:800}
-  .sb-st{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.06);color:var(--faint)}
-  .sb-st.on{background:rgba(52,211,153,.14);color:var(--green)}
-  .sb-item{border-top:1px solid var(--line);margin-top:8px;padding-top:7px}
-  .sb-item.carry{box-shadow:inset 3px 0 0 var(--amber);padding-inline-start:8px}
-  .sb-el{font-weight:800;font-size:13px;overflow-wrap:anywhere}
-  .sb-num{font-family:var(--mono);font-size:12px;color:var(--ink);margin-top:1px}
-  .sb-last,.sb-none{font-size:11px;color:var(--faint);margin-top:2px}
-  .sb-none{margin-top:12px}
-  @media(max-width:560px){ .sb-grid{grid-template-columns:repeat(2,1fr)} }
+  .sb-tbl{width:100%;table-layout:fixed}
+  .sb-tbl thead th{padding:9px 4px;text-align:center;font-size:13px;text-transform:none;letter-spacing:0;color:var(--ink);white-space:normal}
+  .sb-tbl thead th.sb-elh{text-align:start;padding-inline-start:14px;width:24%;color:var(--muted)}
+  .sb-tbl thead th.sb-toth{text-align:end;padding-inline-end:14px;width:16%;color:var(--muted)}
+  .sb-tbl thead th.clk{cursor:pointer}
+  .sb-tbl thead th.clk:hover{background:rgba(255,255,255,.08)}
+  .sb-tbl thead th.sel{box-shadow:inset 0 -2px 0 var(--accent);background:rgba(124,131,255,.14)}
+  .sb-stat{font-size:10.5px;font-weight:600;color:var(--faint);margin-top:1px}
+  .sb-stat.on{color:var(--green)}
+  .sb-tbl tbody td{padding:7px 3px;text-align:center;font-family:var(--mono);font-size:12.5px;line-height:1.35}
+  .sb-tbl tbody td.sb-el{text-align:start;padding-inline-start:14px;font-family:var(--sans);font-weight:800;font-size:13px;overflow-wrap:anywhere}
+  .sb-tbl tbody td.sb-tot{text-align:end;padding-inline-end:14px}
+  .sb-tbl tbody td.sb-e{color:var(--faint)}
+  .sb-from{font-size:10.5px;font-weight:700;color:var(--amber);margin-top:1px}
+  .sb-q{font-size:11px;opacity:.85}
+  .sb-t{font-family:var(--sans);font-size:10.5px;opacity:.85;margin-top:2px;white-space:nowrap}
+  .sb-c.on{background:rgba(34,211,238,.13);color:var(--cyan)}
+  .sb-c.old{background:rgba(255,255,255,.04);color:var(--muted)}
+  .sb-c.cont{background:rgba(245,158,11,.14);color:var(--amber)}
+  .sb-sum-row td{background:rgba(124,131,255,.10);border-top:1px solid var(--line2);font-weight:600}
+  .sb-sum-row td.sb-el{color:var(--muted)}
+  .sb-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 2px 0;font-size:11px;color:var(--faint)}
+  .sb-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:6px;vertical-align:-1px}
+  .sb-legend i.on{background:rgba(34,211,238,.35)} .sb-legend i.old{background:rgba(255,255,255,.14)} .sb-legend i.cont{background:rgba(245,158,11,.4)}
+  @media(max-width:560px){
+    .sb-tbl thead th{font-size:12px;padding:8px 2px}
+    .sb-tbl thead th.sb-elh{width:22%;padding-inline-start:8px} .sb-tbl thead th.sb-toth{width:17%;padding-inline-end:8px}
+    .sb-tbl tbody td{font-size:11px;padding:6px 1px}
+    .sb-tbl tbody td.sb-el{font-size:11.5px;padding-inline-start:8px} .sb-tbl tbody td.sb-tot{padding-inline-end:8px}
+    .sb-q,.sb-t,.sb-stat,.sb-from{font-size:10px} .sb-ck{display:none}
+  }
 
   /* Plant tabs + table */
   .ptabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
@@ -1587,49 +1601,49 @@ function renderAllPours(){
   const fromStation=(g,st)=>{ let n=0,q=0; for(const l of (g.loads||[])) if(l.p===st){ n++; q+=(l.q||0); } return {n,q}; };
   const plants=[...new Set(pours.flatMap(stationsOf))].sort();
   if(activeTab!=='ALL' && !plants.includes(activeTab)) activeTab='ALL';
-  // plant tabs (filter pours that involved that station)
-  const mk=(id,label,count)=>`<div class="ptab ${activeTab===id?'active':''}" data-tab="${encodeURIComponent(id)}">${label}<span class="cnt">${count}</span></div>`;
-  let ph=mk('ALL','All',pours.length);
-  for(const p of plants){ ph+=mk(p,p,pours.filter(g=>inStation(g,p)).length); }
-  el('plantTabs').innerHTML=ph;
-  el('plantTabs').querySelectorAll('.ptab').forEach(t=>t.addEventListener('click',async()=>{
-    // picking a station (or All) shows everything it is working on — drop a leftover Active/Completed filter
-    activeTab=decodeURIComponent(t.dataset.tab); statusFilter=null; await saveCfg(); rerender();
-  }));
+  // the old All / L2 / V3 … tab row is gone: the "Stations now" cards below do the station filtering
+  el('plantTabs').innerHTML='';
 
-  // ---- "Stations now" board: one card per station (idle ones too) listing the open pours it is loading:
-  //      that station's own trucks + m³ and its last truck. A pour that started before the From date is
-  //      marked like in Active Pours; its earlier trucks are already counted in the numbers. ----
+  // ---- "Stations now" board: a grid, open pours down × stations across (idle stations keep their column).
+  //      Each cell = that station's own trucks + m³ + last truck on the element. A pour that started before
+  //      the From date is marked like in Active Pours; its earlier trucks are already counted in the numbers.
+  //      Tapping a station header filters the table below to that station. ----
   const sb=el('stationBoard');
   if(sb){
     const all=[...new Set(String((CFG&&CFG.tabs)||el('tabs').value||'').split(',').map(x=>x.trim()).filter(x=>x&&!/^\d+$/.test(x)).concat(plants))];
     const now=Date.now();
-    const cards=all.map(s=>{
-      const items=[];
-      for(const g of pours){
-        let n=0,q=0,last=null,cq=0,cFrom='';
-        for(const l of (g.loads||[])){ if(l.p!==s) continue; n++; q+=(l.q||0);
-          if(l.t!=null&&(last==null||l.t>last)) last=l.t;
-          if(l.prev){ cq+=(l.q||0); if(!cFrom||l.prev<cFrom) cFrom=l.prev; } }
-        if(n) items.push({g,n,q,last,cq,cFrom});
-      }
-      items.sort((a,b)=>(b.last||0)-(a.last||0));
-      const active=items.some(x=>x.last!=null&&(now-x.last)<ACTIVE_WINDOW);
-      return {s,items,active};
-    });
-    const nAct=cards.filter(c=>c.active).length;
-    sb.innerHTML=`<div class="sb-head"><span>Stations now</span><span class="sb-sum">${nAct} working · ${cards.length-nAct} idle</span></div>
-      <div class="sb-grid">${cards.map(c=>`
-        <div class="sb-card${activeTab===c.s?' sel':''}${c.items.length?'':' idle'}" data-st="${encodeURIComponent(c.s)}">
-          <div class="sb-top"><b>${esc(c.s)}</b><span class="sb-st ${c.active?'on':''}">${c.active?'Active':'Idle'}</span></div>
-          ${c.items.length ? c.items.map(x=>`<div class="sb-item${x.cq>0?' carry':''}">
-              <div class="sb-el">${esc(x.g.elem||'—')}</div>
-              <div class="sb-num">${x.n} trk · ${fmt(x.q,0)} m³</div>
-              ${x.cq>0?`<div class="carry-line"><span class="carry" title="Still running since ${x.cFrom}: ${fmt(x.cq)} m³ of this station's volume was loaded before the From date and is included here">&#8618; ${x.cFrom.slice(5)} · ${fmt(x.cq,0)} m³</span></div>`:''}
-              <div class="sb-last">${x.last!=null?'last '+timeShort(x.last):''}</div>
-            </div>`).join('') : '<div class="sb-none">No open pours</div>'}
-        </div>`).join('')}</div>`;
-    sb.querySelectorAll('.sb-card').forEach(c=>c.addEventListener('click',async()=>{
+    // one cell per (open pour, station): that station's own trucks, m³ and last truck on the element
+    const cellOf=(g,s)=>{ let n=0,q=0,last=null,cq=0;
+      for(const l of (g.loads||[])){ if(l.p!==s) continue; n++; q+=(l.q||0);
+        if(l.t!=null&&(last==null||l.t>last)) last=l.t;
+        if(l.prev) cq+=(l.q||0); }
+      return n?{n,q,last,cq,recent:last!=null&&(now-last)<ACTIVE_WINDOW}:null; };
+    const rowsP=pours.slice().sort((a,b)=>(b.endMax||0)-(a.endMax||0)).map(g=>({g,cells:all.map(s=>cellOf(g,s))}));
+    // station = Active when it loaded any open pour in the last 2 h; an element it loaded EARLIER stays in
+    // its column (greyed) for as long as that pour is open — only a Done mark removes it
+    const stActive=all.map((s,j)=>rowsP.some(r=>r.cells[j]&&r.cells[j].recent));
+    const stTot=all.map((s,j)=>rowsP.reduce((t,r)=>{ const c=r.cells[j]; if(c){t.n+=c.n;t.q+=c.q;} return t; },{n:0,q:0}));
+    const nAct=stActive.filter(Boolean).length;
+    const cellHtml=c=>{
+      if(!c) return '<td class="sb-e">·</td>';
+      const cls=c.cq>0?'cont':(c.recent?'on':'old');
+      const tip=c.cq>0?` title="${fmt(c.cq)} m³ of this was loaded before the From date"`:'';
+      return `<td class="sb-c ${cls}"${tip}><b>${c.n}</b> trk<div class="sb-q">${fmt(c.q,0)} m³</div><div class="sb-t">${c.last!=null?'<span class="sb-ck">&#9719; </span>'+timeShort(c.last):''}</div></td>`;
+    };
+    sb.innerHTML=`<div class="sb-head"><span>Stations now${activeTab!=='ALL'?` <span class="filter-clear" id="sbAll" style="margin-inline-start:8px;text-transform:none;letter-spacing:0">All stations ✕</span>`:''}</span><span class="sb-sum">${nAct} working · ${all.length-nAct} idle</span></div>
+      <div class="tbl-wrap"><table class="sb-tbl">
+        <thead><tr><th class="sb-elh">Element</th>${all.map((s,j)=>`<th class="sb-sth${activeTab===s?' sel':''}${plants.includes(s)?' clk':''}" data-st="${encodeURIComponent(s)}">${esc(s)}<div class="sb-stat${stActive[j]?' on':''}">${stActive[j]?'active':'idle'}</div></th>`).join('')}<th class="sb-toth">Total</th></tr></thead>
+        <tbody>${rowsP.length ? rowsP.map(r=>`<tr>
+            <td class="sb-el">${esc(r.g.elem||'—')}${r.g.carried>0?`<div class="sb-from">&#8618; from ${String(r.g.carriedFrom||'').slice(5)}</div>`:''}</td>
+            ${r.cells.map(cellHtml).join('')}
+            <td class="sb-tot"><b>${r.g.trucks}</b> trk<div class="sb-q">${fmt(r.g.delivered,0)} m³</div></td>
+          </tr>`).join('') : `<tr><td class="sb-el" colspan="${all.length+2}" style="color:var(--faint);font-weight:500">No open pours</td></tr>`}
+          ${rowsP.length?`<tr class="sb-sum-row"><td class="sb-el">Station total</td>${stTot.map(t=>t.n?`<td class="sb-c"><b>${t.n}</b><div class="sb-q">${fmt(t.q,0)} m³</div></td>`:'<td class="sb-e">—</td>').join('')}
+            <td class="sb-tot"><b>${rowsP.reduce((s,r)=>s+r.g.trucks,0)}</b> trk<div class="sb-q">${fmt(rowsP.reduce((s,r)=>s+r.g.delivered,0),0)} m³</div></td></tr>`:''}
+        </tbody></table></div>
+      <div class="sb-legend"><span><i class="on"></i>loaded in the last 2 h</span><span><i class="old"></i>loaded earlier, element still open</span><span><i class="cont"></i>continued from an earlier day</span></div>`;
+    const sa=el('sbAll'); if(sa) sa.addEventListener('click',async()=>{ activeTab='ALL'; statusFilter=null; await saveCfg(); rerender(); });
+    sb.querySelectorAll('.sb-sth.clk').forEach(c=>c.addEventListener('click',async()=>{
       const s=decodeURIComponent(c.dataset.st);
       activeTab=(activeTab===s||!plants.includes(s))?'ALL':s; statusFilter=null; await saveCfg(); rerender();   // tap again = back to All
     }));
