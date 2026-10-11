@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000014">
+<meta name="app-build" content="20261011-000015">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1008,6 +1008,7 @@ function buildPours(full, now){
       p.carried=(p.carried||0)+(l.q||0); p.carriedTrucks=(p.carriedTrucks||0)+1; if(!p.carriedFrom||l.prev<p.carriedFrom)p.carriedFrom=l.prev; }
     enrichGroup(p, now);
     p.mix=row.mix; p.client=row.client;   // keep the plan row's grade/client (planLookup can't find the starred code)
+    if(row.sc) p.sc=row.sc; if(row.tem) p.tem=row.tem; if(row.pumps) p.pumps=row.pumps;   // …and its own selection card / temperature
     return p;
   }
   // label pours of a base: keep an existing differentiator (90UPN*), else number them #1,#2 in plan order
@@ -1937,6 +1938,8 @@ function renderUpcoming(){
       <div class="uc-req">${fmt(p.planReq,0)} <small>m³</small></div>
       <div class="uc-meta">
         Target rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b><br>
+        ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
+        ${p.sc?('Mix (selection card): <b>'+esc(p.sc)+'</b><br>'):''}
         ${p.mix?('Grade: <b>'+p.mix+'</b><br>'):''}
         ${p.client?('Client: <b>'+p.client+'</b>'):''}
       </div>
