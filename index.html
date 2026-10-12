@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261011-000015">
+<meta name="app-build" content="20261012-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -374,6 +374,22 @@
   @media(max-width:960px){ .prod-grid{grid-template-columns:1fr} }
   .prod-tbl th,.prod-tbl td{padding:8px 10px;text-align:center}
   .prod-tbl th:first-child,.prod-tbl td:first-child{text-align:start;white-space:nowrap}
+  /* Today / Yesterday production cards — side by side on every screen, phones included */
+  .pd-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  .pd-grid>*{min-width:0}
+  .pd-name{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+  .pd-name small{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--faint);text-transform:none;letter-spacing:0;white-space:nowrap}
+  .pd-total{font-family:var(--mono);font-size:30px;font-weight:800;line-height:1.1;margin:6px 0 10px}
+  .pd-total small{font-size:12px;font-weight:600;color:var(--faint);margin-inline-start:5px}
+  .pd-row{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
+  .pd-p{font-weight:800}
+  .pd-q{font-family:var(--mono);font-weight:700;min-width:34px;text-align:end}
+  .pd-bar{height:6px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
+  .pd-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--cyan))}
+  @media(max-width:560px){
+    .pd-grid{gap:8px} .pd-card{padding:12px 10px}
+    .pd-total{font-size:24px} .pd-row{gap:6px;font-size:12px} .pd-name{font-size:12px;flex-direction:column;align-items:flex-start;gap:1px}
+  }
   .prod-grid>*{min-width:0}   /* let the card shrink to the screen; a table that is still too wide scrolls inside it */
   .prod-tbl{width:100%}
   @media(max-width:560px){    /* phones: tighten so Date + 5 stations + Total fit without sideways scrolling */
@@ -2305,7 +2321,39 @@ function renderProduction(){
           ${t.total?`<tr class="tot"><td>TOTAL</td>${t.total.map(v=>cell(v)).join('')}</tr>`:''}</tbody>
       </table></div></div>`;
   };
-  area.innerHTML=`<div class="prod-grid">${one(PRODTBL[0],'Production MTD · 8 AM : 8 AM')}${one(PRODTBL[1],'Production MTD · 12 AM : 12 AM')}</div>`;
+  // Today / Yesterday (8 AM : 8 AM) per station — the sheet's own two small tables, side by side above the month
+  const day=(t,name)=>{
+    if(!t) return `<div class="card pd-card"><div class="pd-name">${name}</div><div class="muted" style="font-size:12px">Not found in the sheet.</div></div>`;
+    const mx=Math.max(1,...t.rows.map(r=>r.q||0));
+    return `<div class="card pd-card">
+      <div class="pd-name">${name}<small>8 AM : 8 AM</small></div>
+      <div class="pd-total">${t.total!=null?fmt(t.total,0):'—'}<small>m³</small></div>
+      ${t.rows.map(r=>`<div class="pd-row"><span class="pd-p">${esc(r.p)}</span><div class="pd-bar"><i style="width:${((r.q||0)/mx*100).toFixed(0)}%"></i></div><span class="pd-q">${r.q!=null?fmt(r.q,0):'—'}</span></div>`).join('')}
+    </div>`;
+  };
+  const days=(PROD8.today||PROD8.yesterday)?`<div class="pd-grid">${day(PROD8.today,'Today')}${day(PROD8.yesterday,'Yesterday')}</div>`:'';
+  area.innerHTML=days+`<div class="prod-grid">${one(PRODTBL[0],'Production MTD · 8 AM : 8 AM')}${one(PRODTBL[1],'Production MTD · 12 AM : 12 AM')}</div>`;
+}
+/* The small "Today ( 8 AM : 8 AM )" / "Yesterday ( 8 AM : 8 AM )" tables on the Trucks Tracking tab:
+   a title cell, then  Plant | Production  rows (L1…V5) and a TOTAL row. Read as the sheet shows them. */
+let PROD8={today:null,yesterday:null};
+function parseDayTable(rows, titleRe){
+  let r0=-1,c0=-1;
+  for(let i=0;i<Math.min(rows.length,40)&&r0<0;i++)
+    for(let j=0;j<rows[i].length;j++)
+      if(titleRe.test(String(rows[i][j]||'').trim())){ r0=i; c0=j; break; }
+  if(r0<0) return null;
+  const val=s=>{ const x=String(s==null?'':s).replace(/[^0-9.]/g,''); return x===''?null:parseFloat(x); };
+  const out={rows:[],total:null}; let started=false;
+  for(let i=r0+1;i<Math.min(rows.length,r0+14);i++){
+    const label=String((rows[i]||[])[c0]||'').trim();
+    if(!label){ if(started) break; else continue; }       // a blank row may sit between the title and the header
+    if(/^plant$/i.test(label)){ started=true; continue; }
+    started=true;
+    if(/^total$/i.test(label)){ out.total=val(rows[i][c0+1]); break; }
+    out.rows.push({p:label, q:val(rows[i][c0+1])});
+  }
+  return out.rows.length?out:null;
 }
 async function loadProduction(){
   try{
@@ -2315,6 +2363,8 @@ async function loadProduction(){
     const rows=(await r.text()).split(/\r?\n/).map(parseCsvLine);
     // the two daily tables, as they are in the sheet, for the Production tab
     const pt=[parseProdTable(rows,/production.*\b8\s*AM\s*:\s*8\s*AM/i), parseProdTable(rows,/production.*\b12\s*AM\s*:\s*12\s*AM/i)];
+    const d8={today:parseDayTable(rows,/^today\s*\(\s*8\s*AM/i), yesterday:parseDayTable(rows,/^yesterday\s*\(\s*8\s*AM/i)};
+    if(d8.today||d8.yesterday) PROD8=d8;
     if(pt[0]||pt[1]){ PRODTBL=pt; if(view==='production') renderProduction(); }   // keep the last good tables if the sheet moved
     let r0=-1,c0=-1;                                     // find the "12 AM : 12 AM" block (calendar day)
     for(let i=0;i<Math.min(rows.length,6)&&r0<0;i++)
