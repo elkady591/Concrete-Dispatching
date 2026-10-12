@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261012-000001">
+<meta name="app-build" content="20261012-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -590,6 +590,11 @@
     <div class="cfg-note" style="justify-content:space-between">
       <span id="notifState" style="font-size:12.5px">🔔 Notifications</span>
       <span style="display:flex;gap:8px"><button class="btn ghost" id="notifTest" style="padding:3px 10px;font-size:11.5px" hidden>Test</button><button class="btn ghost" id="notifBtn">Enable notifications</button></span>
+    </div>
+    <!-- Which build this device is running + fetch the newest one now (it also updates by itself) -->
+    <div class="cfg-note" style="justify-content:space-between">
+      <span id="buildState" style="font-size:12.5px;font-family:var(--mono)">Build —</span>
+      <button class="btn ghost" id="updNow">Check for update</button>
     </div>
   </div>
 
@@ -2705,6 +2710,30 @@ function requireAuth(){
 })();
 // Register the service worker so the installed PWA opens offline (network-first — see sw.js).
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('./sw.js').then(()=>notifRefresh()).catch(()=>notifRefresh()); }); }
+
+/* ---------- build number + "Check for update" (⚙) ----------
+   The app already updates itself (on open, then every 5 min). This shows which build is running and lets
+   the user pull the newest one right now instead of waiting. */
+{ const bs=el('buildState'), ub=el('updNow');
+  const show=extra=>{ if(bs) bs.textContent='Build '+(APP_BUILD||'?')+(extra?' · '+extra:''); };
+  show('');
+  if(ub) ub.addEventListener('click',async()=>{
+    ub.disabled=true; show('checking…');
+    try{
+      const base=location.href.split('#')[0].split('?')[0];
+      const r=await fetch(base+'?cb='+Date.now(),{cache:'no-store'});
+      const m=r.ok?(await r.text()).match(/name="app-build"\s+content="([^"]*)"/i):null, live=m&&m[1];
+      if(!live){ show('could not check — try again'); }
+      else if(live===APP_BUILD){ show('up to date ✓'); }
+      else{
+        show('updating to '+live+'…');
+        try{ sessionStorage.setItem('pt_upd',live); sessionStorage.setItem('pt_keepview',JSON.stringify({view,activeTab})); }catch(e){}
+        location.replace(base+'?v='+encodeURIComponent(live)); return;
+      }
+    }catch(e){ show('could not check — no connection?'); }
+    ub.disabled=false;
+  });
+}
 
 /* ---------- the notifier's view of the app ----------
    A scheduled job (notifier/watch.mjs in the repo) opens this page as  …/?bot=1  in a headless browser,
