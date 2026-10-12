@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261012-000002">
+<meta name="app-build" content="20261012-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1347,7 +1347,7 @@ function rerender(){ render(build(LAST.matrix,LAST.header)); }
 function renderViewTabs(){
   const box=el('viewTabs'); if(!box)return;
   const mk=(id,label,cnt)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
-  box.innerHTML=mk('summary','Summary',null)+mk('pours','All Pours',VD.started.length)+mk('upcoming','Upcoming',VD.upcoming.length)
+  box.innerHTML=mk('summary','📋 Summary',null)+mk('pours','🏗️ All Pours',VD.started.length)+mk('upcoming','⏳ Upcoming',VD.upcoming.length)
     +mk('trucks','🚛 Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null)
     +mk('production','📊 Production',null);
   // the Admin entry is NOT a content tab — it lives up top next to the live pill (see #adminTabBtn)
