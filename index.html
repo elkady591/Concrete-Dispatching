@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261012-000003">
+<meta name="app-build" content="20261012-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -118,6 +118,11 @@
   .vtab:hover{color:var(--ink)}
   .vtab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 8px 18px rgba(124,131,255,.4)}
   .vtab .cnt{font-family:var(--mono);font-size:11px;margin-inline-start:7px;opacity:.8;font-weight:600}
+  @media(max-width:560px){   /* phones: tighter tabs so more of the row is visible before swiping */
+    .vtabs{gap:2px;padding:4px}
+    .vtab{padding:9px 9px;font-size:12.5px}
+    .vtab .cnt{margin-inline-start:4px;font-size:10.5px}
+  }
 
   /* KPIs */
   .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:16px}
