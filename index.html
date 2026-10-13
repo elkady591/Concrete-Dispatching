@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261012-000006">
+<meta name="app-build" content="20261013-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -210,6 +210,7 @@
   .spot-cell .s-lab{font-size:11px;color:var(--muted);font-weight:700}
   .spot-cell .s-val{font-family:var(--mono);font-weight:700;font-size:22px;margin-top:4px}
   .spot-cell .s-val small{font-size:11px;color:var(--faint);font-family:var(--sans)}
+  .spot-cell .s-val .s-day{display:block;font-size:12px;font-weight:700;letter-spacing:.5px;opacity:.8;line-height:1.2}
   .spot-cell.hi .s-val{font-size:26px}
   .spot-cell.hi .s-lab{color:#c7cbff}
   .spot-bar{margin-top:16px}
@@ -1252,10 +1253,15 @@ function build(matrix, colHeader){
 const barClass=s=>s==='done'?'g':s==='active'?'b':s==='over'?'v':s==='closed'?'n':'a';
 const stLabel={done:'Completed',active:'Active',wait:'Waiting',none:'Set target',over:'Over',closed:'Closed'};
 function timeShort(t){ if(t==null)return'—'; const d=new Date(t); let h=d.getHours();const m=pad(d.getMinutes());const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${m} ${ap}`; }
-// a finish time; one that falls on another day than today carries its date ("10-13 2:40 AM")
-function finishTime(t){ if(t==null)return'—'; const d=new Date(t), n=new Date();
+// a finish time; one that falls on another day than today carries its date ("14-OCT 2:40 AM")
+const MON3=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function finishDay(t){ if(t==null)return''; const d=new Date(t), n=new Date();   // '' when it is today
   const same=d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate();
-  return (same?'':`${pad(d.getMonth()+1)}-${pad(d.getDate())} `)+timeShort(t); }
+  return same?'':`${d.getDate()}-${MON3[d.getMonth()]}`; }
+function finishTime(t){ if(t==null)return'—'; const day=finishDay(t); return (day?day+' ':'')+timeShort(t); }
+// the same on TWO lines for the big spotlight cells: the date (only when it is not today) above the time
+function finishTwoLine(t){ if(t==null)return'—'; const day=finishDay(t);
+  return (day?`<span class="s-day">${day}</span>`:'')+`<span style="white-space:nowrap">${timeShort(t)}</span>`; }
 // Colour of the average-pace finish: green = at or before the planned (target) finish, red = after it.
 // No target -> no colour.
 function finishAvgColor(g){ return (g.finishAvg!=null&&g.finishTgt!=null) ? (g.finishAvg<=g.finishTgt+60000?'var(--green)':'var(--rose)') : ''; }
@@ -1271,7 +1277,7 @@ function finishHtml(g){
   if(g.finishAvg==null&&g.finishTgt==null) return g.status==='done'?'✓':'—';
   const c=finishAvgColor(g);
   const done=g.remaining!=null&&g.remaining<=0;
-  const line=(lab,t,col)=>`<div style="white-space:nowrap"><span style="color:var(--faint);font-size:10.5px">${lab}</span> <span style="${col?`color:${col};font-weight:800`:''}">${t!=null?finishTime(t):(done&&lab==='Avg'?'✓':'—')}</span></div>`;
+  const line=(lab,t,col)=>`<div style="white-space:nowrap"><span style="color:var(--faint);font-size:10.5px">${lab}</span> <span style="${col?`color:${col};font-weight:800`:''}">${t!=null?timeShort(t):(done&&lab==='Avg'?'✓':'—')}</span>${t!=null&&finishDay(t)?` <span style="color:var(--faint);font-size:10px">${finishDay(t)}</span>`:''}</div>`;
   return line('Avg',g.finishAvg,c)+line('Tgt',g.finishTgt,'');
 }
 function setDiag(s){ const d=el('diag'); if(!d)return; d.style.display='block'; d.innerHTML=s; }
@@ -1606,8 +1612,8 @@ function renderSummary(){
           <div class="spot-cell"><div class="s-lab">Required</div><div class="s-val">${sp.required!=null?fmt(sp.required):'—'} <small>m³</small></div></div>
           <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val" style="${avgRateColor(sp)?`color:${avgRateColor(sp)}`:''}">${sp.cumRate!=null?fmt(sp.cumRate):'—'} <small>m³/h</small></div></div>
           <div class="spot-cell"><div class="s-lab">Target rate</div><div class="s-val">${sp.planRate!=null?fmt(sp.planRate):(sp.rateManual!=null?fmt(sp.rateManual):'—')} <small>m³/h</small></div></div>
-          <div class="spot-cell"><div class="s-lab">Est. finish · average</div><div class="s-val" style="${finishAvgColor(sp)?`color:${finishAvgColor(sp)}`:''}">${sp.finishAvg?finishTime(sp.finishAvg):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
-          <div class="spot-cell"><div class="s-lab" title="First truck + required ÷ target rate — fixed for the whole pour">Planned finish · target</div><div class="s-val">${sp.finishTgt?finishTime(sp.finishTgt):'—'}</div></div>
+          <div class="spot-cell"><div class="s-lab">Est. finish · average</div><div class="s-val" style="${finishAvgColor(sp)?`color:${finishAvgColor(sp)}`:''}">${sp.finishAvg?finishTwoLine(sp.finishAvg):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
+          <div class="spot-cell"><div class="s-lab" title="First truck + required ÷ target rate — fixed for the whole pour">Planned finish · target</div><div class="s-val">${sp.finishTgt?finishTwoLine(sp.finishTgt):'—'}</div></div>
         </div>
         <div class="spot-bar">
           <div class="bar bar-lg"><i class="${bc}" style="width:${pct}%"></i></div>
@@ -2801,7 +2807,14 @@ async function notifRefresh(){
   if(!pushSupported()){ s.textContent='🔔 Notifications are not supported in this browser'; b.hidden=true; if(t)t.hidden=true; return; }
   if(!syncBase()){ s.textContent='🔔 Notifications need the Sync URL to be set'; b.hidden=true; if(t)t.hidden=true; return; }
   if(Notification.permission==='denied'){ s.textContent='🔕 Notifications are blocked for this site — allow them in the browser settings'; b.hidden=true; if(t)t.hidden=true; return; }
-  const sub=(Notification.permission==='granted')?await pushSub():null;
+  let sub=(Notification.permission==='granted')?await pushSub():null;
+  // Self-heal: the browser can drop a subscription on its own (Android does, after a while). If this device
+  // allowed notifications and the user never pressed "Turn off", subscribe again quietly and re-register.
+  let off=false; try{ off=localStorage.getItem('cmpour:pushoff')==='1'; }catch(e){}
+  if(!sub && Notification.permission==='granted' && !off && !BOT){
+    try{ const reg=await navigator.serviceWorker.ready;
+      sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uToU8(VAPID_PUB)}); }catch(e){ sub=null; }
+  }
   b.hidden=false; b.disabled=false;
   if(sub){ s.textContent='🔔 Notifications are ON for this device'; b.textContent='Turn off'; b.dataset.on='1'; if(t)t.hidden=false;
     syncCall({action:'pushsub', dev:deviceId(), sub:JSON.stringify(sub)}); }      // keep the server copy fresh
@@ -2812,9 +2825,11 @@ async function notifToggle(){
   try{
     if(b.dataset.on==='1'){
       const sub=await pushSub(); if(sub) await sub.unsubscribe();
+      try{ localStorage.setItem('cmpour:pushoff','1'); }catch(e){}
       await syncCall({action:'pushdel', dev:deviceId()});
     } else {
       const perm=await Notification.requestPermission();
+      try{ localStorage.removeItem('cmpour:pushoff'); }catch(e){}
       if(perm==='granted'){
         const reg=await navigator.serviceWorker.ready;
         const sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uToU8(VAPID_PUB)});
@@ -2825,6 +2840,8 @@ async function notifToggle(){
   }catch(e){ s.textContent='⚠ Could not change notifications: '+(e&&e.message||e); b.disabled=false; return; }
   notifRefresh();
 }
+// re-check (and re-register) whenever the app comes back to the front, not only when it is first loaded
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) notifRefresh(); });
 { const nb=el('notifBtn'); if(nb) nb.addEventListener('click',notifToggle);
   const nt=el('notifTest'); if(nt) nt.addEventListener('click',async()=>{   // local test: proves this device can SHOW a notification
     try{ const reg=await navigator.serviceWorker.ready; await reg.showNotification('Concrete Dispatching',{body:'Test — notifications work on this device.',icon:'./icons/icon-192.png',badge:'./icons/favicon-32.png',tag:'test'}); }catch(e){} }); }
