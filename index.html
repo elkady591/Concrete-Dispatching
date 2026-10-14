@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261013-000001">
+<meta name="app-build" content="20261014-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1392,6 +1392,11 @@ function applyView(){
 
 /* ---------- truck tracking view (Loaded / Empty sub-tabs) ---------- */
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
+// Lets Concrete Management's Home jump straight to a view, e.g. openView('trucks','empty').
+window.openView=async function(v, sub){
+  view=v; if(v==='trucks' && sub) truckTab=sub;
+  await saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0);
+};
 function renderTrucks(){
   const area=el('trucksArea'); if(!area)return;
   const t=TRUCKS;
