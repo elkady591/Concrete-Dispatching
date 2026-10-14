@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261014-000002">
+<meta name="app-build" content="20261014-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1401,7 +1401,8 @@ function renderTrucks(){
   const area=el('trucksArea'); if(!area)return;
   const t=TRUCKS;
   if(!t||!t.ok){ area.innerHTML='<div class="muted" style="font-size:13px;padding:10px 2px">Truck tracking data not available yet — pull the sheet.</div>'; return; }
-  const esMap={}; (PLAN_ROWS||[]).forEach(r=>{ if(r.es) esMap[String(r.es).trim()]=r.code; });
+  // a loaded truck's ES -> "CLIENT ELEMENT" from the plan (e.g. "TREST 10UJA"); unknown ES -> the ES itself
+  const esMap={}; (PLAN_ROWS||[]).forEach(r=>{ if(r.es) esMap[String(r.es).trim()]=(r.client?r.client+' ':'')+r.code; });
   const site=es=>{ es=String(es||'').trim(); return es?(esMap[es]||es):'—'; };
   const counts=`<div class="trk-counts">
      <div class="trk-kpi"><div class="n">${t.working.length}</div><div class="l">Working</div></div>
