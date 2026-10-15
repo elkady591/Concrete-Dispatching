@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261015-000004">
+<meta name="app-build" content="20261015-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -419,9 +419,9 @@
   .trk-card{display:flex;align-items:center;gap:12px;background:var(--glass,rgba(24,30,50,.5));
     border:1px solid var(--line2);border-radius:13px;padding:10px 13px}
   .tc-truck{font-family:var(--mono);font-size:22px;font-weight:800;min-width:48px;text-align:center;color:var(--cyan);flex:none}
-  .trk-card.el{border-inline-start:5px solid var(--ec);background:linear-gradient(90deg,color-mix(in srgb,var(--ec) 12%,transparent),transparent 55%),var(--glass,rgba(24,30,50,.5))}
-  .trk-card.el .tc-truck,.trk-card.el .tc-top{color:var(--ec)}
-  .trk-card.el .tc-top .tc-dim{color:var(--muted)}
+  /* element colour on the left edge and the truck number only — name and background stay plain */
+  .trk-card.el{border-inline-start:5px solid var(--ec)}
+  .trk-card.el .tc-truck{color:var(--ec)}
   .tc-legend{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
   .tc-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--ec);
     border:1px solid color-mix(in srgb,var(--ec) 55%,transparent);border-radius:99px;padding:3px 10px;background:color-mix(in srgb,var(--ec) 10%,transparent)}
