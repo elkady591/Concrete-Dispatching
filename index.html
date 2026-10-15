@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261014-000003">
+<meta name="app-build" content="20261015-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -419,6 +419,14 @@
   .trk-card{display:flex;align-items:center;gap:12px;background:var(--glass,rgba(24,30,50,.5));
     border:1px solid var(--line2);border-radius:13px;padding:10px 13px}
   .tc-truck{font-family:var(--mono);font-size:22px;font-weight:800;min-width:48px;text-align:center;color:var(--cyan);flex:none}
+  .trk-card.el{border-inline-start:5px solid var(--ec);background:linear-gradient(90deg,color-mix(in srgb,var(--ec) 12%,transparent),transparent 55%),var(--glass,rgba(24,30,50,.5))}
+  .trk-card.el .tc-truck,.trk-card.el .tc-top{color:var(--ec)}
+  .trk-card.el .tc-top .tc-dim{color:var(--muted)}
+  .tc-legend{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+  .tc-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--ec);
+    border:1px solid color-mix(in srgb,var(--ec) 55%,transparent);border-radius:99px;padding:3px 10px;background:color-mix(in srgb,var(--ec) 10%,transparent)}
+  .tc-chip i{width:8px;height:8px;border-radius:50%;background:var(--ec)}
+  .tc-chip b{font-family:var(--mono);color:var(--ink)}
   .tc-info{min-width:0;flex:1}
   .tc-top{font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tc-dim{color:var(--muted);font-weight:500;font-size:13px}
@@ -1439,9 +1447,16 @@ function renderTrucks(){
         </tbody></table></div>`;
     }
   } else if(truckTab==='loaded'){
-    // card layout (not a wide table) so it reads cleanly on a phone without horizontal scroll
-    body = t.loaded.length ? `<div class="trk-cards">${t.loaded.map(x=>`
-        <div class="trk-card">
+    // card layout (not a wide table) so it reads cleanly on a phone without horizontal scroll.
+    // Every element gets its own colour (edge, truck number, name) so trucks of the same pour stand out;
+    // colours go to the elements in code order, so they stay put while the same pours are running.
+    const EL_COLS=['#22d3ee','#fbbf24','#a78bfa','#34d399','#fb7185','#fb923c','#60a5fa','#a3e635','#f472b6','#2dd4bf'];
+    const ess=[...new Set(t.loaded.map(x=>String(x.es||'').trim()))].sort((a,b)=>site(a).localeCompare(site(b))||a.localeCompare(b));
+    const colOf=es=>EL_COLS[ess.indexOf(String(es||'').trim())%EL_COLS.length];
+    const legend=ess.length>1?`<div class="tc-legend">${ess.map(es=>{ const n=t.loaded.filter(x=>String(x.es||'').trim()===es).length;
+      return `<span class="tc-chip" style="--ec:${colOf(es)}"><i></i>${esc(site(es))} <b>${n}</b></span>`; }).join('')}</div>`:'';
+    body = t.loaded.length ? legend+`<div class="trk-cards">${t.loaded.map(x=>`
+        <div class="trk-card el" style="--ec:${colOf(x.es)}">
           <div class="tc-truck">${esc(x.truck)}</div>
           <div class="tc-info">
             <div class="tc-top">${esc(site(x.es))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
