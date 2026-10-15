@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261015-000001">
+<meta name="app-build" content="20261015-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -432,7 +432,7 @@
   .tc-dim{color:var(--muted);font-weight:500;font-size:13px}
   .tc-meta{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px}
   .tc-flag{color:var(--amber);font-family:var(--sans);font-weight:700}
-  @media(min-width:620px){ .trk-cards{grid-template-columns:1fr 1fr} }
+  /* loaded trucks: always ONE column — each truck under the previous one, in loading order */
   @media(max-width:560px){ .trk-counts{grid-template-columns:repeat(2,1fr)} }
   .spin{width:14px;height:14px;border:2px solid var(--line2);border-top-color:var(--accent);border-radius:50%;
     display:inline-block;animation:sp .7s linear infinite;vertical-align:-2px}
