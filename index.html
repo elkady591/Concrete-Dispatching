@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261015-000003">
+<meta name="app-build" content="20261015-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1470,7 +1470,7 @@ function renderTrucks(){
           <div class="tc-truck">${esc(x.truck)}</div>
           <div class="tc-info">
             <div class="tc-top">${esc(site(x.es))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
-            <div class="tc-meta">${x.q?fmt(x.q,0)+' m³':''}${x.elapsed?` · <span class="tc-out ${outClass(x.elapsed)}">out ${esc(x.elapsed)}</span>`:''}${x.dep?` · ${esc(x.dep)}`:''}${x.action?` <span class="tc-flag">⚠ ${esc(x.action)}</span>`:''}</div>
+            <div class="tc-meta">${x.q?fmt(x.q,0)+' m³':''}${x.elapsed?` · out <span class="tc-out ${outClass(x.elapsed)}">${esc(x.elapsed)}</span>`:''}${x.dep?` · ${esc(x.dep)}`:''}${x.action?` <span class="tc-flag">⚠ ${esc(x.action)}</span>`:''}</div>
           </div>
         </div>`).join('')}</div>`
       : '<div class="muted" style="font-size:13px;padding:10px 2px">No loaded trucks out right now.</div>';
