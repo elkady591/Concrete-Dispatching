@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261015-000005">
+<meta name="app-build" content="20261015-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -423,6 +423,11 @@
   .trk-card.el{border-inline-start:5px solid var(--ec)}
   .trk-card.el .tc-truck{color:var(--ec)}
   .tc-legend{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+  .tc-chip{cursor:pointer}
+  .tc-chip.sel{box-shadow:0 0 0 2px var(--ec);background:color-mix(in srgb,var(--ec) 24%,transparent)}
+  .tc-chip.dim{opacity:.45}
+  .tc-chip.tc-all{--ec:var(--muted)}
+  .trk-card.el .tc-top{cursor:pointer}
   .tc-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--ec);
     border:1px solid color-mix(in srgb,var(--ec) 55%,transparent);border-radius:99px;padding:3px 10px;background:color-mix(in srgb,var(--ec) 10%,transparent)}
   .tc-chip i{width:8px;height:8px;border-radius:50%;background:var(--ec)}
@@ -1410,6 +1415,7 @@ function outClass(el){
   return h<2?'ok':(h<=3?'warn':'bad');
 }
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
+let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = every loaded truck
 // Lets Concrete Management's Home jump straight to a view, e.g. openView('trucks','empty').
 window.openView=async function(v, sub){
   view=v; if(v==='trucks' && sub) truckTab=sub;
@@ -1463,10 +1469,13 @@ function renderTrucks(){
     const EL_COLS=['#22d3ee','#fbbf24','#a78bfa','#34d399','#fb7185','#fb923c','#60a5fa','#a3e635','#f472b6','#2dd4bf'];
     const ess=[...new Set(t.loaded.map(x=>String(x.es||'').trim()))].sort((a,b)=>site(a).localeCompare(site(b))||a.localeCompare(b));
     const colOf=es=>EL_COLS[ess.indexOf(String(es||'').trim())%EL_COLS.length];
+    // tap a pour (chip, or the pour name on a card) = show only the trucks loaded on it; tap again = all
+    if(truckEs && !ess.includes(truckEs)) truckEs=null;            // that pour has no truck out any more
     const legend=ess.length>1?`<div class="tc-legend">${ess.map(es=>{ const n=t.loaded.filter(x=>String(x.es||'').trim()===es).length;
-      return `<span class="tc-chip" style="--ec:${colOf(es)}"><i></i>${esc(site(es))} <b>${n}</b></span>`; }).join('')}</div>`:'';
-    body = t.loaded.length ? legend+`<div class="trk-cards">${t.loaded.map(x=>`
-        <div class="trk-card el" style="--ec:${colOf(x.es)}">
+      return `<span class="tc-chip${truckEs===es?' sel':''}${truckEs&&truckEs!==es?' dim':''}" data-es="${esc(es)}" style="--ec:${colOf(es)}"><i></i>${esc(site(es))} <b>${n}</b></span>`; }).join('')}${truckEs?'<span class="tc-chip tc-all">All ✕</span>':''}</div>`:'';
+    const shown=truckEs?t.loaded.filter(x=>String(x.es||'').trim()===truckEs):t.loaded;
+    body = t.loaded.length ? legend+`<div class="trk-cards">${shown.map(x=>`
+        <div class="trk-card el" data-es="${esc(String(x.es||'').trim())}" style="--ec:${colOf(x.es)}">
           <div class="tc-truck">${esc(x.truck)}</div>
           <div class="tc-info">
             <div class="tc-top">${esc(site(x.es))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
@@ -1483,6 +1492,10 @@ function renderTrucks(){
   }
   area.innerHTML=counts+tabs+body;
   area.querySelectorAll('.spot-tab').forEach(s=>s.addEventListener('click',()=>{ truckTab=s.dataset.tt; renderTrucks(); }));
+  area.querySelectorAll('.tc-chip[data-es], .trk-card.el .tc-top').forEach(c=>c.addEventListener('click',()=>{
+    const es=c.dataset.es!=null?c.dataset.es:c.closest('.trk-card').dataset.es;
+    truckEs=(truckEs===es)?null:es; renderTrucks(); }));
+  const all=area.querySelector('.tc-all'); if(all) all.addEventListener('click',()=>{ truckEs=null; renderTrucks(); });
 }
 
 /* ---------- admin panel: who's viewing + the edit log ---------- */
