@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000008">
+<meta name="app-build" content="20261017-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -118,10 +118,12 @@
   .vtab:hover{color:var(--ink)}
   .vtab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 8px 18px rgba(124,131,255,.4)}
   .vtab .cnt{font-family:var(--mono);font-size:11px;margin-inline-start:7px;opacity:.8;font-weight:600}
+  .vt-ic{width:32px;height:20px;vertical-align:-5px;margin-inline-end:4px}
   @media(max-width:560px){   /* phones: the five tabs wrap onto two rows (3 + 2), all readable, no swiping */
     .vtabs{gap:2px;padding:4px;flex-wrap:wrap;width:100%;overflow:visible}
     .vtab{flex:1 1 30%;text-align:center;padding:9px 6px;font-size:12.5px}
     .vtab .cnt{margin-inline-start:4px;font-size:10.5px}
+    .vt-ic{width:27px;height:17px;vertical-align:-4px;margin-inline-end:2px}
   }
 
   /* KPIs */
@@ -437,16 +439,22 @@
   .tc-out.warn{color:#fb923c;background:rgba(251,146,60,.14)}
   .tc-out.bad{color:var(--rose);background:rgba(251,113,133,.15)}
   .tc-info{min-width:0;flex:1}
-  .pm-card{display:flex;align-items:center;gap:12px;background:var(--glass,rgba(24,30,50,.5));
-    border:1px solid var(--line2);border-inline-start:5px solid var(--sc);border-radius:13px;padding:10px 13px}
-  .pm-card.st-on{--sc:var(--cyan)} .pm-card.st-wash{--sc:#fb923c} .pm-card.st-free{--sc:var(--green)} .pm-card.st-down{--sc:var(--rose)}
-  .pm-len{font-family:var(--mono);font-size:24px;font-weight:800;min-width:52px;text-align:center;color:var(--sc);flex:none;line-height:1}
-  .pm-len small{display:block;font-size:11px;color:var(--faint);margin-top:4px}
-  .pm-st{font-size:14px;font-weight:700;color:var(--sc)} .pm-st b{color:var(--ink)}
-  .pm-bd{font-size:11px;font-weight:800;color:var(--rose);border:1px solid var(--rose);border-radius:99px;padding:0 7px;margin-inline-start:4px}
-  .pm-note{width:100%;margin-top:6px;font:inherit;font-size:13px;color:var(--ink);background:transparent;
-    border:1px dashed var(--line2);border-radius:8px;padding:5px 8px}
-  .pm-card.broken .pm-note{border:1px solid var(--rose);color:var(--rose)}
+  .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .pm-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);border:1px solid var(--line2);border-radius:99px;padding:3px 10px}
+  .pm-chip i{width:7px;height:7px;border-radius:50%;background:var(--sc)} .pm-chip b{color:var(--sc);font-family:var(--mono)}
+  .pm-list{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+  .pm-row{padding:5px 8px 6px 9px;border:1px solid var(--line2);border-inline-start:3px solid var(--sc);border-radius:10px;background:var(--glass,rgba(24,30,50,.5));min-width:0}
+  .pm-top{display:flex;align-items:center;justify-content:space-between}
+  .pm-row.st-on{--sc:var(--cyan)} .pm-row.st-wash{--sc:#fb923c} .pm-row.st-free{--sc:var(--green)} .pm-row.st-down{--sc:var(--rose)}
+  .pm-len{font-family:var(--mono);font-size:16px;font-weight:800;color:var(--sc);white-space:nowrap}
+  .pm-len small{font-size:10px;color:var(--faint);font-weight:600;margin-inline-start:3px}
+  .pm-mid{flex:1;min-width:0}
+  .pm-st{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .pm-st b{color:var(--ink)} .pm-k{color:var(--sc);font-weight:700}
+  .pm-nt{font-size:11.5px;color:var(--rose);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pm-bd{font-size:10px;font-weight:800;color:var(--rose);border:1px solid var(--rose);border-radius:99px;padding:0 6px;margin-inline-start:3px}
+  .pm-ed{flex:none;width:24px;height:22px;padding:0;border-radius:6px;border:1px solid var(--line2);background:transparent;color:var(--faint);font-size:12px;cursor:pointer}
+  .pm-ed.on{color:var(--rose);border-color:var(--rose)}
+  .pm-note{width:100%;margin-top:3px;font:inherit;font-size:12.5px;color:var(--ink);background:transparent;border:1px solid var(--rose);border-radius:8px;padding:5px 8px}
   .pm-warn{margin-top:12px;padding:9px 12px;border-radius:11px;font-size:13px;color:#fb923c;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.35)}
   .tc-sortbar{display:flex;justify-content:flex-end;margin:0 0 8px}
   .tc-sort{font:inherit;font-size:12px;font-weight:800;color:var(--ink);background:var(--glass,rgba(24,30,50,.5));
@@ -522,6 +530,57 @@
 </style>
 </head>
 <body>
+<!-- tab icons: a concrete mixer (Trucks) and a boom pump (Pumps), drawn once and used by the view tabs -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <defs>
+  <linearGradient id="ic-cab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cbd5e1"/></linearGradient>
+  <linearGradient id="ic-glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bae6fd"/><stop offset="1" stop-color="#0284c7"/></linearGradient>
+  <linearGradient id="ic-drum" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#e2e8f0"/><stop offset="1" stop-color="#94a3b8"/></linearGradient>
+  <linearGradient id="ic-steel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ca3af"/><stop offset="1" stop-color="#4b5563"/></linearGradient>
+  <linearGradient id="ic-boom" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fde047"/><stop offset="1" stop-color="#ca8a04"/></linearGradient>
+  <radialGradient id="ic-tire"><stop offset=".55" stop-color="#1f2937"/><stop offset="1" stop-color="#030712"/></radialGradient>
+ </defs>
+ <symbol id="ic-base" viewBox="0 0 64 40">
+  <rect x="3" y="27.4" width="57" height="3.2" rx="1" fill="#374151"/>
+  <rect x="35" y="30" width="7" height="3.4" rx="1" fill="url(#ic-steel)"/>
+  <path d="M46 13.4h8.6c1.6 0 2.8.8 3.5 2.2l2.6 5.6c.3.6.4 1.1.4 1.8V30H46z" fill="url(#ic-cab)" stroke="#64748b" stroke-width=".5"/>
+  <path d="M48 15.4h6.2c.9 0 1.6.5 1.9 1.3l1.9 4.6H48z" fill="url(#ic-glass)"/>
+  <path d="M51.6 22.4v6.4" stroke="#94a3b8" stroke-width=".5"/><rect x="49" y="23.6" width="1.8" height=".6" rx=".3" fill="#64748b"/>
+  <rect x="57.6" y="27.6" width="4.4" height="3" rx=".8" fill="url(#ic-steel)"/>
+  <rect x="59.6" y="24.2" width="2" height="1.6" rx=".5" fill="#fde047"/>
+  <path d="M57.2 14.6l1.4-2.4" stroke="#334155" stroke-width=".9" stroke-linecap="round"/>
+  <path d="M8 31.4a6 6 0 0 1 16 0z M46.4 31.4a5.6 5.6 0 0 1 11.2 0z" fill="#334155"/>
+  <circle cx="12.4" cy="32.6" r="4.4" fill="url(#ic-tire)"/><circle cx="12.4" cy="32.6" r="2" fill="#d1d5db"/><circle cx="12.4" cy="32.6" r=".8" fill="#6b7280"/>
+  <circle cx="19.6" cy="32.6" r="4.4" fill="url(#ic-tire)"/><circle cx="19.6" cy="32.6" r="2" fill="#d1d5db"/><circle cx="19.6" cy="32.6" r=".8" fill="#6b7280"/>
+  <circle cx="52" cy="32.6" r="4.4" fill="url(#ic-tire)"/><circle cx="52" cy="32.6" r="2" fill="#d1d5db"/><circle cx="52" cy="32.6" r=".8" fill="#6b7280"/>
+ </symbol>
+ <symbol id="ic-mixer" viewBox="0 0 64 40">
+  <use href="#ic-base"/>
+  <rect x="43.2" y="16" width="2.6" height="11.6" rx="1.2" fill="#2563eb"/>
+  <path d="M11 18.6h4l1.4 8.8h-6z" fill="url(#ic-steel)"/><path d="M37.4 18.6h4.2v8.8h-4.2z" fill="url(#ic-steel)"/>
+  <path d="M9 8.2l2.6-1.6C20 3.6 32.6 3.2 39.6 6.8c4.4 2.3 5.2 9.4 1.2 12.8-4.6 3.8-16.6 4-25 .6l-5-2.8C8.8 15.8 8 11.8 9 8.2z" fill="url(#ic-drum)" stroke="#64748b" stroke-width=".5"/>
+  <g fill="none" stroke-width="1.6" stroke-linecap="round">
+   <path d="M15.6 5.4c-2.4 3.8-2 9.6 1.4 14.6" stroke="#1d9bd1"/><path d="M22 4.2c-2.6 4.4-2 11 1.8 16.6" stroke="#22a34a"/>
+   <path d="M29 3.9c-2.6 4.6-1.8 11.6 2 17.2" stroke="#1d9bd1"/><path d="M35.6 4.8c-2.2 4.4-1.4 10.8 2 15.8" stroke="#22a34a"/></g>
+  <ellipse cx="9.8" cy="12.6" rx="1.6" ry="4.6" fill="#334155"/>
+  <path d="M4.6 3.6h6.4l-1.8 4.2H7z" fill="url(#ic-steel)"/>
+  <path d="M8.4 17.6L3.2 24.4" stroke="#6b7280" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M5.6 15v12.4M7.4 15v12.4M5.6 18h1.8M5.6 21h1.8M5.6 24h1.8" stroke="#94a3b8" stroke-width=".6"/>
+ </symbol>
+ <symbol id="ic-pump" viewBox="0 0 64 40">
+  <use href="#ic-base"/>
+  <rect x="6" y="19.4" width="38" height="8" rx="1.2" fill="url(#ic-cab)" stroke="#64748b" stroke-width=".5"/>
+  <rect x="6.4" y="23.6" width="37.2" height="1" fill="#1d9bd1"/><rect x="6.4" y="24.8" width="37.2" height=".7" fill="#22a34a"/>
+  <path d="M1.8 17.8h7.4l-1.2 5H3z" fill="url(#ic-steel)"/><rect x="3.4" y="22.8" width="3.6" height="4.6" fill="#4b5563"/>
+  <path d="M27 27.4l-3.4 6.4h-2.6M33 27.4l3.4 6.4h2.6" stroke="#475569" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M37.4 19.4l1-6.2h5.2l1 6.2z" fill="#475569"/>
+  <path d="M41 13.8L9 11.4" stroke="url(#ic-boom)" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M9.4 9.6L44.4 7.2" stroke="url(#ic-boom)" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M44.2 5.6L14 4.2" stroke="url(#ic-boom)" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="41" cy="13.8" r="1.8" fill="#334155"/><circle cx="9.2" cy="10.5" r="1.4" fill="#334155"/><circle cx="44.3" cy="6.4" r="1.3" fill="#334155"/>
+  <path d="M14 4.2v-2.2" stroke="#1f2937" stroke-width="1" stroke-linecap="round"/>
+ </symbol>
+</svg>
 <div id="authGate" style="position:fixed;inset:0;z-index:9999;display:none;place-items:center;background:rgba(8,11,22,.72);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)">
   <form id="authForm" autocomplete="off" style="width:min(360px,90vw);padding:26px 24px;border-radius:20px;border:1px solid var(--glass-brd);background:linear-gradient(180deg,var(--glass),var(--glass2));-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:var(--shadow);text-align:center">
     <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:15px;overflow:hidden;box-shadow:0 8px 22px rgba(124,131,255,.5)"><img src="icons/icon-192.png" alt="" style="width:100%;height:100%;object-fit:cover"></div>
@@ -1408,8 +1467,8 @@ function renderViewTabs(){
   const box=el('viewTabs'); if(!box)return;
   const mk=(id,label,cnt)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
   box.innerHTML=mk('summary','📋 Summary',null)+mk('pours','🏗️ All Pours',VD.started.length)+mk('upcoming','⏳ Upcoming',VD.upcoming.length)
-    +mk('trucks','🚛 Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null)
-    +mk('pumps','🏗 Pumps', PUMPS.length)
+    +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null)
+    +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', PUMPS.length)
     +mk('production','📊 Production',null);
   // the Admin entry is NOT a content tab — it lives up top next to the live pill (see #adminTabBtn)
   box.querySelectorAll('.vtab').forEach(t=>t.addEventListener('click',async()=>{
@@ -1501,36 +1560,36 @@ function renderPumps(){
   const n=k=>state.filter(s=>s.st===k).length;
   const down=state.filter(s=>s.note).length;
   const site=g=>(g.client?g.client+' ':'')+g.elem;
-  const counts=`<div class="trk-counts">
-     <div class="trk-kpi"><div class="n" style="color:var(--cyan)">${n('on')}</div><div class="l">Working</div></div>
-     <div class="trk-kpi"><div class="n" style="color:#fb923c">${n('wash')}</div><div class="l">Washing</div></div>
-     <div class="trk-kpi"><div class="n" style="color:var(--green)">${n('free')}</div><div class="l">Available</div></div>
-     <div class="trk-kpi"><div class="n" style="color:var(--rose)">${down}</div><div class="l">Breakdown</div></div>
-   </div>`;
+  // compact: one line of counts, then one short row per pump; the note box opens only from ✎
+  const chip=(c,v,l)=>`<span class="pm-chip" style="--sc:${c}"><i></i><b>${v}</b> ${l}</span>`;
+  const counts=`<div class="pm-chips">${chip('var(--cyan)',n('on'),'Working')}${chip('#fb923c',n('wash'),'Washing')}${chip('var(--green)',n('free'),'Available')}${chip('var(--rose)',down,'Breakdown')}</div>`;
   // running pours that asked for a length nobody could give
   const short=[...byPour.entries()].filter(([g,a])=>a.end==null && a.missing.length);
   const warn=short.length?`<div class="pm-warn">${short.map(([g,a])=>`⚠ <b>${esc(site(g))}</b> — no ${esc(pumpLabel(a.missing))} pump free`).join('<br>')}</div>`:'';
-  const cards=state.map(s=>{
-    const txt = s.st==='on'   ? `On <b>${esc(site(s.pour))}</b>`
-              : s.st==='wash' ? `Washing <span class="tc-dim">· ${esc(site(s.pour))} · free at ${timeShort(s.until)}</span>`
-              : s.st==='down' ? 'Breakdown' : 'Available';
-    return `<div class="pm-card st-${s.st}${s.note?' broken':''}">
-      <div class="pm-len">${s.len}<small>#${s.i+1}</small></div>
-      <div class="tc-info">
-        <div class="pm-st">${txt}${s.note&&s.st!=='down'?' <span class="pm-bd">Breakdown</span>':''}</div>
-        <input class="pm-note" data-i="${s.i}" placeholder="✎ problem…" value="${esc(s.note)}">
-      </div></div>`; }).join('');
-  area.innerHTML=counts+warn+`<div class="trk-cards" style="margin-top:14px">${cards}</div>`;
+  const rows=state.map(s=>{
+    const txt = s.st==='on'   ? `<span class="pm-k">On</span> <b>${esc(site(s.pour))}</b>`
+              : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
+              : s.st==='down' ? '<span class="pm-k">Breakdown</span>' : '<span class="pm-k">Available</span>';
+    const editing=pumpEditing===String(s.i);
+    return `<div class="pm-row st-${s.st}">
+      <div class="pm-top"><div class="pm-len">${s.len}<small>#${s.i+1}</small>${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
+      <button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Problem note">✎</button></div>
+      <div class="pm-mid">${editing?`<input class="pm-note" data-i="${s.i}" placeholder="problem…" value="${esc(s.note)}">`
+        :`<div class="pm-st">${txt}</div>${s.note?`<div class="pm-nt">${esc(s.note)}</div>`:''}`}</div></div>`; }).join('');
+  area.innerHTML=counts+warn+`<div class="pm-list">${rows}</div>`;
+  area.querySelectorAll('.pm-ed').forEach(b=>b.addEventListener('click',()=>{
+    const i=b.dataset.i; if(pumpEditing===i){ const inp=area.querySelector('.pm-note'); if(inp) inp.blur(); return; }
+    pumpEditing=i; b.blur(); renderPumps(); const inp=area.querySelector('.pm-note'); if(inp){ inp.focus(); inp.select(); } }));
   area.querySelectorAll('.pm-note').forEach(inp=>{
     const i=inp.dataset.i;
-    inp.addEventListener('focus',()=>{ pumpEditing=i; });
-    const save=async()=>{ pumpEditing=null; const v=inp.value.trim();
-      const old=pumpNote(i); if(v===old.text) return;
+    const save=async()=>{ if(pumpEditing!==i) return; pumpEditing=null; const v=inp.value.trim();
+      const old=pumpNote(i); if(v===old.text){ renderPumps(); return; }
       const val=v?((old.text?old.t:Date.now())+'|'+v):'';      // editing the text keeps the original "broke at" time
       if(val) PUMPNOTE[i]=val; else delete PUMPNOTE[i];
       stSet(KEY_PUMP,PUMPNOTE); renderPumps(); await syncPush('pump',i,val); };
     inp.addEventListener('blur',save);
-    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') inp.blur(); });
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') inp.blur();
+      if(e.key==='Escape'){ pumpEditing=null; renderPumps(); } });
   });
 }
 
