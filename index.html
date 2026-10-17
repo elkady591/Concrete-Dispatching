@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000003">
+<meta name="app-build" content="20261017-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1290,12 +1290,12 @@ function finishTwoLine(t){ if(t==null)return'—'; const day=finishDay(t);
 // Colour of the average-pace finish: green = at or before the planned (target) finish, red = after it.
 // No target -> no colour.
 function finishAvgColor(g){ return (g.finishAvg!=null&&g.finishTgt!=null) ? (g.finishAvg<=g.finishTgt+60000?'var(--green)':'var(--rose)') : ''; }
-// Average rate vs target rate: green = at or above the target, red = below it. Compared at the one
-// decimal the screen shows, so a rate displayed as "4" against a target of 4 is never red.
+// Average rate vs target rate: green = at or above the target, red = below it. Compared as the
+// whole number the screen shows, so a rate displayed as "40" against a target of 40 is never red.
 function avgRateColor(g){
   const a=g.cumRate!=null?g.cumRate:g.rateCalc, t=g.rateManual!=null?g.rateManual:g.planRate;
   if(!(a>0)||!(t>0)) return '';
-  return Math.round(a*10)>=Math.round(t*10) ? 'var(--green)' : 'var(--rose)';
+  return Math.round(a)>=Math.round(t) ? 'var(--green)' : 'var(--rose)';
 }
 // compact two-line finish cell (Active Pours list + All Pours table): "Avg 4:47 AM" over "Tgt 5:13 PM"
 function finishHtml(g){
@@ -1347,7 +1347,7 @@ function hourlyHtml(sp){
       <span class="hr-v">${fmt(x.q,1)} <small style="color:var(--faint)">m³/h</small></span>
     </div>`).join('');
   return `<div class="hourly">${rows}</div>
-    <div class="hr-avg">Avg ${fmt(avg,1)} m³/h · Peak ${fmt(peak.q,1)} m³/h at ${timeShort(peak.h)}</div>`;
+    <div class="hr-avg">Avg ${fmt(avg,0)} m³/h · Peak ${fmt(peak.q,1)} m³/h at ${timeShort(peak.h)}</div>`;
 }
 
 /* ---------- main render ---------- */
@@ -1671,7 +1671,7 @@ function renderSummary(){
           <div class="spot-cell hi"><div class="s-lab">Remaining</div><div class="s-val" style="${sp.remaining!=null&&sp.remaining<=0?'color:var(--green)':''}">${sp.remaining!=null?(sp.remaining>0?fmt(sp.remaining)+' <small>m³</small>':'✓ <small>done</small>'):'—'}</div></div>
           <div class="spot-cell"><div class="s-lab">Rejected</div><div class="s-val" style="color:${sp.rejected>0?'var(--amber)':'var(--faint)'}">${sp.rejected>0?fmt(sp.rejected)+' <small>m³</small>':'—'}</div></div>
           <div class="spot-cell"><div class="s-lab">Required</div><div class="s-val">${sp.required!=null?fmt(sp.required):'—'} <small>m³</small></div></div>
-          <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val" style="${avgRateColor(sp)?`color:${avgRateColor(sp)}`:''}">${sp.cumRate!=null?fmt(sp.cumRate):'—'} <small>m³/h</small></div></div>
+          <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val" style="${avgRateColor(sp)?`color:${avgRateColor(sp)}`:''}">${sp.cumRate!=null?fmt(sp.cumRate,0):'—'} <small>m³/h</small></div></div>
           <div class="spot-cell"><div class="s-lab">Target rate</div><div class="s-val">${sp.planRate!=null?fmt(sp.planRate):(sp.rateManual!=null?fmt(sp.rateManual):'—')} <small>m³/h</small></div></div>
           <div class="spot-cell"><div class="s-lab">Est. finish · average</div><div class="s-val" style="${finishAvgColor(sp)?`color:${finishAvgColor(sp)}`:''}">${sp.finishAvg?finishTwoLine(sp.finishAvg):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
           <div class="spot-cell"><div class="s-lab" title="First truck + required ÷ target rate — fixed for the whole pour">Planned finish · target</div><div class="s-val">${sp.finishTgt?finishTwoLine(sp.finishTgt):'—'}</div></div>
@@ -1707,7 +1707,7 @@ function renderSummary(){
       <div class="apy-el">${g.elem||'—'}<span class="p">${g.plant||''}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
       <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
-      <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc)+' m³/h':'—'}</div>
+      <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc,0)+' m³/h':'—'}</div>
       <div class="apy-eta">${finishHtml(g)}</div>
       <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end"><span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span><input type="checkbox" class="done-chk" data-e="${encodeURIComponent(doneKey(g))}" ${DONE[doneKey(g)]?'checked':''} title="Close this pour — same as the Done box in All Pours"></div>
     </div>`;
@@ -1982,7 +1982,7 @@ function renderAllPours(){
       <td class="num">${fmt(g.delivered)}</td>
       <td><input class="req-in" dir="ltr" data-k="${encodeURIComponent(g.key)}" value="${g.reqManual!=null?g.reqManual:''}" placeholder="${g.planReq!=null?fmt(g.planReq,0):'—'}"></td>
       <td class="num" style="${g.remaining!=null?(g.remaining>0?'':'color:var(--green)'):'color:var(--faint)'}">${g.remaining!=null?(g.remaining>0?fmt(g.remaining):'✓'):'—'}</td>
-      <td class="num" style="font-weight:800">${g.rateCalc!=null?fmt(g.rateCalc):'<span class="muted">—</span>'}</td>
+      <td class="num" style="font-weight:800">${g.rateCalc!=null?fmt(g.rateCalc,0):'<span class="muted">—</span>'}</td>
       <td><input class="req-in rate-in" dir="ltr" data-k="${encodeURIComponent(g.key)}" value="${g.rateManual!=null?g.rateManual:''}" placeholder="${g.planRate!=null?fmt(g.planRate,0):'—'}"></td>
       <td class="num muted">${g.trucks}</td>
       <td class="num muted">${finishHtml(g)}</td>
@@ -2064,7 +2064,7 @@ function buildReport(){
       <td class="n">${g.required!=null?fmt(g.required):'—'}</td>
       <td class="n">${fmt(g.delivered)}</td>
       <td class="n">${g.remaining!=null?(g.remaining>0?fmt(g.remaining):'✓'):'—'}</td>
-      <td class="n">${g.rateCalc!=null?fmt(g.rateCalc):'—'}</td>
+      <td class="n">${g.rateCalc!=null?fmt(g.rateCalc,0):'—'}</td>
       <td class="n">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</td>
       <td>${stLabel[g.status]||''}</td>
     </tr>`;
