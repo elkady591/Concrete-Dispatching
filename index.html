@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000002">
+<meta name="app-build" content="20261017-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -437,6 +437,9 @@
   .tc-out.warn{color:#fb923c;background:rgba(251,146,60,.14)}
   .tc-out.bad{color:var(--rose);background:rgba(251,113,133,.15)}
   .tc-info{min-width:0;flex:1}
+  .tc-sortbar{display:flex;justify-content:flex-end;margin:0 0 8px}
+  .tc-sort{font:inherit;font-size:12px;font-weight:800;color:var(--ink);background:var(--glass,rgba(24,30,50,.5));
+    border:1px solid var(--line2);border-radius:99px;padding:5px 12px;cursor:pointer}
   .tc-top{font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tc-dim{color:var(--muted);font-weight:500;font-size:13px}
   .tc-meta{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px}
@@ -1421,6 +1424,8 @@ function outClass(el){
 }
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
 let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = every loaded truck
+let truckSort='new';     // Loaded tab order: 'new' = latest truck on top, 'old' = longest out on top (kept per device)
+try{ if(localStorage.getItem('cmpour:trucksort')==='old') truckSort='old'; }catch(e){}
 // Lets Concrete Management's Home jump straight to a view, e.g. openView('trucks','empty').
 window.openView=async function(v, sub){
   view=v; if(v==='trucks' && sub) truckTab=sub;
@@ -1478,8 +1483,13 @@ function renderTrucks(){
     if(truckEs && !ess.includes(truckEs)) truckEs=null;            // that pour has no truck out any more
     const legend=ess.length>1?`<div class="tc-legend">${ess.map(es=>{ const n=t.loaded.filter(x=>String(x.es||'').trim()===es).length;
       return `<span class="tc-chip${truckEs===es?' sel':''}${truckEs&&truckEs!==es?' dim':''}" data-es="${esc(es)}" style="--ec:${colOf(es)}"><i></i>${esc(site(es))} <b>${n}</b></span>`; }).join('')}${truckEs?'<span class="tc-chip tc-all">All ✕</span>':''}</div>`:'';
-    const shown=truckEs?t.loaded.filter(x=>String(x.es||'').trim()===truckEs):t.loaded;
-    body = t.loaded.length ? legend+`<div class="trk-cards">${shown.map(x=>`
+    // newest = shortest time out on top (or the reverse); trucks without a time stay at the end
+    const outMin=x=>{ const m=String(x.elapsed||'').trim().match(/^(-?)(\d+):(\d{1,2})/); return m?(m[1]?0:(+m[2])*60+(+m[3])):null; };   // "-0:00" = just left
+    const shown=(truckEs?t.loaded.filter(x=>String(x.es||'').trim()===truckEs):t.loaded).slice().sort((a,b)=>{
+      const A=outMin(a), B=outMin(b); if(A==null||B==null) return (A==null)-(B==null);
+      return truckSort==='old'?B-A:A-B; });
+    const sortBar=`<div class="tc-sortbar"><button class="tc-sort" title="Sort by time out">${truckSort==='old'?'↑ Oldest first':'↓ Newest first'}</button></div>`;
+    body = t.loaded.length ? legend+sortBar+`<div class="trk-cards">${shown.map(x=>`
         <div class="trk-card el" data-es="${esc(String(x.es||'').trim())}" style="--ec:${colOf(x.es)}">
           <div class="tc-truck">${esc(x.truck)}</div>
           <div class="tc-info">
@@ -1501,6 +1511,8 @@ function renderTrucks(){
     const es=c.dataset.es!=null?c.dataset.es:c.closest('.trk-card').dataset.es;
     truckEs=(truckEs===es)?null:es; renderTrucks(); }));
   const all=area.querySelector('.tc-all'); if(all) all.addEventListener('click',()=>{ truckEs=null; renderTrucks(); });
+  const so=area.querySelector('.tc-sort'); if(so) so.addEventListener('click',()=>{
+    truckSort=truckSort==='old'?'new':'old'; try{ localStorage.setItem('cmpour:trucksort',truckSort); }catch(e){} renderTrucks(); });
 }
 
 /* ---------- admin panel: who's viewing + the edit log ---------- */
