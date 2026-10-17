@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000007">
+<meta name="app-build" content="20261017-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -437,6 +437,17 @@
   .tc-out.warn{color:#fb923c;background:rgba(251,146,60,.14)}
   .tc-out.bad{color:var(--rose);background:rgba(251,113,133,.15)}
   .tc-info{min-width:0;flex:1}
+  .pm-card{display:flex;align-items:center;gap:12px;background:var(--glass,rgba(24,30,50,.5));
+    border:1px solid var(--line2);border-inline-start:5px solid var(--sc);border-radius:13px;padding:10px 13px}
+  .pm-card.st-on{--sc:var(--cyan)} .pm-card.st-wash{--sc:#fb923c} .pm-card.st-free{--sc:var(--green)} .pm-card.st-down{--sc:var(--rose)}
+  .pm-len{font-family:var(--mono);font-size:24px;font-weight:800;min-width:52px;text-align:center;color:var(--sc);flex:none;line-height:1}
+  .pm-len small{display:block;font-size:11px;color:var(--faint);margin-top:4px}
+  .pm-st{font-size:14px;font-weight:700;color:var(--sc)} .pm-st b{color:var(--ink)}
+  .pm-bd{font-size:11px;font-weight:800;color:var(--rose);border:1px solid var(--rose);border-radius:99px;padding:0 7px;margin-inline-start:4px}
+  .pm-note{width:100%;margin-top:6px;font:inherit;font-size:13px;color:var(--ink);background:transparent;
+    border:1px dashed var(--line2);border-radius:8px;padding:5px 8px}
+  .pm-card.broken .pm-note{border:1px solid var(--rose);color:var(--rose)}
+  .pm-warn{margin-top:12px;padding:9px 12px;border-radius:11px;font-size:13px;color:#fb923c;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.35)}
   .tc-sortbar{display:flex;justify-content:flex-end;margin:0 0 8px}
   .tc-sort{font:inherit;font-size:12px;font-weight:800;color:var(--ink);background:var(--glass,rgba(24,30,50,.5));
     border:1px solid var(--line2);border-radius:99px;padding:5px 12px;cursor:pointer}
@@ -640,8 +651,9 @@
     <div id="spot"></div>
     <div class="card" style="margin-top:14px"><h3>Active Pours</h3><div id="activeList"></div></div>
     <div class="card" style="margin-top:14px" id="closedCard"><h3>Closed Pours</h3><div id="closedList"></div></div>
-    <!-- Daily Production Plan as a picture for WhatsApp (see planPhoto) -->
-    <div style="display:flex;justify-content:center;margin-top:16px">
+    <!-- Daily Production Plan as a picture for WhatsApp (see planPhoto) — live preview of exactly what gets sent -->
+    <img id="planPhotoPrev" alt="Daily Production Plan" style="display:none;width:100%;margin-top:16px;border-radius:12px;border:1px solid var(--line2);background:#fff">
+    <div style="display:flex;justify-content:center;margin-top:12px">
       <button class="btn" id="planPhotoBtn" style="padding:12px 22px;font-size:14px">📸 WhatsApp Photo — Daily Production Plan</button>
     </div>
     <div id="planPhotoMsg" class="muted" style="text-align:center;font-size:12px;margin-top:6px"></div>
@@ -670,6 +682,12 @@
   <section id="trucksView">
     <div class="section-title">Truck Tracking</div>
     <div id="trucksArea"></div>
+  </section>
+
+  <!-- PUMPS VIEW: which pump is on which pour / washing / available, plus a problem note per pump -->
+  <section id="pumpsView">
+    <div class="section-title">Pumps</div>
+    <div id="pumpsArea"></div>
   </section>
 
   <!-- PRODUCTION VIEW: the sheet's own two daily tables (8 AM : 8 AM and 12 AM : 12 AM) -->
@@ -733,6 +751,7 @@ const KEY_REQ='cmpour:req';
 const KEY_RATE='cmpour:rate';
 const BOT=/[?&]bot=1(&|$)/.test(location.search);   // opened by the notifier job, not by a person (see window.__notifyItems)
 const KEY_DONE='cmpour:done';
+const KEY_PUMP='cmpour:pumpnote';
 const KEY_DONE_ORDER='cmpour:doneorder';   // order pours were closed on THIS device, for Undo
 const KEY_CFG='cmpour:cfg';
 const KEY_PLAN='cmpour:plan';   // last-good plan cached so it never blanks out
@@ -1390,6 +1409,7 @@ function renderViewTabs(){
   const mk=(id,label,cnt)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
   box.innerHTML=mk('summary','📋 Summary',null)+mk('pours','🏗️ All Pours',VD.started.length)+mk('upcoming','⏳ Upcoming',VD.upcoming.length)
     +mk('trucks','🚛 Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null)
+    +mk('pumps','🏗 Pumps', PUMPS.length)
     +mk('production','📊 Production',null);
   // the Admin entry is NOT a content tab — it lives up top next to the live pill (see #adminTabBtn)
   box.querySelectorAll('.vtab').forEach(t=>t.addEventListener('click',async()=>{
@@ -1408,11 +1428,110 @@ function applyView(){
   show('poursView', view==='pours');
   show('upcomingView', view==='upcoming');
   show('trucksView', view==='trucks');
+  show('pumpsView', view==='pumps');
   show('productionView', view==='production');
   show('adminView', view==='admin' && IS_ADMIN);
   if(view==='trucks') renderTrucks();
+  if(view==='pumps') renderPumps();
+  if(view==='summary' && typeof updatePlanPreview==='function') updatePlanPreview();
   if(view==='production') renderProduction();
   if(view==='admin' && IS_ADMIN){ renderAdminWho(); loadAdminUsers(); loadAdminLog(); }
+}
+
+/* ---------- pumps ----------
+   The fleet, in the order the user gave it (no names: #1..#10 + boom length in m).
+   The plan's "Pump" column holds the LENGTH(S) a pour needs ("63", "63, 59", "2x63"). When the pour's
+   first truck loads, it takes the first pump of that length that is free at that moment (not on another
+   pour, not washing, not Breakdown). Pours are served in start order, so every device works out the same
+   pumps. A pour ends at its last truck once it is Done / reached its quantity / auto-closed; the pump then
+   washes for an hour and is Available again. A note on a pump (shared like Done) = Breakdown. */
+const PUMPS=[48,56,59,59,63,63,63,63,63,63];
+const PUMP_WASH=3600000;
+let PUMPNOTE={};                 // pump index (0-based, as a string) -> problem note, shared via the sync script
+function pumpReq(s){             // "63, 59" / "63+59" / "2x63" / "63x2" -> [63,59] / [63,63]
+  const out=[]; String(s||'').split(/[,+&\/]|\s{2,}/).forEach(p=>{ p=p.trim(); if(!p) return;
+    let m=p.match(/^(\d+)\s*[x×*]\s*(\d+)$/i);
+    if(m){ const a=+m[1], b=+m[2]; const len=PUMPS.includes(a)?a:b, n=PUMPS.includes(a)?b:a; for(let i=0;i<Math.min(n,10);i++) out.push(len); return; }
+    (p.match(/\d+/g)||[]).forEach(x=>out.push(+x)); });
+  return out;
+}
+// "63, 63, 63, 59" -> "(63)³, 59"  (WhatsApp photo / cards) — the user's own way of writing 3 pumps of 63
+const SUP='⁰¹²³⁴⁵⁶⁷⁸⁹';
+function pumpLabel(lens){ const c={}, order=[]; lens.forEach(l=>{ if(!c[l]){c[l]=0;order.push(l);} c[l]++; });
+  return order.map(l=>c[l]>1?`(${l})${String(c[l]).split('').map(d=>SUP[+d]).join('')}`:String(l)).join(', '); }
+// a note is stored as "<ms when written>|<text>": the pump is skipped only by pours that start AFTER that,
+// so a pump that breaks mid-pour stays on its pour (the user moves it himself)
+function pumpNote(i){ const v=String(PUMPNOTE[String(i)]||''), m=v.match(/^(\d{12,})\|([\s\S]*)$/);
+  return m?{t:+m[1], text:m[2].trim()}:{t:0, text:v.trim()}; }
+function pumpBroken(i,at){ const n=pumpNote(i); return !!n.text && (at==null || at>=n.t); }
+// -> { byPour: Map(pour -> {need:[len], got:[pumpIdx], missing:[len]}), state:[{i,len,st,pour,until,note}] }
+function pumpPlan(now){
+  now=now||Date.now();
+  const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
+  const pours=(VD.summary||[]).filter(g=>g.trucks>0 && pumpReq(g.pumps).length && ts(g).length).map(g=>{
+    const a=ts(g), fin=!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
+    return {g, start:Math.min(...a), end:fin?Math.max(...a):null}; }).sort((a,b)=>a.start-b.start);
+  const busy=PUMPS.map(()=>[]);   // per pump: [{start, free, p}]
+  const byPour=new Map();
+  for(const p of pours){
+    const need=pumpReq(p.g.pumps), got=[], missing=[];
+    for(const len of need){
+      const i=PUMPS.findIndex((L,j)=>L===len && !got.includes(j) && !pumpBroken(j,p.start) &&
+        busy[j].every(b=>b.free!=null && b.free<=p.start));
+      if(i<0){ missing.push(len); continue; }
+      got.push(i); busy[i].push({start:p.start, free:p.end==null?null:p.end+PUMP_WASH, end:p.end, p});
+    }
+    byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
+  }
+  const state=PUMPS.map((len,i)=>{
+    const note=pumpNote(i).text;
+    const cur=busy[i].find(b=>b.start<=now && (b.free==null || now<b.free));
+    let st='free', pour=null, until=null;
+    if(cur){ pour=cur.p.g; if(cur.end==null) st='on'; else { st='wash'; until=cur.free; } }
+    if(note && st==='free') st='down';
+    return {i,len,st,pour,until,note};
+  });
+  return {byPour,state};
+}
+let pumpEditing=null;            // index of the note box being typed in — a refresh must not wipe it
+function renderPumps(){
+  const area=el('pumpsArea'); if(!area) return;
+  if(pumpEditing!=null && area.contains(document.activeElement)) return;
+  const {byPour,state}=pumpPlan();
+  const n=k=>state.filter(s=>s.st===k).length;
+  const down=state.filter(s=>s.note).length;
+  const site=g=>(g.client?g.client+' ':'')+g.elem;
+  const counts=`<div class="trk-counts">
+     <div class="trk-kpi"><div class="n" style="color:var(--cyan)">${n('on')}</div><div class="l">Working</div></div>
+     <div class="trk-kpi"><div class="n" style="color:#fb923c">${n('wash')}</div><div class="l">Washing</div></div>
+     <div class="trk-kpi"><div class="n" style="color:var(--green)">${n('free')}</div><div class="l">Available</div></div>
+     <div class="trk-kpi"><div class="n" style="color:var(--rose)">${down}</div><div class="l">Breakdown</div></div>
+   </div>`;
+  // running pours that asked for a length nobody could give
+  const short=[...byPour.entries()].filter(([g,a])=>a.end==null && a.missing.length);
+  const warn=short.length?`<div class="pm-warn">${short.map(([g,a])=>`⚠ <b>${esc(site(g))}</b> — no ${esc(pumpLabel(a.missing))} pump free`).join('<br>')}</div>`:'';
+  const cards=state.map(s=>{
+    const txt = s.st==='on'   ? `On <b>${esc(site(s.pour))}</b>`
+              : s.st==='wash' ? `Washing <span class="tc-dim">· ${esc(site(s.pour))} · free at ${timeShort(s.until)}</span>`
+              : s.st==='down' ? 'Breakdown' : 'Available';
+    return `<div class="pm-card st-${s.st}${s.note?' broken':''}">
+      <div class="pm-len">${s.len}<small>#${s.i+1}</small></div>
+      <div class="tc-info">
+        <div class="pm-st">${txt}${s.note&&s.st!=='down'?' <span class="pm-bd">Breakdown</span>':''}</div>
+        <input class="pm-note" data-i="${s.i}" placeholder="✎ problem…" value="${esc(s.note)}">
+      </div></div>`; }).join('');
+  area.innerHTML=counts+warn+`<div class="trk-cards" style="margin-top:14px">${cards}</div>`;
+  area.querySelectorAll('.pm-note').forEach(inp=>{
+    const i=inp.dataset.i;
+    inp.addEventListener('focus',()=>{ pumpEditing=i; });
+    const save=async()=>{ pumpEditing=null; const v=inp.value.trim();
+      const old=pumpNote(i); if(v===old.text) return;
+      const val=v?((old.text?old.t:Date.now())+'|'+v):'';      // editing the text keeps the original "broke at" time
+      if(val) PUMPNOTE[i]=val; else delete PUMPNOTE[i];
+      stSet(KEY_PUMP,PUMPNOTE); renderPumps(); await syncPush('pump',i,val); };
+    inp.addEventListener('blur',save);
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') inp.blur(); });
+  });
 }
 
 /* ---------- truck tracking view (Loaded / Empty sub-tabs) ---------- */
@@ -2154,6 +2273,7 @@ function applyState(st){
   if(!st) return false;
   DONE=st.done||{}; REQ=st.req||{}; RATE=st.rate||{};
   stSet(KEY_DONE,DONE); stSet(KEY_REQ,REQ); stSet(KEY_RATE,RATE);   // keep a local cache for offline
+  if(st.pump){ PUMPNOTE=st.pump; stSet(KEY_PUMP,PUMPNOTE); }        // older sync script: no pump notes -> keep local
   return true;
 }
 // Pull shared state. Only overwrites the local maps when the call SUCCEEDS (offline -> keep local).
@@ -2708,6 +2828,7 @@ function requireAuth(){
   if(savedPlan&&savedPlan.plan){ PLAN=savedPlan.plan; PLAN_ROWS=savedPlan.rows||[]; }
   RATE=(await stGet(KEY_RATE))||{};
   DONE=(await stGet(KEY_DONE))||{};
+  PUMPNOTE=(await stGet(KEY_PUMP))||{};
   DONE_ORDER=(await stGet(KEY_DONE_ORDER))||[];
   SKIP=(await stGet(KEY_SKIP))||{};
   for(const k in SKIP){ if(Date.now()-SKIP[k]>7*86400000) delete SKIP[k]; }   // reviewed-check marks expire after a week
@@ -2733,7 +2854,7 @@ function requireAuth(){
   // restore identity + admin mode BEFORE the first render, so the right controls show from the start
   loadMe();
   try{ IS_ADMIN = localStorage.getItem(KEY_ADMIN)===ADMIN_HASH; }catch(e){ IS_ADMIN=false; }
-  if(['summary','pours','upcoming','trucks','production','admin'].indexOf(view)<0)view='summary';
+  if(['summary','pours','upcoming','trucks','pumps','production','admin'].indexOf(view)<0)view='summary';
   if(view==='admin' && !IS_ADMIN) view='summary';
   document.querySelectorAll('#quickRange .chip').forEach(c=>c.classList.toggle('active',
     c.dataset.r==='today' && el('fromDate').value===todayStr(0) && el('toDate').value===todayStr(0)));
@@ -2801,8 +2922,11 @@ function planPhotoRows(){
   const plantsOf=(g,recentOnly)=>{ const s=new Set();
     (g.loads||[]).forEach(l=>{ if(l.p && (!recentOnly || (l.t!=null && now-l.t<ACTIVE_WINDOW))) s.add(l.p); });
     return [...s].sort().join(', '); };
+  // Working Pumps: the lengths of the pumps the pour got ("63 (x2), 59"); not started / none free -> what it asked for
+  const PP=pumpPlan(now).byPour;
+  const pumpsOf=g=>{ const a=PP.get(g); const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps); return pumpLabel(lens); };
   const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
-    qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants});
+    qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g)});
   const pours=(VD.summary||[]).filter(g=>{ const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0; });
   // order: finished by finish time (first to finish on top) → running by start time → not started in plan order
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
@@ -2828,7 +2952,7 @@ function planPhotoRows(){
 function drawPlanPhoto(rows, at){
   rows=rows||planPhotoRows(); at=at||Date.now();
   const S=2, W=1500, PAD=40, HEAD=150, TH=64, RH=58;
-  const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305]];
+  const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305],['Working\nPumps',170]];
   const tableW=cols.reduce((s,c)=>s+c[1],0), H=HEAD+TH+Math.max(rows.length,1)*RH+PAD;
   const cv=document.createElement('canvas'); cv.width=(tableW+PAD*2)*S; cv.height=H*S;
   const x=cv.getContext('2d'); x.scale(S,S);
@@ -2849,16 +2973,42 @@ function drawPlanPhoto(rows, at){
   x.fillStyle='#1f2a44'; x.font='700 16px Arial'; x.textAlign='center'; x.textBaseline='middle';
   cols.forEach(([t,w])=>{ const ls=t.split('\n'); ls.forEach((l,i)=>x.fillText(l,cx+w/2,y+TH/2+(i-(ls.length-1)/2)*19)); cx+=w; });
   // rows
+  // pump counts "(63)⁵": the font's own superscript digits come out tiny, so draw them as real digits, raised
+  const supSize=f=>Math.round(parseInt(f.match(/(\d+)px/)[1])*0.9);
+  const richSegs=(s,font)=>{ const segs=[]; for(const ch of s){ const sup=SUP.indexOf(ch)>=0; const c=sup?String(SUP.indexOf(ch)):ch;
+      if(segs.length&&segs[segs.length-1].sup===sup) segs[segs.length-1].t+=c; else segs.push({t:c,sup}); }
+    const sf=font.replace(/\d+px/, supSize(font)+'px');
+    segs.forEach(g=>{ g.f=g.sup?sf:font; x.font=g.f; g.w=x.measureText(g.t).width+(g.sup?1:0); }); return segs; };
+  // a "L1, L2, V3" / "48, (63)⁵" list, centred; strike = a red "/" over EACH item (finished pour: none of them is on it any more)
+  const drawList=(s,xc,yc,font,strike)=>{
+    const fs=parseInt(font.match(/(\d+)px/)[1]);
+    const pieces=s.split(/(,\s*)/).filter(p=>p!=='').map(p=>({p, sep:/^,\s*$/.test(p), segs:richSegs(p,font)}));
+    pieces.forEach(q=>q.w=q.segs.reduce((a,g)=>a+g.w,0));
+    let xx=xc-pieces.reduce((a,q)=>a+q.w,0)/2; x.textAlign='left';
+    pieces.forEach(q=>{ const x0=xx;
+      q.segs.forEach(g=>{ x.font=g.f; x.fillText(g.t,xx+(g.sup?1:0),g.sup?yc-supSize(font)*0.45:yc); xx+=g.w; });
+      if(strike && !q.sep && q.p.trim()!=='—'){ x.save(); x.strokeStyle='#dc2626'; x.lineWidth=2; x.beginPath();
+        x.moveTo(x0-2,yc+fs*0.6); x.lineTo(xx+2,yc-fs*0.65); x.stroke(); x.restore(); } });
+    x.textAlign='center'; };
   const fit=(s,w,font)=>{ x.font=font; s=String(s==null?'':s); if(x.measureText(s).width<=w-14) return s; while(s.length>1&&x.measureText(s+'…').width>w-14) s=s.slice(0,-1); return s+'…'; };
   y+=TH;
   rows.forEach((r,i)=>{
     x.fillStyle=r.finished?'#f1faf4':(r.started?'#f3f8ff':'#ffffff'); x.fillRect(PAD,y,tableW,RH);
-    const v=[r.started?'✓':'', r.finished?'✓':'', r.sc, r.client, r.code, r.qty!=null?fmt(r.qty,0)+' m³':'—', r.tem||'—', r.rate?fmt(r.rate,0)+' m³/h':'—', r.plants];
+    const v=[r.started?'✓':'', r.finished?'✓':'', r.sc, r.client, r.code, r.qty!=null?fmt(r.qty,0)+' m³':'—', r.tem||'—', r.rate?fmt(r.rate,0)+' m³/h':'—', r.plants, r.pumps||'—'];
     cx=PAD;
     v.forEach((val,k)=>{ const w=cols[k][1];
       const check=k<2, font=check?'800 30px Arial':(k===4?'700 21px Arial':'500 20px Arial');
       x.fillStyle=check?'#15803d':'#1f2a44';
-      x.fillText(fit(val,w,font),cx+w/2,y+RH/2+1); cx+=w; });
+      x.font=font; const s=String(val==null?'':val);
+      if(k>=8 && x.measureText(s).width>w-14){         // plants / pumps lists: break after a comma onto a 2nd line
+        const parts=s.split(', '), ls=['']; x.font='500 18px Arial';
+        parts.forEach((p,j)=>{ const t=ls[ls.length-1]?ls[ls.length-1]+', '+p:p;
+          if(ls[ls.length-1] && x.measureText(t+(j<parts.length-1?',':'')).width>w-14) { ls[ls.length-1]+=','; ls.push(p); } else ls[ls.length-1]=t; });
+        const two=ls.length>2?[ls[0],ls.slice(1).join(' ')]:ls;
+        two.forEach((l,j)=>drawList(l,cx+w/2,y+RH/2+1+(j-(two.length-1)/2)*21,'500 18px Arial',r.finished));
+      } else if(k>=8) drawList(s,cx+w/2,y+RH/2+1,font,r.finished);
+      else x.fillText(fit(s,w,font),cx+w/2,y+RH/2+1);
+      cx+=w; });
     y+=RH;
   });
   if(!rows.length){ x.fillStyle='#6b7a90'; x.font='italic 18px Arial'; x.fillText('No pours today',PAD+tableW/2,y+RH/2); y+=RH; }
@@ -2886,6 +3036,17 @@ async function planPhoto(){
   }catch(e){ if(e&&e.name==='AbortError') return; say('Could not make the picture: '+(e&&e.message||e)); }
 }
 { const pb=el('planPhotoBtn'); if(pb) pb.addEventListener('click',planPhoto); }
+// the live picture above the button: redrawn on every render while Summary is open (same drawing as the sent one)
+let planPrevKey='';
+function updatePlanPreview(){
+  const im=el('planPhotoPrev'); if(!im || view!=='summary') return;
+  try{
+    const rows=planPhotoRows(), key=JSON.stringify(rows)+'|'+new Date().toDateString()+'|'+NCM_LOGO.complete;
+    if(key===planPrevKey) return;                       // nothing changed -> keep the current picture
+    planPrevKey=key; im.src=drawPlanPhoto(rows).toDataURL('image/png'); im.style.display='block';
+  }catch(e){}
+}
+NCM_LOGO.addEventListener('load',()=>{ planPrevKey=''; updatePlanPreview(); });
 
 /* ---------- build number + "Check for update" (⚙) ----------
    The app already updates itself (on open, then every 5 min). This shows which build is running and lets
