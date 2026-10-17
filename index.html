@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000005">
+<meta name="app-build" content="20261017-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -948,31 +948,6 @@ function looksHeader(arr){
   return hasDate&&hasQ;
 }
 
-/* ---------- requested-rate history ----------
-   Every time a rate is typed in All Pours, an extra RATE entry "<pour key>@<time ms>" = rate is saved
-   (0 = cleared, back to the plan's rate; "@0" = the rate in force before the first change). Shared through
-   the same sync as the rate itself. AVG Requested rate = those rates weighted by how long each was in force
-   between the first truck and the last activity — so a client raising the rate late in the pour does not
-   make our average look bad. Null when the rate never changed. */
-function rateHistory(key){
-  const pre=key+'@', out=[];
-  for(const k in RATE){ if(k.indexOf(pre)!==0)continue; const t=Number(k.slice(pre.length)); if(isFinite(t))out.push([t,num(RATE[k])||0]); }
-  return out.sort((a,b)=>a[0]-b[0]);
-}
-function avgRequested(g){
-  const h=rateHistory(g.key); if(h.length<2&&!(h.length===1&&h[0][0]>0))return null;
-  const from=g.depMin, to=g.endMax; if(from==null||to==null||!(to>from))return null;
-  const val=v=>v>0?v:(g.planRate>0?g.planRate:0);
-  let sum=0, dur=0, cur=g.planRate>0?g.planRate:val(h[0][1]), t=from, i=0;
-  while(i<h.length&&h[i][0]<=from){cur=val(h[i][1]);i++;}
-  for(;i<=h.length;i++){
-    const end=i<h.length?Math.min(h[i][0],to):to;
-    if(end>t){ if(cur>0){sum+=cur*(end-t);dur+=end-t;} t=end; }
-    if(i<h.length){ if(h[i][0]>=to)break; cur=val(h[i][1]); }
-  }
-  return dur>0?sum/dur:null;
-}
-
 /* ---------- core compute ---------- */
 function enrichGroup(g, now){
   now = now||Date.now();
@@ -1010,8 +985,6 @@ function enrichGroup(g, now){
   //              typed, else the plan's). Fixed from the start of the pour — it does not move with the clock.
   //  • AVERAGE = when it WILL finish at the pace so far: now + remaining ÷ average rate. This one moves.
   const avgR=g.cumRate!=null?g.cumRate:g.rateCalc, tgtR=g.rateManual!=null?g.rateManual:g.planRate;
-  g.tgtNow=tgtR>0?tgtR:null;
-  g.tgtAvg=avgRequested(g);               // what the client asked for on average (rate changes weighted by time)
   g.finishAvg=null; g.finishTgt=null;
   if(tgtR>0 && g.required>0 && g.depMin!=null) g.finishTgt=g.depMin+g.required/tgtR*3600000;
   if(g.remaining!=null&&g.remaining>0&&avgR>0) g.finishAvg=now+g.remaining/avgR*3600000;
@@ -1319,9 +1292,8 @@ function finishTwoLine(t){ if(t==null)return'—'; const day=finishDay(t);
 function finishAvgColor(g){ return (g.finishAvg!=null&&g.finishTgt!=null) ? (g.finishAvg<=g.finishTgt+60000?'var(--green)':'var(--rose)') : ''; }
 // Average rate vs target rate: green = at or above the target, red = below it. Compared as the
 // whole number the screen shows, so a rate displayed as "40" against a target of 40 is never red.
-// When the client changed the rate during the pour the target is the AVG Requested rate.
 function avgRateColor(g){
-  const a=g.cumRate!=null?g.cumRate:g.rateCalc, t=g.tgtAvg!=null?g.tgtAvg:(g.rateManual!=null?g.rateManual:g.planRate);
+  const a=g.cumRate!=null?g.cumRate:g.rateCalc, t=g.rateManual!=null?g.rateManual:g.planRate;
   if(!(a>0)||!(t>0)) return '';
   return Math.round(a)>=Math.round(t) ? 'var(--green)' : 'var(--rose)';
 }
@@ -1700,7 +1672,7 @@ function renderSummary(){
           <div class="spot-cell"><div class="s-lab">Rejected</div><div class="s-val" style="color:${sp.rejected>0?'var(--amber)':'var(--faint)'}">${sp.rejected>0?fmt(sp.rejected)+' <small>m³</small>':'—'}</div></div>
           <div class="spot-cell"><div class="s-lab">Required</div><div class="s-val">${sp.required!=null?fmt(sp.required):'—'} <small>m³</small></div></div>
           <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val" style="${avgRateColor(sp)?`color:${avgRateColor(sp)}`:''}">${sp.cumRate!=null?fmt(sp.cumRate,0):'—'} <small>m³/h</small></div></div>
-          <div class="spot-cell"><div class="s-lab">Target rate</div><div class="s-val">${sp.tgtNow!=null?fmt(sp.tgtNow):'—'} <small>m³/h</small>${sp.tgtAvg!=null&&Math.round(sp.tgtAvg)!==Math.round(sp.tgtNow||0)?`<div style="font-size:11px;font-weight:600;color:var(--faint);margin-top:2px">AVG Requested rate ${fmt(sp.tgtAvg,0)} m³/h</div>`:''}</div></div>
+          <div class="spot-cell"><div class="s-lab">Target rate</div><div class="s-val">${sp.planRate!=null?fmt(sp.planRate):(sp.rateManual!=null?fmt(sp.rateManual):'—')} <small>m³/h</small></div></div>
           <div class="spot-cell"><div class="s-lab">Est. finish · average</div><div class="s-val" style="${finishAvgColor(sp)?`color:${finishAvgColor(sp)}`:''}">${sp.finishAvg?finishTwoLine(sp.finishAvg):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
           <div class="spot-cell"><div class="s-lab" title="First truck + required ÷ target rate — fixed for the whole pour">Planned finish · target</div><div class="s-val">${sp.finishTgt?finishTwoLine(sp.finishTgt):'—'}</div></div>
         </div>
@@ -2039,13 +2011,8 @@ function renderAllPours(){
   el('tableArea').querySelectorAll('.rate-in').forEach(inp=>{
     inp.addEventListener('change',async()=>{
       const k=decodeURIComponent(inp.dataset.k); const v=num(inp.value);
-      // remember WHEN the rate changed (for the AVG Requested rate); the first change also keeps the rate before it
-      const g=(VD.full||[]).concat(VD.summary||[]).find(x=>x.key===k), first=!rateHistory(k).length, prev=g?(g.rateManual!=null?g.rateManual:(g.planRate||0)):(num(RATE[k])||0);
-      const hk=k+'@'+Date.now(), hist=first&&prev>0?[[k+'@0',prev],[hk,v>0?v:0]]:[[hk,v>0?v:0]];
-      hist.forEach(([a,b])=>{RATE[a]=b;});
       if(v>0)RATE[k]=v; else delete RATE[k];
       await stSet(KEY_RATE,RATE); rerender();
-      for(const [a,b] of hist) await syncPush('rate',a,b);
       syncPush('rate',k, v>0?v:'');     // share with every device
     });
   });
