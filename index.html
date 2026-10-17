@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000009">
+<meta name="app-build" content="20261017-000010">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -439,8 +439,16 @@
   .tc-out.warn{color:#fb923c;background:rgba(251,146,60,.14)}
   .tc-out.bad{color:var(--rose);background:rgba(251,113,133,.15)}
   .tc-info{min-width:0;flex:1}
+  .uc-pump{margin-top:9px;padding:6px 9px;border-radius:9px;font-size:12.5px;line-height:1.45;border:1px solid}
+  .uc-pump.ok{color:var(--green);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.08)}
+  .uc-pump.warn{color:#fb923c;border-color:rgba(251,146,60,.45);background:rgba(251,146,60,.08)}
+  .uc-pump.bad{color:var(--rose);border-color:rgba(251,113,133,.45);background:rgba(251,113,133,.08)}
+  .uc-pump::before{content:"🏗 "}
+  .vtab .pm-alert{color:#fb923c;margin-inline-start:4px}
   .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
-  .pm-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);border:1px solid var(--line2);border-radius:99px;padding:3px 10px}
+  .pm-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);border:1px solid var(--line2);border-radius:99px;padding:3px 10px;cursor:pointer;user-select:none}
+  .pm-chip.sel{border-color:var(--sc);box-shadow:0 0 0 1px var(--sc);color:var(--ink);background:color-mix(in srgb,var(--sc) 14%,transparent)}
+  .pm-chip.dim{opacity:.45} .pm-chip.pm-all{--sc:var(--muted)}
   .pm-chip i{width:7px;height:7px;border-radius:50%;background:var(--sc)} .pm-chip b{color:var(--sc);font-family:var(--mono)}
   .pm-list{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
   .pm-row{padding:5px 8px 6px 9px;border:1px solid var(--line2);border-inline-start:3px solid var(--sc);border-radius:10px;background:var(--glass,rgba(24,30,50,.5));min-width:0}
@@ -1466,7 +1474,9 @@ function rerender(){ render(build(LAST.matrix,LAST.header)); }
 function renderViewTabs(){
   const box=el('viewTabs'); if(!box)return;
   const mk=(id,label,cnt)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
-  box.innerHTML=mk('summary','📋 Summary',null)+mk('pours','🏗️ All Pours',VD.started.length)+mk('upcoming','⏳ Upcoming',VD.upcoming.length)
+  // ⚠ on Upcoming when a request's pumps are not ready
+  let upWarn=''; try{ for(const v of upcomingPumpCheck().values()) if(v.cls!=='ok'){ upWarn='<span class="pm-alert" title="Pumps not ready for a request">⚠</span>'; break; } }catch(e){}
+  box.innerHTML=mk('summary','📋 Summary',null)+mk('pours','🏗️ All Pours',VD.started.length)+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length)
     +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null)
     +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', PUMPS.length)
     +mk('production','📊 Production',null);
@@ -1503,9 +1513,9 @@ function applyView(){
    first truck loads, it takes the first pump of that length that is free at that moment (not on another
    pour, not washing, not Breakdown). Pours are served in start order, so every device works out the same
    pumps. A pour ends at its last truck once it is Done / reached its quantity / auto-closed; the pump then
-   washes for an hour and is Available again. A note on a pump (shared like Done) = Breakdown. */
+   shows Washing for 2 hours and is Available again. A note on a pump (shared like Done) = Breakdown. */
 const PUMPS=[48,56,59,59,63,63,63,63,63,63];
-const PUMP_WASH=3600000;
+const PUMP_WASH=2*3600000;     // busy (travel + discharge + washing) for 2 h after the last truck left the plant
 let PUMPNOTE={};                 // pump index (0-based, as a string) -> problem note, shared via the sync script
 function pumpReq(s){             // "63, 59" / "63+59" / "2x63" / "63x2" -> [63,59] / [63,63]
   const out=[]; String(s||'').split(/[,+&\/]|\s{2,}/).forEach(p=>{ p=p.trim(); if(!p) return;
@@ -1552,7 +1562,44 @@ function pumpPlan(now){
   });
   return {byPour,state};
 }
+// Upcoming requests: are the pumps they ask for ready NOW? Requests are served in plan order and each
+// pump counts for one request only (two requests for 63 + one free 63 = the second one is short).
+// -> Map(pour -> {cls:'ok'|'warn'|'bad', html})
+function upcomingPumpCheck(now){
+  now=now||Date.now();
+  const {state}=pumpPlan(now), claimed=new Set(), out=new Map();
+  const used=new Set(), rowOf=g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) &&
+      (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es)))); if(i>=0) used.add(i); return i<0?1e9:i; };
+  const list=(VD.upcoming||[]).map(g=>({g,i:rowOf(g)})).sort((a,b)=>a.i-b.i).map(x=>x.g);
+  const site=g=>(g.client?g.client+' ':'')+g.elem;
+  for(const g of list){
+    const need=pumpReq(g.pumps); if(!need.length) continue;
+    const res=[];                                    // per requested pump: {len, kind, s}
+    for(const len of need){
+      const cand=state.filter(s=>s.len===len && !claimed.has(s.i));
+      const pick=cand.find(s=>s.st==='free')
+        || cand.filter(s=>s.st==='wash' && !s.note).sort((a,b)=>a.until-b.until)[0]
+        || cand.find(s=>s.st==='on' && !s.note)
+        || cand.find(s=>s.note);
+      if(pick) claimed.add(pick.i);
+      res.push({len, kind:!pick?'none':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick});
+    }
+    const bad=res.filter(r=>r.kind!=='ok');
+    if(!bad.length){ out.set(g,{cls:'ok', html:`Pumps ready: <b>${esc(pumpLabel(need))}</b>`}); continue; }
+    const byLen={}; res.forEach(r=>{ (byLen[r.len]=byLen[r.len]||[]).push(r); });
+    const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok').length, miss=rs.filter(r=>r.kind!=='ok');
+      if(!miss.length) return `${L} ✓`;
+      const why=miss.map(r=> r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
+                            : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}`
+                            : r.kind==='down' ? 'Breakdown' : 'no pump');
+      const uniq=[...new Set(why)].join(' · ');
+      return rs.length>1 ? `${L}: ${okN} of ${rs.length} free · ${uniq}` : `${L} ${uniq}`; });
+    out.set(g,{cls:bad.every(r=>r.kind==='wash')?'warn':'bad', html:parts.join('<br>')});
+  }
+  return out;
+}
 let pumpEditing=null;            // index of the note box being typed in — a refresh must not wipe it
+let pumpFilter=null;             // 'on' | 'wash' | 'free' | 'down' (has a note) | null = all pumps
 function renderPumps(){
   const area=el('pumpsArea'); if(!area) return;
   if(pumpEditing!=null && area.contains(document.activeElement)) return;
@@ -1561,12 +1608,14 @@ function renderPumps(){
   const down=state.filter(s=>s.note).length;
   const site=g=>(g.client?g.client+' ':'')+g.elem;
   // compact: one line of counts, then one short row per pump; the note box opens only from ✎
-  const chip=(c,v,l)=>`<span class="pm-chip" style="--sc:${c}"><i></i><b>${v}</b> ${l}</span>`;
-  const counts=`<div class="pm-chips">${chip('var(--cyan)',n('on'),'Working')}${chip('#fb923c',n('wash'),'Washing')}${chip('var(--green)',n('free'),'Available')}${chip('var(--rose)',down,'Breakdown')}</div>`;
+  // the count chips are filters: tap = show only those pumps, tap again (or "All ✕") = every pump
+  const chip=(k,c,v,l)=>`<span class="pm-chip${pumpFilter===k?' sel':''}${pumpFilter&&pumpFilter!==k?' dim':''}" data-f="${k}" style="--sc:${c}"><i></i><b>${v}</b> ${l}</span>`;
+  const counts=`<div class="pm-chips">${chip('on','var(--cyan)',n('on'),'Working')}${chip('wash','#fb923c',n('wash'),'Washing')}${chip('free','var(--green)',n('free'),'Available')}${chip('down','var(--rose)',down,'Breakdown')}${pumpFilter?'<span class="pm-chip pm-all" data-f="">All ✕</span>':''}</div>`;
+  const keep=s=>!pumpFilter || (pumpFilter==='down'?!!s.note:s.st===pumpFilter);
   // running pours that asked for a length nobody could give
   const short=[...byPour.entries()].filter(([g,a])=>a.end==null && a.missing.length);
   const warn=short.length?`<div class="pm-warn">${short.map(([g,a])=>`⚠ <b>${esc(site(g))}</b> — no ${esc(pumpLabel(a.missing))} pump free`).join('<br>')}</div>`:'';
-  const rows=state.map(s=>{
+  const rows=state.filter(keep).map(s=>{
     const txt = s.st==='on'   ? `<span class="pm-k">On</span> <b>${esc(site(s.pour))}</b>`
               : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
               : s.st==='down' ? '<span class="pm-k">Breakdown</span>' : '<span class="pm-k">Available</span>';
@@ -1576,7 +1625,9 @@ function renderPumps(){
       <button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Problem note">✎</button></div>
       <div class="pm-mid">${editing?`<input class="pm-note" data-i="${s.i}" placeholder="problem…" value="${esc(s.note)}">`
         :`<div class="pm-st">${txt}</div>${s.note?`<div class="pm-nt">${esc(s.note)}</div>`:''}`}</div></div>`; }).join('');
-  area.innerHTML=counts+warn+`<div class="pm-list">${rows}</div>`;
+  area.innerHTML=counts+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
+  area.querySelectorAll('.pm-chip[data-f]').forEach(c=>c.addEventListener('click',()=>{
+    const f=c.dataset.f||null; pumpFilter=(pumpFilter===f)?null:f; renderPumps(); }));
   area.querySelectorAll('.pm-ed').forEach(b=>b.addEventListener('click',()=>{
     const i=b.dataset.i; if(pumpEditing===i){ const inp=area.querySelector('.pm-note'); if(inp) inp.blur(); return; }
     pumpEditing=i; b.blur(); renderPumps(); const inp=area.querySelector('.pm-note'); if(inp){ inp.focus(); inp.select(); } }));
@@ -2208,7 +2259,8 @@ function renderUpcoming(){
   el('upTitle').textContent=`Upcoming — not started yet (${rest.length})`;
   if(!rest.length){ el('upcomingArea').innerHTML='<div class="state"><h3>All planned pours have started</h3></div>'; return; }
   const sorted=rest.slice().sort((a,b)=>(b.planReq||0)-(a.planReq||0));
-  el('upcomingArea').innerHTML='<div class="ucards">'+sorted.map(p=>`
+  const PC=upcomingPumpCheck();
+  el('upcomingArea').innerHTML='<div class="ucards">'+sorted.map(p=>{ const pc=PC.get(p); return `
     <div class="ucard">
       <div class="uc-code">${p.elem}</div>
       <div class="uc-req">${fmt(p.planReq,0)} <small>m³</small></div>
@@ -2218,8 +2270,8 @@ function renderUpcoming(){
         ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
         Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b>
         ${p.mix?('<br>Grade: <b>'+esc(p.mix)+'</b>'):''}
-      </div>
-    </div>`).join('')+'</div>';
+      </div>${pc?`<div class="uc-pump ${pc.cls}">${pc.html}</div>`:''}
+    </div>`; }).join('')+'</div>';
 }
 
 /* ---------- print report / PDF ---------- */
