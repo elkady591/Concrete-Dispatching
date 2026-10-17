@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000011">
+<meta name="app-build" content="20261017-000012">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -463,6 +463,11 @@
   .pm-ed{flex:none;width:24px;height:22px;padding:0;border-radius:6px;border:1px solid var(--line2);background:transparent;color:var(--faint);font-size:12px;cursor:pointer}
   .pm-ed.on{color:var(--rose);border-color:var(--rose)}
   .pm-note{width:100%;margin-top:3px;font:inherit;font-size:12.5px;color:var(--ink);background:transparent;border:1px solid var(--rose);border-radius:8px;padding:5px 8px}
+  .pm-edit{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;align-items:stretch}
+  .pm-edit .pm-note{flex:1;min-width:0;margin-top:0}
+  .pm-code{flex:1 1 100%;font:inherit;font-size:12.5px;color:var(--ink);background:var(--bg2,#0f172a);border:1px solid var(--rose);border-radius:8px;padding:4px 4px}
+  .pm-ok{flex:none;width:28px;border-radius:8px;border:1px solid var(--green);background:transparent;color:var(--green);font-weight:800;cursor:pointer}
+  .pm-code-tag{font-size:10.5px;font-weight:800;color:#fff;background:var(--rose);border-radius:6px;padding:0 5px;margin-inline-end:5px;font-family:var(--mono)}
   /* computer: bigger tiles, 5 per row (10 pumps = 2 rows) */
   @media (min-width:900px){
     .pm-list{grid-template-columns:repeat(5,1fr);gap:10px}
@@ -471,7 +476,7 @@
     .pm-st{font-size:15.5px;margin-top:4px} .pm-nt{font-size:13.5px;margin-top:2px}
     .pm-ed{width:30px;height:28px;font-size:14px}
     .pm-chip{font-size:14px;padding:5px 14px} .pm-note{font-size:14px}
-    .pm-bd{font-size:11.5px}
+    .pm-bd{font-size:11.5px} .pm-code-tag{font-size:12.5px} .pm-code{font-size:14px}
   }
   .pm-warn{margin-top:12px;padding:9px 12px;border-radius:11px;font-size:13px;color:#fb923c;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.35)}
   .tc-sortbar{display:flex;justify-content:flex-end;margin:0 0 8px}
@@ -1540,9 +1545,14 @@ function pumpLabel(lens){ const c={}, order=[]; lens.forEach(l=>{ if(!c[l]){c[l]
   return order.map(l=>c[l]>1?`(${l})${String(c[l]).split('').map(d=>SUP[+d]).join('')}`:String(l)).join(', '); }
 // a note is stored as "<ms when written>|<text>": the pump is skipped only by pours that start AFTER that,
 // so a pump that breaks mid-pour stays on its pour (the user moves it himself)
+// The real pumps' codes (length-number). The app still works by length; a code is only picked when a
+// breakdown is written, so you know WHICH 63 is broken. Stored in front of the note: "[63-08] text".
+const PUMP_CODES=['48-01','59-04','59-05','56-06','63-07','63-08','63-09','63-10','63-11','63-12'];
+const codesFor=len=>PUMP_CODES.filter(c=>c.split('-')[0]===String(len));
 function pumpNote(i){ const v=String(PUMPNOTE[String(i)]||''), m=v.match(/^(\d{12,})\|([\s\S]*)$/);
-  return m?{t:+m[1], text:m[2].trim()}:{t:0, text:v.trim()}; }
-function pumpBroken(i,at){ const n=pumpNote(i); return !!n.text && (at==null || at>=n.t); }
+  const t=m?+m[1]:0, raw=(m?m[2]:v).trim(), c=raw.match(/^\[([^\]]*)\]\s*([\s\S]*)$/);
+  return c?{t, code:c[1].trim(), text:c[2].trim()}:{t, code:'', text:raw}; }
+function pumpBroken(i,at){ const n=pumpNote(i); return !!(n.text||n.code) && (at==null || at>=n.t); }
 // -> { byPour: Map(pour -> {need:[len], got:[pumpIdx], missing:[len]}), state:[{i,len,st,pour,until,note}] }
 function pumpPlan(now){
   now=now||Date.now();
@@ -1563,12 +1573,12 @@ function pumpPlan(now){
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
   }
   const state=PUMPS.map((len,i)=>{
-    const note=pumpNote(i).text;
+    const pn=pumpNote(i), note=pn.text||(pn.code?'Breakdown':''), code=pn.code;
     const cur=busy[i].find(b=>b.start<=now && (b.free==null || now<b.free));
     let st='free', pour=null, until=null;
     if(cur){ pour=cur.p.g; if(cur.end==null) st='on'; else { st='wash'; until=cur.free; } }
     if(note && st==='free') st='down';
-    return {i,len,st,pour,until,note};
+    return {i,len,st,pour,until,note,code};
   });
   return {byPour,state};
 }
@@ -1609,7 +1619,8 @@ function upcomingPumpCheck(now){
   return out;
 }
 let pumpEditing=null;            // index of the note box being typed in — a refresh must not wipe it
-let pumpFilter=null;             // 'on' | 'wash' | 'free' | 'down' (has a note) | null = all pumps
+let pumpDraft=null;              // {code,text} typed in the open editor, kept across a data refresh
+let pumpFilter=null;            // 'on' | 'wash' | 'free' | 'down' (has a note) | null = all pumps
 function renderPumps(){
   const area=el('pumpsArea'); if(!area) return;
   if(pumpEditing!=null && area.contains(document.activeElement)) return;
@@ -1630,28 +1641,40 @@ function renderPumps(){
               : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
               : s.st==='down' ? '<span class="pm-k">Breakdown</span>' : '<span class="pm-k">Available</span>';
     const editing=pumpEditing===String(s.i);
+    const pn=pumpNote(s.i), d=editing&&pumpDraft?pumpDraft:{code:pn.code, text:pn.text};
+    const editor=`<div class="pm-edit"><select class="pm-code" title="Which pump (code)"><option value="">code…</option>${codesFor(s.len).map(c=>`<option${c===d.code?' selected':''}>${c}</option>`).join('')}</select>
+        <input class="pm-note" placeholder="problem…" value="${esc(d.text)}"><button class="pm-ok" title="Save">✓</button></div>`;
     return `<div class="pm-row st-${s.st}">
-      <div class="pm-top"><div class="pm-len">${s.len}<small>#${s.i+1}</small>${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
-      <button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Problem note">✎</button></div>
-      <div class="pm-mid">${editing?`<input class="pm-note" data-i="${s.i}" placeholder="problem…" value="${esc(s.note)}">`
-        :`<div class="pm-st">${txt}</div>${s.note?`<div class="pm-nt">${esc(s.note)}</div>`:''}`}</div></div>`; }).join('');
+      <div class="pm-top"><div class="pm-len">${s.len}${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
+      <button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div>
+      <div class="pm-mid">${editing?editor
+        :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div></div>`; }).join('');
   area.innerHTML=counts+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
   area.querySelectorAll('.pm-chip[data-f]').forEach(c=>c.addEventListener('click',()=>{
     const f=c.dataset.f||null; pumpFilter=(pumpFilter===f)?null:f; renderPumps(); }));
+  // ✎ opens the editor (code + problem); ✓ or Enter saves, ✎ again or Esc closes without saving.
+  // Empty code AND empty problem = the pump is OK again.
+  const close=()=>{ pumpEditing=null; pumpDraft=null; document.activeElement&&document.activeElement.blur(); renderPumps(); };
   area.querySelectorAll('.pm-ed').forEach(b=>b.addEventListener('click',()=>{
-    const i=b.dataset.i; if(pumpEditing===i){ const inp=area.querySelector('.pm-note'); if(inp) inp.blur(); return; }
-    pumpEditing=i; b.blur(); renderPumps(); const inp=area.querySelector('.pm-note'); if(inp){ inp.focus(); inp.select(); } }));
-  area.querySelectorAll('.pm-note').forEach(inp=>{
-    const i=inp.dataset.i;
-    const save=async()=>{ if(pumpEditing!==i) return; pumpEditing=null; const v=inp.value.trim();
-      const old=pumpNote(i); if(v===old.text){ renderPumps(); return; }
-      const val=v?((old.text?old.t:Date.now())+'|'+v):'';      // editing the text keeps the original "broke at" time
+    const i=b.dataset.i; if(pumpEditing===i){ close(); return; }
+    const pn=pumpNote(i); pumpEditing=i; pumpDraft={code:pn.code, text:pn.text}; b.blur(); renderPumps();
+    const inp=area.querySelector('.pm-note'); if(inp){ inp.focus(); inp.select(); } }));
+  const ed=area.querySelector('.pm-edit');
+  if(ed){
+    const i=pumpEditing, sel=ed.querySelector('.pm-code'), inp=ed.querySelector('.pm-note');
+    const keepDraft=()=>{ pumpDraft={code:sel.value, text:inp.value}; };
+    sel.addEventListener('change',keepDraft); inp.addEventListener('input',keepDraft);
+    const save=async()=>{
+      const code=sel.value.trim(), v=inp.value.trim(), old=pumpNote(i);
+      pumpEditing=null; pumpDraft=null; document.activeElement&&document.activeElement.blur();
+      if(code===old.code && v===old.text){ renderPumps(); return; }
+      const body=(code?`[${code}] `:'')+v;
+      const val=(code||v)?(((old.text||old.code)?old.t:Date.now())+'|'+body.trim()):'';   // editing keeps the original "broke at" time
       if(val) PUMPNOTE[i]=val; else delete PUMPNOTE[i];
       stSet(KEY_PUMP,PUMPNOTE); renderPumps(); await syncPush('pump',i,val); };
-    inp.addEventListener('blur',save);
-    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') inp.blur();
-      if(e.key==='Escape'){ pumpEditing=null; renderPumps(); } });
-  });
+    ed.querySelector('.pm-ok').addEventListener('click',save);
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') save(); if(e.key==='Escape') close(); });
+  }
 }
 
 /* ---------- truck tracking view (Loaded / Empty sub-tabs) ---------- */
