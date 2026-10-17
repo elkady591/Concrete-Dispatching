@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000006">
+<meta name="app-build" content="20261017-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2804,14 +2804,26 @@ function planPhotoRows(){
   const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
     qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants});
   const pours=(VD.summary||[]).filter(g=>{ const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0; });
+  // order: finished by finish time (first to finish on top) → running by start time → not started in plan order
+  const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
+  const first=g=>{ const a=ts(g); return a.length?Math.min(...a):Infinity; };
+  const last=g=>{ const a=ts(g); return a.length?Math.max(...a):Infinity; };
+  // plan row of each upcoming pour: by its ES, else by its code (split pours "30UMA #2" by base); each row used once
+  const usedRow=new Set(), PI=new Map();
+  for(const g of (VD.upcoming||[])){
+    const i=(PLAN_ROWS||[]).findIndex((r,j)=>!usedRow.has(j) && (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es))));
+    if(i>=0) usedRow.add(i); PI.set(g,i<0?1e9:i);
+  }
+  const planIdx=g=>PI.get(g);
   const fin=[], run=[];
   for(const g of pours){
     const done=!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
-    if(done) fin.push(row(g,true,true,plantsOf(g,false)));
-    else run.push(row(g,true,false,plantsOf(g,true)));
+    (done?fin:run).push(g);
   }
-  const up=(VD.upcoming||[]).map(g=>row(g,false,false,''));
-  return fin.concat(run,up);
+  fin.sort((a,b)=>last(a)-last(b)); run.sort((a,b)=>first(a)-first(b));
+  const up=(VD.upcoming||[]).slice().sort((a,b)=>planIdx(a)-planIdx(b));
+  return fin.map(g=>row(g,true,true,plantsOf(g,false)))
+    .concat(run.map(g=>row(g,true,false,plantsOf(g,true))), up.map(g=>row(g,false,false,'')));
 }
 function drawPlanPhoto(rows, at){
   rows=rows||planPhotoRows(); at=at||Date.now();
