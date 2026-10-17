@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261015-000006">
+<meta name="app-build" content="20261017-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -637,6 +637,11 @@
     <div id="spot"></div>
     <div class="card" style="margin-top:14px"><h3>Active Pours</h3><div id="activeList"></div></div>
     <div class="card" style="margin-top:14px" id="closedCard"><h3>Closed Pours</h3><div id="closedList"></div></div>
+    <!-- Daily Production Plan as a picture for WhatsApp (see planPhoto) -->
+    <div style="display:flex;justify-content:center;margin-top:16px">
+      <button class="btn" id="planPhotoBtn" style="padding:12px 22px;font-size:14px">📸 WhatsApp Photo — Daily Production Plan</button>
+    </div>
+    <div id="planPhotoMsg" class="muted" style="text-align:center;font-size:12px;margin-top:6px"></div>
   </section>
 
   <!-- ALL POURS VIEW -->
@@ -2770,6 +2775,93 @@ function requireAuth(){
 })();
 // Register the service worker so the installed PWA opens offline (network-first — see sw.js).
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('./sw.js').then(()=>notifRefresh()).catch(()=>notifRefresh()); }); }
+
+/* ---------- "WhatsApp Photo": the Daily Production Plan as a picture ----------
+   Same columns as the paper form (minus Working Pumps), filled from the live data:
+     finished (Done-marked or required quantity reached) → Started ✓ Finished ✓, plants that worked on it
+     running → Started ✓, plants that loaded in the last 2 h
+     not started (Upcoming) → empty boxes
+   Drawn on a canvas, then shared (phone) / copied to the clipboard (PC) / downloaded as a last resort. */
+const NCM_LOGO=new Image(); NCM_LOGO.src='icons/ncm-logo.png';   // drawn top-left (text fallback while it loads)
+function planPhotoRows(){
+  const now=Date.now(), rows=[];
+  const tgt=g=>g.rateManual!=null?g.rateManual:g.planRate;
+  const plantsOf=(g,recentOnly)=>{ const s=new Set();
+    (g.loads||[]).forEach(l=>{ if(l.p && (!recentOnly || (l.t!=null && now-l.t<ACTIVE_WINDOW))) s.add(l.p); });
+    return [...s].sort().join(', '); };
+  const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
+    qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants});
+  const pours=(VD.summary||[]).filter(g=>{ const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0; });
+  const fin=[], run=[];
+  for(const g of pours){
+    const done=!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
+    if(done) fin.push(row(g,true,true,plantsOf(g,false)));
+    else run.push(row(g,true,false,plantsOf(g,true)));
+  }
+  const up=(VD.upcoming||[]).map(g=>row(g,false,false,''));
+  return fin.concat(run,up);
+}
+function drawPlanPhoto(rows, at){
+  rows=rows||planPhotoRows(); at=at||Date.now();
+  const S=2, W=1500, PAD=40, HEAD=150, TH=64, RH=58;
+  const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305]];
+  const tableW=cols.reduce((s,c)=>s+c[1],0), H=HEAD+TH+Math.max(rows.length,1)*RH+PAD;
+  const cv=document.createElement('canvas'); cv.width=(tableW+PAD*2)*S; cv.height=H*S;
+  const x=cv.getContext('2d'); x.scale(S,S);
+  x.fillStyle='#ffffff'; x.fillRect(0,0,tableW+PAD*2,H);
+  // header
+  x.textBaseline='alphabetic';
+  if(NCM_LOGO.complete && NCM_LOGO.naturalWidth){ const lh=72, lw=lh*NCM_LOGO.naturalWidth/NCM_LOGO.naturalHeight; x.drawImage(NCM_LOGO,PAD,PAD-4,lw,lh); }
+  else { x.fillStyle='#1d9bd1'; x.font='800 54px Arial'; x.fillText('NCM',PAD,PAD+48);
+    x.fillStyle='#8a9aa8'; x.font='600 12px Arial'; x.fillText('NUCLEAR CONCRETE MIXES',PAD+2,PAD+68); }
+  const d=new Date(at); const dd=`${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()}`;
+  x.fillStyle='#1f2a44'; x.textAlign='center'; x.font='700 26px Arial'; x.fillText('Daily Production Plan',PAD+tableW/2,PAD+58);
+  x.font='600 18px Arial'; x.fillStyle='#3a4a63'; x.fillText('Date: '+dd,PAD+tableW/2,PAD+26);
+  x.textAlign='left';
+  // table header
+  let y=HEAD, cx=PAD;
+  x.fillStyle='#dbe7f5'; x.fillRect(PAD,y,tableW,TH);
+  x.strokeStyle='#5b6b80'; x.lineWidth=1.2;
+  x.fillStyle='#1f2a44'; x.font='700 16px Arial'; x.textAlign='center'; x.textBaseline='middle';
+  cols.forEach(([t,w])=>{ const ls=t.split('\n'); ls.forEach((l,i)=>x.fillText(l,cx+w/2,y+TH/2+(i-(ls.length-1)/2)*19)); cx+=w; });
+  // rows
+  const fit=(s,w,font)=>{ x.font=font; s=String(s==null?'':s); if(x.measureText(s).width<=w-14) return s; while(s.length>1&&x.measureText(s+'…').width>w-14) s=s.slice(0,-1); return s+'…'; };
+  y+=TH;
+  rows.forEach((r,i)=>{
+    x.fillStyle=r.finished?'#f1faf4':(r.started?'#f3f8ff':'#ffffff'); x.fillRect(PAD,y,tableW,RH);
+    const v=[r.started?'✓':'', r.finished?'✓':'', r.sc, r.client, r.code, r.qty!=null?fmt(r.qty,0)+' m³':'—', r.tem||'—', r.rate?fmt(r.rate,0)+' m³/h':'—', r.plants];
+    cx=PAD;
+    v.forEach((val,k)=>{ const w=cols[k][1];
+      const check=k<2, font=check?'800 30px Arial':(k===4?'700 21px Arial':'500 20px Arial');
+      x.fillStyle=check?'#15803d':'#1f2a44';
+      x.fillText(fit(val,w,font),cx+w/2,y+RH/2+1); cx+=w; });
+    y+=RH;
+  });
+  if(!rows.length){ x.fillStyle='#6b7a90'; x.font='italic 18px Arial'; x.fillText('No pours today',PAD+tableW/2,y+RH/2); y+=RH; }
+  // grid
+  const top=HEAD, bot=y; x.beginPath();
+  for(let yy=top; yy<=bot+0.1; yy+= (yy===top?TH:RH)) { x.moveTo(PAD,yy); x.lineTo(PAD+tableW,yy); }
+  cx=PAD; x.moveTo(cx,top); x.lineTo(cx,bot); cols.forEach(([t,w])=>{ cx+=w; x.moveTo(cx,top); x.lineTo(cx,bot); });
+  x.stroke();
+  return cv;
+}
+async function planPhoto(){
+  const msg=el('planPhotoMsg'), say=t=>{ if(msg) msg.textContent=t; };
+  try{
+    const cv=drawPlanPhoto();
+    const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
+    const d=new Date(), name=`Daily Production Plan ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.png`;
+    const file=new File([blob],name,{type:'image/png'});
+    const touch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+    if(touch && navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); say('Shared'); return; }
+    if(navigator.clipboard && window.ClipboardItem){
+      try{ await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]); say('Copied ✓ — paste it in WhatsApp (Ctrl+V)'); return; }catch(e){}
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    say('Saved as an image — attach it in WhatsApp');
+  }catch(e){ if(e&&e.name==='AbortError') return; say('Could not make the picture: '+(e&&e.message||e)); }
+}
+{ const pb=el('planPhotoBtn'); if(pb) pb.addEventListener('click',planPhoto); }
 
 /* ---------- build number + "Check for update" (⚙) ----------
    The app already updates itself (on open, then every 5 min). This shows which build is running and lets
