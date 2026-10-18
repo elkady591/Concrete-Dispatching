@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000004">
+<meta name="app-build" content="20261018-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -349,7 +349,8 @@
   .done-chk{width:19px;height:19px;cursor:pointer;accent-color:var(--green)}
 
   /* Upcoming cards */
-  .ucards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-top:12px}
+  .ucards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:12px}
+  @media (max-width:640px){ .ucards{grid-template-columns:1fr} }
   .ucard{border-radius:15px;padding:14px 15px;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);box-shadow:var(--shadow)}
   .ucard .uc-code{font-weight:800;font-size:16px;font-family:var(--mono);color:#c7cbff}
   .ucard .uc-cl{font-family:inherit;color:var(--ink)}   /* client, left of the element */
@@ -448,6 +449,15 @@
   .uc-time{font-family:var(--mono);font-size:22px;font-weight:800;color:var(--cyan);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .uc-time.late{color:#fb923c}
   .uc-setup{font-family:inherit;font-size:12px;font-weight:800;color:var(--cyan);border:1px solid rgba(34,211,238,.45);background:rgba(34,211,238,.1);border-radius:99px;padding:1px 9px}
+  .uc-time.est{color:var(--muted)}
+  .uc-after{font-family:inherit;font-size:12px;font-weight:700;color:var(--muted)}
+  .ucard .uc-n{white-space:nowrap;font-family:inherit;font-size:11px;font-weight:800;color:var(--cyan);border:1px solid rgba(34,211,238,.45);border-radius:99px;padding:1px 8px;vertical-align:2px}
+  .uc-steps{margin:6px 0 8px;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+  .uc-step{display:flex;align-items:center;gap:10px;padding:5px 10px;font-size:13px}
+  .uc-step+.uc-step{border-top:1px solid var(--line2)}
+  .uc-k{font-family:var(--mono);font-weight:800;color:var(--cyan);width:24px}
+  .uc-st{margin-inline-start:auto;font-family:var(--mono);font-weight:700;color:var(--ink)} .uc-st i{font-style:normal;color:var(--muted)}
+  .uc-same{margin-top:6px;font-size:12px;color:var(--muted)}
   .uc-sends{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px;padding-top:7px;border-top:1px dashed rgba(148,163,184,.25)}
   .uc-snd{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;
     border:1px dashed rgba(148,163,184,.5);border-radius:99px;padding:2px 10px;cursor:pointer}
@@ -907,7 +917,7 @@ function parsePlanTab(cols, matrix){
     const code=String(row[c.code]||'').trim().toUpperCase().replace(/\s+/g,'');
     if(!code) continue;
     entries.push({ code, es: c.es>=0?String(row[c.es]||'').trim():'', req: num(row[c.req]), rate: c.rate>=0?num(row[c.rate]):0,
-      date: c.date>=0?normPlanDate(row[c.date]):'', time: c.time>=0?normPlanTime(row[c.time]):'',
+      date: c.date>=0?normPlanDate(row[c.date]):'', time: c.time>=0?normPlanTime(row[c.time]):'', after: c.time>=0?normPlanAfter(row[c.time]):'',
       mix: c.mix>=0?String(row[c.mix]||'').trim():'', client: c.client>=0?String(row[c.client]||'').trim():'',
       sc: c.sc>=0?String(row[c.sc]||'').trim():'', pumps: pumpCols.map(j=>String(row[j]==null?'':row[j]).trim()).find(v=>v&&v!=='-')||'',
       tem: c.tem>=0?String(row[c.tem]||'').trim():'' });
@@ -1014,11 +1024,19 @@ function normPlanDate(v){
 // Plan "Time" cell ("15:00", "3:00 PM", "3 pm", "7 م", "19.30") -> "HH:MM" 24 h ('' = no time)
 function normPlanTime(v){
   let s=String(v==null?'':v).trim().toLowerCase(); if(!s||s==='-') return '';
-  const pm=/(pm|p\.m|م|مساء)/.test(s), am=/(am|a\.m|ص|صباح)/.test(s);
-  const m=s.match(/(\d{1,2})(?:[:.](\d{2}))?/); if(!m) return '';
-  let h=+m[1], mi=+(m[2]||0); if(h>23||mi>59) return '';
-  if(pm&&h<12) h+=12; if(am&&h===12) h=0;
+  // the WHOLE cell must be a time ("15", "15:00", "1130", "3 pm", "8:00: PM", "7 م") — "10UQA" is not 10:00
+  const m=s.match(/^(\d{1,2})(?:\s*[:.]\s*(\d{1,2}))?\s*:?\s*(am|pm|a\.m\.?|p\.m\.?|ص|م|صباحا|صباحاً|مساء|مساءً)?$/)
+       || s.match(/^(\d{1,2})(\d{2})$/);
+  if(!m) return '';
+  let h=+m[1], mi=+(m[2]||0); if(m[2]&&m[2].length===1) mi*=10; if(h>23||mi>59) return '';
+  const suf=m[3]||''; if(/^(pm|p\.m|م|مساء)/.test(suf)&&h<12) h+=12; if(/^(am|a\.m|ص|صباح)/.test(suf)&&h===12) h=0;
   return pad(h)+':'+pad(mi);
+}
+// TIME cell that names another element / ES instead of a clock time = "poured after it" ("91UYE", "after 91UYE", "بعد 45308")
+function normPlanAfter(v){
+  const s=String(v==null?'':v).trim(); if(!s||s==='-'||normPlanTime(s)) return '';
+  const m=s.replace(/^(after|بعد)\s*/i,'').trim().toUpperCase().replace(/\s+/g,'');
+  return /^[0-9A-Z*#-]{3,}$/.test(m)&&/[A-Z]/.test(m)||/^\d{4,6}$/.test(m)?m:'';
 }
 // Collect ALL dates in the plan sheet -> {min,max} "YYYY-MM-DD"
 function findPlanDateRange(matrix){
@@ -1592,16 +1610,19 @@ const SENT_STALE=12*3600000;
 function sentKey(g){ return 's'+(g.esId||g.key); }
 function pumpSent(g){ return String(PUMPNOTE[sentKey(g)]||'').split(';').map(x=>{ const m=x.match(/^(\d+)@(\d+)$/); return m?{len:+m[1],t:+m[2]}:null; }).filter(Boolean); }
 function pumpPlan(now){
-  now=now||Date.now();
+  now=now||Date.now(); const SF=pumpShareFam();
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
   const pours=(VD.summary||[]).filter(g=>pumpReq(g.pumps).length && (ts(g).length ||
       (g.trucks===0 && pumpSent(g).some(x=>now-x.t<SENT_STALE)))).map(g=>{
     const a=ts(g), sent=pumpSent(g), s0=sent.length?Math.min(...sent.map(x=>x.t)):null;
-    if(!a.length) return {g, start:s0, last:s0, end:null, fam:pumpFam(g), setup:true, sentLens:sent.map(x=>x.len)};
+    if(!a.length) return {g, start:s0, last:s0, end:null, fam:SF(g), setup:true, sentLens:sent.map(x=>x.len)};
     const fin=!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
-    return {g, start:s0!=null?Math.min(s0,...a):Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:pumpFam(g)}; }).sort((a,b)=>a.start-b.start);
+    return {g, start:s0!=null?Math.min(s0,...a):Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:SF(g)}; }).sort((a,b)=>a.start-b.start);
   const busy=PUMPS.map(()=>[]);   // per pump: [{start, free, end, p}]
   const byPour=new Map();
+  // a finished pour whose chain sibling (same client + element) has not started yet keeps its pumps on site
+  // ("Waiting · next …") — the 2 h washing starts only after the LAST request of the chain
+  const nextOf=new Map(); for(const g of (VD.upcoming||[])){ if(g.trucks===0){ const f=SF(g); if(!nextOf.has(f)) nextOf.set(f,g); } }
   for(const p of pours){
     const need=p.setup?p.sentLens:pumpReq(p.g.pumps), got=[], missing=[];
     const ok=j=>!got.includes(j) && !pumpBroken(j,p.start) &&
@@ -1611,9 +1632,10 @@ function pumpPlan(now){
       let i=PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>p.start)));
       if(i<0) i=PUMPS.findIndex((L,j)=>L===len && ok(j));
       if(i<0){ missing.push(len); continue; }
-      let free=p.end==null?null:p.end+PUMP_WASH;
+      const hold=p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
+      let free=p.end==null||hold?null:p.end+PUMP_WASH;
       const rel=pumpRelease(i); if(rel && rel>=p.start && rel>=p.last) free=free==null?rel:Math.min(free,rel);
-      got.push(i); busy[i].push({start:p.start, free, end:p.end, p});
+      got.push(i); busy[i].push({start:p.start, free, end:p.end, p, hold});
     }
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
   }
@@ -1621,26 +1643,105 @@ function pumpPlan(now){
     const pn=pumpNote(i), note=pn.text||(pn.code?'Breakdown':''), code=pn.code;
     const live=busy[i].filter(b=>b.start<=now && (b.free==null || now<b.free));
     const cur=live.find(b=>b.end==null&&b.free==null) || live[live.length-1];   // a running pour wins over a washing sibling
-    let st='free', pour=null, until=null, setup=false;
-    if(cur){ pour=cur.p.g; setup=!!cur.p.setup; if(cur.end==null&&cur.free==null) st='on'; else { st='wash'; until=cur.free; } }
+    let st='free', pour=null, until=null, setup=false, next=null;
+    if(cur){ pour=cur.p.g; setup=!!cur.p.setup;
+      if(cur.hold && cur.free==null){ st='on'; next=cur.hold; }                  // done, waiting on site for the next of its chain
+      else if(cur.end==null&&cur.free==null) st='on'; else { st='wash'; until=cur.free; } }
     if(note && st==='free') st='down';
-    return {i,len,st,pour,until,note,code,setup};
+    return {i,len,st,pour,until,note,code,setup,next};
   });
   return {byPour,state};
 }
 // Planned time of each pour (plan "TIME" column + its DATE, today when the date is empty)
 // -> Map(pour -> {time:'HH:MM', at:ms}) — only pours that have a time
 const LATE_START=30*60000;       // not started this long after its planned time -> a Data check / notification
-function requestTimes(){
-  const out=new Map(), used=new Set(), today=new Date();
+// plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
+function planRowsOf(){
+  const out=new Map(), used=new Set();
   for(const g of (VD.summary||[])){
     const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) && (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es))));
-    if(i<0) continue; used.add(i);
-    const r=PLAN_ROWS[i]; if(!r.time) continue;
-    const [hh,mi]=r.time.split(':').map(Number), d=r.date?r.date.split('-').map(Number):null;
-    const at=d?new Date(d[0],d[1]-1,d[2],hh,mi).getTime():new Date(today.getFullYear(),today.getMonth(),today.getDate(),hh,mi).getTime();
-    out.set(g,{time:r.time, at});
+    if(i>=0){ used.add(i); out.set(g,{row:PLAN_ROWS[i], idx:i}); }
   }
+  return out;
+}
+const pourDone=g=>!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
+// Chains: requests of the SAME client + element poured one after the other with the same pumps.
+// Members = the ones still running or not started, running first, then plan order.
+// -> Map(pour -> {members, idx (1-based), prev (pour|null), lastDone (ms of the newest finished sibling)})
+function pourChains(PRm){
+  PRm=PRm||planRowsOf();
+  const up=new Set(VD.upcoming||[]), fams=new Map(), doneAt=new Map();
+  for(const g of (VD.summary||[])){
+    const e=String(g.elem||'').trim(); if(!e||e===NOEL) continue;
+    const f=pumpFam(g), a=(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
+    if(g.trucks>0 && pourDone(g)){ if(a.length) doneAt.set(f,Math.max(doneAt.get(f)||0,...a)); continue; }
+    if(!up.has(g) && !(g.trucks>0)) continue;
+    if(!fams.has(f)) fams.set(f,[]); fams.get(f).push(g);
+  }
+  const out=new Map();
+  for(const [f,list] of fams){
+    const first=g=>{ const a=(g.loads||[]).map(l=>l.t).filter(t=>t!=null); return a.length?Math.min(...a):Infinity; };
+    list.sort((a,b)=>(b.trucks>0)-(a.trucks>0) || first(a)-first(b) || ((PRm.get(a)||{}).idx??1e9)-((PRm.get(b)||{}).idx??1e9));
+    list.forEach((g,k)=>out.set(g,{members:list, idx:k+1, prev:k?list[k-1]:null, lastDone:doneAt.get(f)||0, fam:f}));
+  }
+  return out;
+}
+// "After" links from the plan's TIME column (another element's code or ES): -> Map(pour -> the pour it follows)
+// the one it follows = same ES, else same code — the open one if there is one, else the newest finished
+function pourLinks(PRm){
+  PRm=PRm||planRowsOf(); const out=new Map();
+  for(const g of (VD.summary||[])){ const pr=PRm.get(g), a=pr&&pr.row&&pr.row.after; if(!a) continue;
+    const c=(VD.summary||[]).filter(h=>h!==g && (String(h.esId||'')===a || String(h.elem||'').toUpperCase()===a || String(h.base||'').toUpperCase()===a));
+    if(!c.length) continue;
+    const open=c.filter(h=>!(h.trucks>0&&pourDone(h)));
+    const last=h=>{ const t=(h.loads||[]).map(l=>l.t).filter(x=>x!=null); return t.length?Math.max(...t):0; };
+    out.set(g, open.length?open[0]:c.sort((x,y)=>last(y)-last(x))[0]);
+  }
+  return out;
+}
+// Which pours SHARE pumps: same client + element, plus an "after" link when it asks for the same pumps
+// -> function(pour) -> family key
+function pumpShareFam(){
+  const L=pourLinks(), memo=new Map();
+  const same=(a,b)=>pumpReq(a.pumps).slice().sort().join(',')===pumpReq(b.pumps).slice().sort().join(',');
+  const f=(g,d)=>{ if(memo.has(g)) return memo.get(g); const p=L.get(g);
+    const k=(p && d<8 && pumpReq(g.pumps).length && same(g,p)) ? f(p,d+1) : pumpFam(g); memo.set(g,k); return k; };
+  return g=>f(g,0);
+}
+// Planned time of each pour -> Map(pour -> {time:'HH:MM', at:ms, est, after})
+//   own TIME from the plan; a request that waits behind its chain sibling gets an estimate instead
+//   (sibling's start/finish + quantity ÷ rate) marked est — an estimate never raises Late / due alerts.
+//   The new head of a chain with no time of its own: due when its sibling finished (after = that sibling).
+function requestTimes(){
+  const out=new Map(), today=new Date(), PRm=planRowsOf(), CH=pourChains(PRm);
+  const hm=t=>{ const d=new Date(t); return pad(d.getHours())+':'+pad(d.getMinutes()); };
+  const own=g=>{ const pr=PRm.get(g); const r=pr&&pr.row; if(!r||!r.time) return null;
+    const [hh,mi]=r.time.split(':').map(Number), d=r.date?r.date.split('-').map(Number):null;
+    return {time:r.time, at:d?new Date(d[0],d[1]-1,d[2],hh,mi).getTime():new Date(today.getFullYear(),today.getMonth(),today.getDate(),hh,mi).getTime()}; };
+  const dur=g=>{ const q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate; return q>0&&r>0?q/r*3600000:null; };
+  const endOf=g=>{   // expected end of a chain member
+    // running: finish at the ACTUAL average rate so far (the "Avg" finish), else the target; not started: plan rate
+    if(g.trucks>0){ if(g.finishAvg!=null) return g.finishAvg; if(g.finishTgt!=null) return g.finishTgt;
+      const a=(g.loads||[]).map(l=>l.t).filter(t=>t!=null), d=dur(g); return a.length&&d?Math.min(...a)+d:null; }
+    const s=out.get(g), d=dur(g); return s&&d?s.at+d:null; };
+  const LK=pourLinks(PRm);
+  const waits=g=>{ const ch=CH.get(g); return !!(ch && ch.prev && g.trucks===0) || (g.trucks===0 && LK.has(g)); };
+  for(const g of (VD.summary||[])){                          // 1) own times (not for the ones waiting behind a sibling)
+    if(waits(g)) continue;
+    const o=own(g), ch=CH.get(g);
+    if(o) out.set(g,o);
+    else if(ch && g.trucks===0 && ch.lastDone && Date.now()-ch.lastDone<6*3600000) out.set(g,{time:hm(ch.lastDone), at:ch.lastDone, afterDone:true});   // sibling just finished -> due now
+  }
+  // 2) estimates: behind a chain sibling, or behind the element named in its TIME cell ("after" link).
+  //    A few rounds so a link to a pour that itself waits gets its estimate first.
+  const prevOf=g=>{ const ch=CH.get(g); return (ch&&ch.prev&&g.trucks===0)?ch.prev:(LK.get(g)||null); };
+  for(let round=0; round<4; round++){
+    for(const g of (VD.summary||[])){ if(!waits(g)) continue; const prev=prevOf(g); if(!prev) continue;
+      if(prev.trucks>0 && pourDone(prev)){                   // the one before is finished -> due now
+        const a=(prev.loads||[]).map(l=>l.t).filter(t=>t!=null);
+        if(a.length){ const t=Math.max(...a); out.set(g,{time:hm(t), at:t, afterDone:true, after:prev}); }
+        continue; }
+      const e=endOf(prev); if(e!=null) out.set(g,{time:'≈'+hm(e), at:e, est:true, after:prev}); } }
   return out;
 }
 // Upcoming requests: are the pumps they ask for ready NOW (or, when the request has a time, AT that time)? Requests are served in plan order and each
@@ -1649,7 +1750,7 @@ function requestTimes(){
 function upcomingPumpCheck(now){
   now=now||Date.now();
   const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
-  const RT=requestTimes(), stAt={};
+  const RT=requestTimes(), stAt={}, SF=pumpShareFam();
   const stateFor=g=>{ const t=RT.get(g); if(!t||t.at<=now) return base;      // timed request: the pumps as they will be then
     return stAt[t.at]||(stAt[t.at]=pumpPlan(t.at).state); };
   const used=new Set(), rowOf=g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) &&
@@ -1658,12 +1759,12 @@ function upcomingPumpCheck(now){
   const site=g=>(g.client?g.client+' ':'')+g.elem;
   for(const g of list){
     const need=pumpReq(g.pumps); if(!need.length) continue;
-    const fam=pumpFam(g), got=new Set(), res=[], state=stateFor(g);   // per requested pump: {len, kind, s}
+    const fam=SF(g), got=new Set(), res=[], state=stateFor(g);   // per requested pump: {len, kind, s}
     for(const len of need){
       const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!claimed.has(s.i) || claimed.get(s.i)===fam));
       // a pump on / washing after the same client + element = this request just carries on with it
       const own=s=>s.pour===g;                       // already sent to this request
-      const sib=s=>!own(s) && !s.note && s.pour && pumpFam(s.pour)===fam && (s.st==='on'||s.st==='wash');
+      const sib=s=>!own(s) && !s.note && s.pour && SF(s.pour)===fam && (s.st==='on'||s.st==='wash');
       const pick=cand.find(own) || cand.find(s=>sib(s) || (claimed.get(s.i)===fam && s.st!=='down'))
         || cand.find(s=>s.st==='free')
         || cand.filter(s=>s.st==='wash' && !s.note).sort((a,b)=>a.until-b.until)[0]
@@ -1710,7 +1811,8 @@ function renderPumps(){
   const short=[...byPour.entries()].filter(([g,a])=>a.end==null && a.missing.length);
   const warn=short.length?`<div class="pm-warn">${short.map(([g,a])=>`⚠ <b>${esc(site(g))}</b> — no ${esc(pumpLabel(a.missing))} pump free`).join('<br>')}</div>`:'';
   const rows=state.filter(keep).map(s=>{
-    const txt = s.st==='on'&&s.setup ? `<span class="pm-k">Setting up</span> <b>${esc(site(s.pour))}</b>`
+    const txt = s.st==='on'&&s.next ? `<span class="pm-k">Waiting</span> <span class="tc-dim">next</span> <b>${esc(site(s.next))}</b>`
+              : s.st==='on'&&s.setup ?`<span class="pm-k">Setting up</span> <b>${esc(site(s.pour))}</b>`
               : s.st==='on'   ? `<span class="pm-k">On</span> <b>${esc(site(s.pour))}</b>`
               : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
               : s.st==='down' ? '<span class="pm-k">Breakdown</span>' : '<span class="pm-k">Available</span>';
@@ -2216,12 +2318,12 @@ function collectChecks(pours){
   // requests with a planned time (Upcoming): its time has come -> "Request due" (one notification),
   // still not started 30 min later -> "Late start" (a second one)
   try{ const RT=requestTimes(), now=Date.now();
-    for(const g of (VD.upcoming||[])){ const t=RT.get(g); if(!t||now<t.at||pumpSent(g).length) continue;   // pumps already sent = on time
+    for(const g of (VD.upcoming||[])){ const t=RT.get(g); if(!t||t.est||now<t.at||pumpSent(g).length) continue;   // pumps already sent / waiting behind its chain = on time
       const nm=esc((g.client?g.client+' ':'')+g.elem), id=(g.esId||g.key)+'|'+t.at;
       if(now-t.at<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
-        txt:`${nm} · planned ${t.time} — it is time to start${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`});
+        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time} — start this one`:`planned ${t.time} — it is time to start`}${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`});
       else items.push({id:`late|${id}`, kind:'Late start', cls:'gap',
-        txt:`${nm} · planned ${t.time} — not started yet (${mins(now-t.at)} late)`}); } }catch(e){}
+        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time}`:`planned ${t.time}`} — not started yet (${mins(now-t.at)} late)`}); } }catch(e){}
   return items;
 }
 function renderCheckList(cb, items){
@@ -2392,18 +2494,27 @@ function renderUpcoming(){
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
       return `<button class="uc-snd${on?' on':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}" title="${on?'Sent — tap to undo':'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}</button>`; }).join('')}</div>`; };
-  el('upcomingArea').innerHTML='<div class="ucards">'+sorted.map(p=>{ const pc=PC.get(p), rt=RT.get(p), sent=pumpSent(p);
-    const late=rt&&now>rt.at&&!sent.length?Math.round((now-rt.at)/60000):0;   // pumps on their way = not late
+  // chains (same client + element, poured one after the other) become ONE card; its place = its first request
+  const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
+  const units=[], inUnit=new Set();
+  for(const p of sorted){ if(inUnit.has(p)) continue;
+    const ch=CH.get(p), mem=ch?ch.members.filter(m=>m.trucks===0 && rest.includes(m)):[p];
+    if(mem.length>1){ mem.forEach(m=>inUnit.add(m)); units.push(mem); } else { inUnit.add(p); units.push([p]); } }
+  const timeLine=(rt,late,sent)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(site(rt.after))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
+  el('upcomingArea').innerHTML='<div class="ucards">'+units.map(u=>{ const p=u[0], pc=PC.get(p), rt=RT.get(p), sent=pumpSent(p);
+    const late=rt&&!rt.est&&now>rt.at&&!sent.length?Math.round((now-rt.at)/60000):0;   // pumps on their way / waiting behind its chain = not late
+    const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
     return `
-    <div class="ucard">${rt?`<div class="uc-time${late?' late':''}${sent.length?' setup':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}${sent.length?`<span class="uc-setup">Setting up</span>`:''}</div>`:''}
-      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}</div>
-      <div class="uc-req">${fmt(p.planReq,0)} <small>m³</small></div>
+    <div class="ucard${multi?' chain':''}">${timeLine(rt,late,sent.length)}
+      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}</div>
+      <div class="uc-req">${fmt(multi?tot:p.planReq,0)} <small>m³</small></div>
+      ${multi?`<div class="uc-steps">${u.map((g,k)=>{ const t=RT.get(g); return `<div class="uc-step"><span class="uc-k">#${k+1}</span><b>${fmt(g.planReq,0)} m³</b><span class="uc-st">${t?(t.est?`<i>${t.time}</i>`:t.time):'—'}</span></div>`; }).join('')}</div>`:''}
       <div class="uc-meta">
         ${p.sc?('Selection card: <b>'+esc(p.sc)+'</b><br>'):''}
         ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
         Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b>
         ${p.mix?('<br>Grade: <b>'+esc(p.mix)+'</b>'):''}
-      </div>${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${sendChips(p)}</div>`:''}
+      </div>${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
     </div>`; }).join('')+'</div>';
   el('upcomingArea').querySelectorAll('.uc-snd').forEach(b=>b.addEventListener('click',async()=>{
     const k=decodeURIComponent(b.dataset.k), len=+b.dataset.len;
@@ -3178,7 +3289,8 @@ function planPhotoRows(){
   const pumpsOf=g=>{ const a=g.trucks>0?PP.get(g):null; const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps); return pumpLabel(lens); };
   const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
     qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g),
-    time:finished?'':((PR.get(g)||{}).time||'')});   // planned time, written left of the row (not on finished pours)
+    // a request waiting behind its chain sibling (same client + element) gets no time of its own
+    time:finished||chainNext(g)?'':((PR.get(g)||{}).time||''), after:finished?'':((PR.get(g)||{}).after||'')});   // planned time / "after X", written left of the row (not on finished pours)
   const pours=(VD.summary||[]).filter(g=>{ const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0; });
   // order: finished by finish time (first to finish on top) → running by start time → not started in plan order
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
@@ -3193,7 +3305,9 @@ function planPhotoRows(){
   const planIdx=g=>PI.has(g)?PI.get(g):1e9;
   // not started: the ones with a time first, by date + time; the rest after them in plan order
   const today=new Date(), todayKey=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-  const when=g=>{ const r=PR.get(g); return r&&r.time ? (r.date||todayKey)+' '+r.time : '~'; };
+  const RTp=requestTimes();   // own times + estimates behind a chain sibling / an "after" element
+  const CHp=pourChains(), chainNext=g=>{ const c=CHp.get(g); return !!(c&&c.prev&&g.trucks===0); };
+  const when=g=>{ const t=RTp.get(g); return t ? String(t.at).padStart(15,'0') : '~'; };
   const fin=[], run=[];
   for(const g of pours){
     const done=!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
@@ -3210,7 +3324,7 @@ function drawPlanPhoto(rows, at){
   const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305],['Working\nPumps',170]];
   const tableW=cols.reduce((s,c)=>s+c[1],0), H=HEAD+TH+Math.max(rows.length,1)*RH+PAD;
   // planned times are written OUTSIDE the table, left of their row (like on the paper) — margin only when any
-  const TM=rows.some(r=>r.time)?96:0, L=PAD+TM;
+  const TM=rows.some(r=>r.time||r.after)?96:0, L=PAD+TM;
   const cv=document.createElement('canvas'); cv.width=(tableW+PAD*2+TM)*S; cv.height=H*S;
   const x=cv.getContext('2d'); x.scale(S,S);
   x.fillStyle='#ffffff'; x.fillRect(0,0,tableW+PAD*2+TM,H);
@@ -3252,6 +3366,8 @@ function drawPlanPhoto(rows, at){
   rows.forEach((r,i)=>{
     x.fillStyle=r.finished?'#f1faf4':(r.started?'#f3f8ff':'#ffffff'); x.fillRect(L,y,tableW,RH);
     if(r.time){ x.save(); x.fillStyle='#1d4ed8'; x.font='700 22px Arial'; x.textAlign='right'; x.fillText(r.time,L-14,y+RH/2+1); x.restore(); }
+    else if(r.after){ x.save(); x.fillStyle='#1d4ed8'; x.textAlign='right'; x.font='600 13px Arial'; x.fillText('after',L-14,y+RH/2-10);
+      x.fillText(fit(r.after,TM+6,'700 17px Arial'),L-14,y+RH/2+10); x.restore(); }
     const v=[r.started?'✓':'', r.finished?'✓':'', r.sc, r.client, r.code, r.qty!=null?fmt(r.qty,0)+' m³':'—', r.tem||'—', r.rate?fmt(r.rate,0)+' m³/h':'—', r.plants, r.pumps||'—'];
     cx=L;
     v.forEach((val,k)=>{ const w=cols[k][1];
