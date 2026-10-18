@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000011">
+<meta name="app-build" content="20261018-000012">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -497,8 +497,10 @@
   .pm-ed{flex:none;width:24px;height:22px;padding:0;border-radius:6px;border:1px solid var(--line2);background:transparent;color:var(--faint);font-size:12px;cursor:pointer}
   .pm-ed.on{color:var(--rose);border-color:var(--rose)}
   .pm-note{width:100%;margin-top:3px;font:inherit;font-size:12.5px;color:var(--ink);background:transparent;border:1px solid var(--rose);border-radius:8px;padding:5px 8px}
-  .pm-free{margin-top:5px;width:100%;font:inherit;font-size:11.5px;font-weight:700;color:var(--green);background:transparent;
-    border:1px solid rgba(52,211,153,.45);border-radius:7px;padding:3px 6px;cursor:pointer}
+  /* small ✓ next to ✎ = free this pump now (no big "Available" text on a busy pump) */
+  .pm-btns{display:flex;gap:4px;flex:none}
+  .pm-free{flex:none;width:24px;height:22px;padding:0;font:inherit;font-size:12px;font-weight:800;color:var(--green);background:transparent;
+    border:1px solid rgba(52,211,153,.5);border-radius:6px;cursor:pointer}
   .pm-edit{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;align-items:stretch}
   .pm-edit .pm-note{flex:1;min-width:0;margin-top:0}
   .pm-code{flex:1 1 100%;font:inherit;font-size:12.5px;color:var(--ink);background:var(--bg2,#0f172a);border:1px solid var(--rose);border-radius:8px;padding:4px 4px}
@@ -513,7 +515,7 @@
     .pm-ed{width:30px;height:28px;font-size:14px}
     .pm-chip{font-size:14px;padding:5px 14px} .pm-note{font-size:14px}
     .pm-wash-btn{font-size:14px;padding:5px 14px} .pm-wopt{font-size:14px;padding:5px 11px}
-    .pm-bd{font-size:11.5px} .pm-code-tag{font-size:12.5px} .pm-code{font-size:14px} .pm-free{font-size:13px;padding:4px 8px}
+    .pm-bd{font-size:11.5px} .pm-code-tag{font-size:12.5px} .pm-code{font-size:14px} .pm-free{width:30px;height:28px;font-size:14px}
   }
   .pm-warn{margin-top:12px;padding:9px 12px;border-radius:11px;font-size:13px;color:#fb923c;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.35)}
   .tc-sortbar{display:flex;justify-content:flex-end;margin:0 0 8px}
@@ -1674,7 +1676,9 @@ function pumpPlan(now){
       if(i<0){ missing.push(len); continue; }
       const hold=p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
       let free=p.end==null||hold?null:p.end+WASH;
-      const rel=pumpRelease(i); if(rel && rel>=p.start && rel>=p.last) free=free==null?rel:Math.min(free,rel);
+      // "Available now": on a pour still running it frees THIS pump at once (a spare pulled out and sent elsewhere —
+      // the pour goes on with its other pumps); on a finished pour a top-up truck after the press cancels it
+      const rel=pumpRelease(i); if(rel && rel>=at && (p.end==null || rel>=p.last)) free=free==null?rel:Math.min(free,rel);
       got.push(i); busy[i].push({start:at, free, end:p.end, p, hold});
     }
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
@@ -1884,10 +1888,9 @@ function renderPumps(){
         <input class="pm-note" placeholder="problem…" value="${esc(d.text)}"><button class="pm-ok" title="Save">✓</button></div>`;
     return `<div class="pm-row st-${s.noop?'noop':s.st}">
       <div class="pm-top"><div class="pm-len">${s.len}${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
-      <button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div>
+      <div class="pm-btns">${!editing&&(s.st==='on'||s.st==='wash')?`<button class="pm-free" data-i="${s.i}" title="Free this pump now (finished early / pulled out to another site)">✓</button>`:''}<button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div></div>
       <div class="pm-mid">${editing?editor
-        :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div>
-      ${!editing&&(s.st==='on'||s.st==='wash')?`<button class="pm-free" data-i="${s.i}" title="Finished early — make it available now">✓ Available now</button>`:''}</div>`; }).join('');
+        :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div></div>`; }).join('');
   area.innerHTML=`<div class="pm-head">${counts}<div class="pm-ctls">${opsCtl}${washCtl}</div></div>`+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
   const wb=area.querySelector('.pm-wash-btn:not(.pm-ops-btn)'); if(wb) wb.addEventListener('click',()=>{ pumpWashOpen=!pumpWashOpen; pumpOpsOpen=false; renderPumps(); });
   const ob=area.querySelector('.pm-ops-btn'); if(ob) ob.addEventListener('click',()=>{ pumpOpsOpen=!pumpOpsOpen; pumpWashOpen=false; renderPumps(); });
