@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000008">
+<meta name="app-build" content="20261018-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1570,9 +1570,9 @@ function applyView(){
    first truck loads, it takes the first pump of that length that is free at that moment (not on another
    pour, not washing, not Breakdown). Pours are served in start order, so every device works out the same
    pumps. A pour ends at its last truck once it is Done / reached its quantity / auto-closed; the pump then
-   shows Washing for 2 hours and is Available again. A note on a pump (shared like Done) = Breakdown. */
+   shows Washing for 2.5 hours and is Available again. A note on a pump (shared like Done) = Breakdown. */
 const PUMPS=[48,56,59,59,63,63,63,63,63,63];
-const PUMP_WASH=2*3600000;     // busy (travel + discharge + washing) for 2 h after the last truck left the plant
+const PUMP_WASH=2.5*3600000;   // busy (travel + discharge + washing) for 2.5 h after the last truck left the plant
 let PUMPNOTE={};                 // pump index (0-based, as a string) -> problem note, shared via the sync script
 function pumpReq(s){             // "63, 59" / "63+59" / "2x63" / "63x2" -> [63,59] / [63,63]
   const out=[]; String(s||'').split(/[,+&\/]|\s{2,}/).forEach(p=>{ p=p.trim(); if(!p) return;
