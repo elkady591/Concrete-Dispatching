@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000014">
+<meta name="app-build" content="20261018-000015">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -187,6 +187,7 @@
   .plant-bar{height:10px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
   .plant-bar>i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--cyan))}
   .plant-meta{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .plant-next{grid-column:2/-1;margin-top:-6px;font-size:12px;color:#c4b5fd} .plant-next b{color:var(--ink)}
   .plant-meta b{color:var(--ink)}
 
   /* Spotlight */
@@ -458,6 +459,11 @@
   .uc-k{font-family:var(--mono);font-weight:800;color:var(--cyan);width:24px}
   .uc-st{margin-inline-start:auto;font-family:var(--mono);font-weight:700;color:var(--ink)} .uc-st i{font-style:normal;color:var(--muted)}
   .uc-same{margin-top:6px;font-size:12px;color:var(--muted)}
+  .uc-plants{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:9px}
+  .uc-pl{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;
+    border:1px dashed rgba(148,163,184,.5);border-radius:99px;padding:2px 10px;cursor:pointer}
+  .uc-pl.on{color:#0b1020;background:#a78bfa;border:1px solid #a78bfa}
+  .uc-plwarn{margin-top:6px;font-size:12px;line-height:1.5;color:#fb923c} .uc-plwarn b{font-family:var(--mono)}
   .uc-sends{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px;padding-top:7px;border-top:1px dashed rgba(148,163,184,.25)}
   .uc-snd{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;
     border:1px dashed rgba(148,163,184,.5);border-radius:99px;padding:2px 10px;cursor:pointer}
@@ -1639,6 +1645,33 @@ function pumpRelease(i){ const v=+String(PUMPNOTE['r'+i]||'').trim(); return v>0
 // from that moment ("Setting up") and is never shown as Late. A send with no truck after 12 h is ignored.
 const SENT_STALE=12*3600000;
 function sentKey(g){ return 's'+(g.esId||g.key); }
+// Planned plants of a request, chosen in the app (Upcoming card chips), shared like the pump notes:
+// PUMPNOTE['p<request id>'] = "L1,V3". Shown light in the plan picture until the pour starts (then the real ones).
+function plantKey(g){ return 'p'+(g.esId||g.key); }
+function planPlants(k){ return String(PUMPNOTE[k]||'').split(',').map(s=>s.trim()).filter(Boolean); }
+// Is a plant busy at a given moment? = it loaded a pour that is still open within the last 2 h, and that pour is
+// expected to end after the moment (actual-rate finish, else target). -> {g, till} or null
+function plantBusy(st, at){
+  const now=Date.now(); let best=null;
+  for(const g of (VD.summary||[])){
+    if(!(g.trucks>0) || pourDone(g)) continue;
+    const ls=(g.loads||[]).filter(l=>l.p===st && l.t!=null); if(!ls.length) continue;
+    if(now-Math.max(...ls.map(l=>l.t))>ACTIVE_WINDOW) continue;
+    const till=g.finishAvg!=null?g.finishAvg:g.finishTgt;
+    if(till!=null && till<=at) continue;
+    if(!best || (till||Infinity)>(best.till||Infinity)) best={g,till};
+  }
+  return best;
+}
+// The next not-started request planned on a plant (earliest planned time, then plan order) -> {g, t} or null
+function plantNext(st){
+  const RT=requestTimes(); let best=null;
+  (VD.upcoming||[]).forEach((g,i)=>{ if(!planPlants(plantKey(g)).includes(st)) return;
+    const t=RT.get(g), k=t?t.at:1e15+i; if(!best||k<best.k) best={g,t,k}; });
+  return best;
+}
+function PLANT_LIST(){ const t=String((CFG&&CFG.tabs)||(el('tabs')&&el('tabs').value)||'').split(',').map(x=>x.trim()).filter(x=>x&&!/^\d+$/.test(x));
+  return t.length?t:['L1','L2','V3','V4','V5']; }
 function pumpSent(g){ return String(PUMPNOTE[sentKey(g)]||'').split(';').map(x=>{ const m=x.match(/^(\d+)@(\d+)$/); return m?{len:+m[1],t:+m[2]}:null; }).filter(Boolean); }
 function pumpPlan(now){
   now=now||Date.now(); const SF=pumpShareFam(), WASH=washHours()*3600000;
@@ -2172,6 +2205,7 @@ function renderSummary(){
       <span class="plant-tag">${o.p}</span>
       <div class="plant-bar"><i style="width:${(o.deliv/maxD*100).toFixed(0)}%"></i></div>
       <span class="plant-meta"><b>${fmt(o.deliv,0)}</b> m³ · ${o.trucks} trk${o.active?` · <b style="color:var(--cyan)">${o.active} active</b>`:''}</span>
+      ${(()=>{ const n=plantNext(o.p); return n?`<div class="plant-next">Next: <b>${esc((n.g.client?n.g.client+' ':'')+n.g.elem)}</b>${n.t?` · ${n.t.time}`:''}</div>`:''; })()}
     </div>`).join('') : '<div class="muted" style="font-size:13px">No station data.</div>';
 
   // Spotlight
@@ -2567,6 +2601,11 @@ function renderUpcoming(){
   const PC=upcomingPumpCheck();
   const dayLbl=t=>{ const d=new Date(t), n=new Date(); return d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `; };
   // one small chip per requested pump inside the pump box: tap = "sent to site" (tap again = undo)
+  // 🏭 one chip per plant; lit = planned for this card's requests
+  // + a warning for each chosen plant still busy on another open pour at this request's time (now if it has none)
+  const plantChips=u=>{ const keys=u.map(g=>plantKey(g)), on=planPlants(keys[0]), t=RT.get(u[0]), at=t&&t.at>now?t.at:now;
+    const warns=on.map(st=>{ const b=plantBusy(st,at); return b&&!u.includes(b.g)?`⚠ <b>${esc(st)}</b> busy on ${esc((b.g.client?b.g.client+' ':'')+b.g.elem)}${b.till?` till ≈${timeShort(b.till)}`:''}`:''; }).filter(Boolean);
+    return `<div class="uc-plants">🏭 ${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="Planned plant">${esc(st)}</button>`).join('')}</div>${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
   const sendChips=p=>{ const need=pumpReq(p.pumps); if(!need.length) return '';
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
@@ -2593,8 +2632,16 @@ function renderUpcoming(){
         ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
         Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b>
         ${p.mix?('<br>Grade: <b>'+esc(p.mix)+'</b>'):''}
-      </div>${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${(CH.get(p)||{}).prev?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
+      </div>${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${(CH.get(p)||{}).prev?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
     </div>`; }).join('')+'</div>';
+  // 🏭 planned plants: tap a plant to add / remove it — the same choice goes to every request of the card
+  el('upcomingArea').querySelectorAll('.uc-pl').forEach(b=>b.addEventListener('click',async()=>{
+    const keys=decodeURIComponent(b.dataset.k).split('\n'), st=b.dataset.p;
+    const cur=planPlants(keys[0]), next=cur.includes(st)?cur.filter(x=>x!==st):PLANT_LIST().filter(x=>x===st||cur.includes(x));
+    const val=next.join(',');
+    for(const k of keys){ if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k]; }
+    stSet(KEY_PUMP,PUMPNOTE); renderUpcoming();
+    for(const k of keys) await syncPush('pump',k,val); }));
   el('upcomingArea').querySelectorAll('.uc-snd').forEach(b=>b.addEventListener('click',async()=>{
     const k=decodeURIComponent(b.dataset.k), len=+b.dataset.len;
     let list=String(PUMPNOTE[k]||'').split(';').filter(x=>/^\d+@\d+$/.test(x));
@@ -3396,7 +3443,9 @@ function planPhotoRows(){
   fin.sort((a,b)=>last(a)-last(b)); run.sort((a,b)=>first(a)-first(b));
   const up=(VD.upcoming||[]).slice().sort((a,b)=>when(a).localeCompare(when(b))||planIdx(a)-planIdx(b));
   const base=fin.map(g=>({g,r:row(g,true,true,plantsOf(g,false))}))
-    .concat(run.map(g=>({g,r:row(g,true,false,plantsOf(g,true))})), up.map(g=>({g,r:row(g,false,false,'')})));
+    .concat(run.map(g=>({g,r:row(g,true,false,plantsOf(g,true))})),
+      // not started: the plants planned in the app, drawn light (they become the real ones once it starts)
+      up.map(g=>{ const pl=planPlants(plantKey(g)).join(', '), r=row(g,false,false,pl); r.plPlan=!!pl; return {g,r}; }));
   // pours that follow each other (same client + element, or an "after" link) stay TOGETHER, in pouring order,
   // at the place of the first of them — drawn with a bracket arrow on the left like on the paper
   const LK=pourLinks(), par=new Map(), find=g=>{ while(par.get(g)!==g) g=par.get(g); return g; };
@@ -3478,15 +3527,17 @@ function drawPlanPhoto(rows, at){
     const v=[r.started?'✓':'', r.finished?'✓':'', r.sc, r.client, r.code, r.qty!=null?fmt(r.qty,0)+' m³':'—', r.tem||'—', r.rate?fmt(r.rate,0)+' m³/h':'—', r.plants, r.pumps||'—'];
     cx=L;
     v.forEach((val,k)=>{ const w=cols[k][1];
-      const check=k<2, font=check?'800 30px Arial':(k===4?'700 21px Arial':'500 20px Arial');
-      x.fillStyle=check?'#15803d':'#1f2a44';
+      const lite=k===8&&r.plPlan;                      // planned plants of a request not started yet: light grey
+      const check=k<2, font=check?'800 30px Arial':lite?'500 20px Arial':(k===4?'700 21px Arial':'500 20px Arial');
+      x.fillStyle=check?'#15803d':lite?'#94a3b8':'#1f2a44';
       x.font=font; const s=String(val==null?'':val);
       if(k>=8 && x.measureText(s).width>w-14){         // plants / pumps lists: break after a comma onto a 2nd line
-        const parts=s.split(', '), ls=['']; x.font='500 18px Arial';
+        const f2='500 18px Arial';
+        const parts=s.split(', '), ls=['']; x.font=f2;
         parts.forEach((p,j)=>{ const t=ls[ls.length-1]?ls[ls.length-1]+', '+p:p;
           if(ls[ls.length-1] && x.measureText(t+(j<parts.length-1?',':'')).width>w-14) { ls[ls.length-1]+=','; ls.push(p); } else ls[ls.length-1]=t; });
         const two=ls.length>2?[ls[0],ls.slice(1).join(' ')]:ls;
-        two.forEach((l,j)=>drawList(l,cx+w/2,y+RH/2+1+(j-(two.length-1)/2)*21,'500 18px Arial',r.finished));
+        two.forEach((l,j)=>drawList(l,cx+w/2,y+RH/2+1+(j-(two.length-1)/2)*21,f2,r.finished));
       } else if(k>=8) drawList(s,cx+w/2,y+RH/2+1,font,r.finished);
       else x.fillText(fit(s,w,font),cx+w/2,y+RH/2+1);
       cx+=w; });
