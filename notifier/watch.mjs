@@ -22,7 +22,8 @@ const KEEP_MS = 4 * 86400000;      // forget ids older than this
 const MAX_SEPARATE = 4;            // more new checks than this in one run -> one summary note
 
 const TITLES = { 'No ES': 'Truck without ES', 'Rejected': 'Rejected truck', 'Late trucks': 'Late trucks',
-                 'Gaps': 'Long gap between trucks', 'Overdue now': 'No truck — overdue now' };
+                 'Gaps': 'Long gap between trucks', 'Overdue now': 'No truck — overdue now',
+                 'Request due': 'Request time — start now', 'Late start': 'Request not started yet' };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // The sync script sometimes answers with a Google "try again" HTML page instead of JSON: retry a few times.
