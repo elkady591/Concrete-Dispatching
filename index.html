@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000002">
+<meta name="app-build" content="20261018-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -352,6 +352,7 @@
   .ucards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-top:12px}
   .ucard{border-radius:15px;padding:14px 15px;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);box-shadow:var(--shadow)}
   .ucard .uc-code{font-weight:800;font-size:16px;font-family:var(--mono);color:#c7cbff}
+  .ucard .uc-cl{font-family:inherit;color:var(--ink)}   /* client, left of the element */
   .ucard .uc-req{font-family:var(--mono);font-size:22px;font-weight:700;margin-top:8px}
   .ucard .uc-req small{font-size:11px;color:var(--faint);font-family:var(--sans)}
   .ucard .uc-meta{margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.7}
@@ -2373,10 +2374,9 @@ function renderUpcoming(){
     const late=rt&&now>rt.at?Math.round((now-rt.at)/60000):0;
     return `
     <div class="ucard">${rt?`<div class="uc-time${late?' late':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}</div>`:''}
-      <div class="uc-code">${p.elem}</div>
+      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}</div>
       <div class="uc-req">${fmt(p.planReq,0)} <small>m³</small></div>
       <div class="uc-meta">
-        ${p.client?('Client: <b>'+esc(p.client)+'</b><br>'):''}
         ${p.sc?('Selection card: <b>'+esc(p.sc)+'</b><br>'):''}
         ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
         Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b>
