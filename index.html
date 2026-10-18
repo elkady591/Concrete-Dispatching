@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000007">
+<meta name="app-build" content="20261018-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1615,27 +1615,31 @@ function pumpPlan(now){
   const pours=(VD.summary||[]).filter(g=>pumpReq(g.pumps).length && (ts(g).length ||
       (g.trucks===0 && pumpSent(g).some(x=>now-x.t<SENT_STALE)))).map(g=>{
     const a=ts(g), sent=pumpSent(g), s0=sent.length?Math.min(...sent.map(x=>x.t)):null;
-    if(!a.length) return {g, start:s0, last:s0, end:null, fam:SF(g), setup:true, sentLens:sent.map(x=>x.len)};
+    // each pump is taken at ITS moment: a pump sent later is looked for when it was sent, the rest at the first truck
+    const items=need=>{ const left=sent.slice(), out=[];
+      for(const len of need){ const k=left.findIndex(x=>x.len===len); if(k>=0){ out.push({len,at:left[k].t}); left.splice(k,1); } else out.push({len,at:a.length?Math.min(...a):s0}); }
+      return out.sort((x,y)=>x.at-y.at); };
+    if(!a.length) return {g, start:s0, last:s0, end:null, fam:SF(g), setup:true, items:items(sent.map(x=>x.len))};
     const fin=!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
-    return {g, start:s0!=null?Math.min(s0,...a):Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:SF(g)}; }).sort((a,b)=>a.start-b.start);
+    return {g, start:s0!=null?Math.min(s0,...a):Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:SF(g), items:items(pumpReq(g.pumps))}; }).sort((a,b)=>a.start-b.start);
   const busy=PUMPS.map(()=>[]);   // per pump: [{start, free, end, p}]
   const byPour=new Map();
   // a finished pour whose chain sibling (same client + element) has not started yet keeps its pumps on site
   // ("Waiting · next …") — the 2 h washing starts only after the LAST request of the chain
   const nextOf=new Map(); for(const g of (VD.upcoming||[])){ if(g.trucks===0){ const f=SF(g); if(!nextOf.has(f)) nextOf.set(f,g); } }
   for(const p of pours){
-    const need=p.setup?p.sentLens:pumpReq(p.g.pumps), got=[], missing=[];
-    const ok=j=>!got.includes(j) && !pumpBroken(j,p.start) &&
-      busy[j].every(b=>(b.free!=null && b.free<=p.start) || b.p.fam===p.fam);
-    for(const len of need){
+    const need=p.items.map(x=>x.len), got=[], missing=[];
+    for(const {len,at} of p.items){
+      const ok=j=>!got.includes(j) && !pumpBroken(j,at) &&
+        busy[j].every(b=>(b.free!=null && b.free<=at) || b.p.fam===p.fam);
       // first the pumps its sibling (same client + element) is holding, then the first free one in order
-      let i=PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>p.start)));
+      let i=PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>at)));
       if(i<0) i=PUMPS.findIndex((L,j)=>L===len && ok(j));
       if(i<0){ missing.push(len); continue; }
       const hold=p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
       let free=p.end==null||hold?null:p.end+PUMP_WASH;
       const rel=pumpRelease(i); if(rel && rel>=p.start && rel>=p.last) free=free==null?rel:Math.min(free,rel);
-      got.push(i); busy[i].push({start:p.start, free, end:p.end, p, hold});
+      got.push(i); busy[i].push({start:at, free, end:p.end, p, hold});
     }
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
   }
