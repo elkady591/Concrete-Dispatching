@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000012">
+<meta name="app-build" content="20261018-000013">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -466,6 +466,7 @@
   .vtab .pm-alert{color:#fb923c;margin-inline-start:4px}
   .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
   .pm-row.st-noop{--sc:#94a3b8}
+  @media (max-width:640px){ .pic-btns{display:grid!important;grid-template-columns:1fr 1fr} }   /* picture buttons 2 × 2 on phones */
   .pm-wash-opts.pm-ops-opts{display:grid;grid-template-columns:repeat(6,1fr);gap:2px 4px}
   .pm-ops-opts .pm-wopt{min-width:34px;text-align:center}
   .pm-ctls{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:flex-start;margin-inline-start:auto}
@@ -774,8 +775,11 @@
     <div class="card" style="margin-top:14px" id="closedCard"><h3>Closed Pours</h3><div id="closedList"></div></div>
     <!-- Daily Production Plan as a picture for WhatsApp (see planPhoto) — live preview of exactly what gets sent -->
     <img id="planPhotoPrev" alt="Daily Production Plan" style="display:none;width:100%;margin-top:16px;border-radius:12px;border:1px solid var(--line2);background:#fff">
-    <div style="display:flex;justify-content:center;margin-top:12px">
-      <button class="btn" id="planPhotoBtn" style="padding:12px 22px;font-size:14px">📸 WhatsApp Photo — Daily Production Plan</button>
+    <div class="pic-btns" style="display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:12px">
+      <button class="btn" id="planSaveBtn" style="padding:12px 18px;font-size:14px" title="Save the picture to this device">💾 Save</button>
+      <button class="btn" id="planCopyBtn" style="padding:12px 18px;font-size:14px" title="Copy the picture">📋 Copy</button>
+      <button class="btn" id="planPhotoBtn" style="padding:12px 18px;font-size:14px" title="Send the picture to an app">📤 Share</button>
+      <button class="btn" id="planOpenBtn" style="padding:12px 18px;font-size:14px" title="Open the picture full size">🔍 Open</button>
     </div>
     <div id="planPhotoMsg" class="muted" style="text-align:center;font-size:12px;margin-top:6px"></div>
   </section>
@@ -3500,16 +3504,30 @@ async function planPhoto(){
     const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
     const d=new Date(), name=`Daily Production Plan ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.png`;
     const file=new File([blob],name,{type:'image/png'});
-    const touch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
-    if(touch && navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); say('Shared'); return; }
-    if(navigator.clipboard && window.ClipboardItem){
-      try{ await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]); say('Copied ✓ — paste it in WhatsApp (Ctrl+V)'); return; }catch(e){}
-    }
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove();
-    say('Saved as an image — attach it in WhatsApp');
+    // 📤 Share = the device's share list (phone, and PCs that support it); otherwise say so (Copy / Save still work)
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); say('Shared ✓'); return; }
+    say('Sharing is not available on this device — use Copy or Save');
   }catch(e){ if(e&&e.name==='AbortError') return; say('Could not make the picture: '+(e&&e.message||e)); }
 }
 { const pb=el('planPhotoBtn'); if(pb) pb.addEventListener('click',planPhoto); }
+// 💾 Save = always a .png file on this device; 📋 Copy = always to the clipboard (paste anywhere)
+async function planPhotoBlob(){ const cv=drawPlanPhoto(); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
+  const d=new Date(); return {blob, name:`Daily Production Plan ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}.png`}; }
+{ const sb=el('planSaveBtn'); if(sb) sb.addEventListener('click',async()=>{ const say=t=>{ const m=el('planPhotoMsg'); if(m) m.textContent=t; };
+    try{ const {blob,name}=await planPhotoBlob(); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); say('Saved ✓ '+name); }
+    catch(e){ say('Could not save: '+(e&&e.message||e)); } }); }
+// 🔍 Open = the picture full size in a new tab (zoom / long-press to save there). The tab is opened right away
+// (inside the tap) so pop-up blockers allow it, then the picture is put in.
+{ const ob=el('planOpenBtn'); if(ob) ob.addEventListener('click',async()=>{ const say=t=>{ const m=el('planPhotoMsg'); if(m) m.textContent=t; };
+    const win=window.open('','_blank');
+    try{ const {blob,name}=await planPhotoBlob(); const url=URL.createObjectURL(blob);
+      if(win){ win.location.href=url; } else { location.href=url; } say('Opened ✓ '+name); }
+    catch(e){ if(win) win.close(); say('Could not open: '+(e&&e.message||e)); } }); }
+{ const cb=el('planCopyBtn'); if(cb) cb.addEventListener('click',async()=>{ const say=t=>{ const m=el('planPhotoMsg'); if(m) m.textContent=t; };
+    try{ if(!(navigator.clipboard&&window.ClipboardItem)) throw new Error('copying pictures is not supported on this browser — use Save');
+      const {blob}=await planPhotoBlob(); await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]); say('Copied ✓ — paste it anywhere'); }
+    catch(e){ say('Could not copy: '+(e&&e.message||e)); } }); }
 // the live picture above the button: redrawn on every render while Summary is open (same drawing as the sent one)
 let planPrevKey='';
 function updatePlanPreview(){
