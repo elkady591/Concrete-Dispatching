@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000005">
+<meta name="app-build" content="20261018-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1642,7 +1642,8 @@ function pumpPlan(now){
   const state=PUMPS.map((len,i)=>{
     const pn=pumpNote(i), note=pn.text||(pn.code?'Breakdown':''), code=pn.code;
     const live=busy[i].filter(b=>b.start<=now && (b.free==null || now<b.free));
-    const cur=live.find(b=>b.end==null&&b.free==null) || live[live.length-1];   // a running pour wins over a washing sibling
+    // a pour actually pouring wins over a sibling still setting up, which wins over a washing one
+    const cur=live.find(b=>b.end==null&&b.free==null&&!b.p.setup) || live.find(b=>b.end==null&&b.free==null) || live[live.length-1];
     let st='free', pour=null, until=null, setup=false, next=null;
     if(cur){ pour=cur.p.g; setup=!!cur.p.setup;
       if(cur.hold && cur.free==null){ st='on'; next=cur.hold; }                  // done, waiting on site for the next of its chain
@@ -1723,7 +1724,8 @@ function requestTimes(){
     // running: finish at the ACTUAL average rate so far (the "Avg" finish), else the target; not started: plan rate
     if(g.trucks>0){ if(g.finishAvg!=null) return g.finishAvg; if(g.finishTgt!=null) return g.finishTgt;
       const a=(g.loads||[]).map(l=>l.t).filter(t=>t!=null), d=dur(g); return a.length&&d?Math.min(...a)+d:null; }
-    const s=out.get(g), d=dur(g); return s&&d?s.at+d:null; };
+    // not started yet: from its time — or from NOW once that time has passed (it can only start from now on)
+    const s=out.get(g), d=dur(g); return s&&d?Math.max(s.at,Date.now())+d:null; };
   const LK=pourLinks(PRm);
   const waits=g=>{ const ch=CH.get(g); return !!(ch && ch.prev && g.trucks===0) || (g.trucks===0 && LK.has(g)); };
   for(const g of (VD.summary||[])){                          // 1) own times (not for the ones waiting behind a sibling)
@@ -1773,7 +1775,7 @@ function upcomingPumpCheck(now){
       const same=pick && (sib(pick) || (claimed.get(pick.i)===fam && pick.st!=='down'));   // sibling running / ahead in the plan
       if(pick){ claimed.set(pick.i,fam); got.add(pick.i); }
       res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
-        after:same?(sib(pick)?site(pick.pour):site(g)+' (previous request)'):''});
+        after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
     if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(pumpLabel(need))}</b> — setting up`}); continue; }
@@ -2496,16 +2498,18 @@ function renderUpcoming(){
       return `<button class="uc-snd${on?' on':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}" title="${on?'Sent — tap to undo':'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}</button>`; }).join('')}</div>`; };
   // chains (same client + element, poured one after the other) become ONE card; its place = its first request
   const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
+  // the one it waits for: same client + element -> just its quantity ("after the 72 m³"), else its name
+  const afterName=(a,g)=>pumpFam(a)===pumpFam(g)?`the ${fmt(a.required!=null?a.required:a.planReq,0)} m³`:site(a);
   const units=[], inUnit=new Set();
   for(const p of sorted){ if(inUnit.has(p)) continue;
     const ch=CH.get(p), mem=ch?ch.members.filter(m=>m.trucks===0 && rest.includes(m)):[p];
     if(mem.length>1){ mem.forEach(m=>inUnit.add(m)); units.push(mem); } else { inUnit.add(p); units.push([p]); } }
-  const timeLine=(rt,late,sent)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(site(rt.after))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
+  const timeLine=(rt,late,sent,p)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(afterName(rt.after,p))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
   el('upcomingArea').innerHTML='<div class="ucards">'+units.map(u=>{ const p=u[0], pc=PC.get(p), rt=RT.get(p), sent=pumpSent(p);
     const late=rt&&!rt.est&&now>rt.at&&!sent.length?Math.round((now-rt.at)/60000):0;   // pumps on their way / waiting behind its chain = not late
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
     return `
-    <div class="ucard${multi?' chain':''}">${timeLine(rt,late,sent.length)}
+    <div class="ucard${multi?' chain':''}">${timeLine(rt,late,sent.length,p)}
       <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}</div>
       <div class="uc-req">${fmt(multi?tot:p.planReq,0)} <small>m³</small></div>
       ${multi?`<div class="uc-steps">${u.map((g,k)=>{ const t=RT.get(g); return `<div class="uc-step"><span class="uc-k">#${k+1}</span><b>${fmt(g.planReq,0)} m³</b><span class="uc-st">${t?(t.est?`<i>${t.time}</i>`:t.time):'—'}</span></div>`; }).join('')}</div>`:''}
