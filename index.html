@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000003">
+<meta name="app-build" content="20261018-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -447,6 +447,11 @@
   .uc-pump::before{content:"🏗 "}
   .uc-time{font-family:var(--mono);font-size:22px;font-weight:800;color:var(--cyan);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .uc-time.late{color:#fb923c}
+  .uc-setup{font-family:inherit;font-size:12px;font-weight:800;color:var(--cyan);border:1px solid rgba(34,211,238,.45);background:rgba(34,211,238,.1);border-radius:99px;padding:1px 9px}
+  .uc-sends{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px;padding-top:7px;border-top:1px dashed rgba(148,163,184,.25)}
+  .uc-snd{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;
+    border:1px dashed rgba(148,163,184,.5);border-radius:99px;padding:2px 10px;cursor:pointer}
+  .uc-snd.on{color:#0b1020;background:var(--cyan);border:1px solid var(--cyan)}
   .uc-late{font-family:inherit;font-size:12px;font-weight:800;color:#fb923c;border:1px solid rgba(251,146,60,.5);background:rgba(251,146,60,.1);border-radius:99px;padding:1px 9px}
   .vtab .pm-alert{color:#fb923c;margin-inline-start:4px}
   .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -1580,16 +1585,25 @@ function pumpFam(g){ return String(g.client||'').trim().toLowerCase()+'|'+
 // "Available now" pressed on a busy/washing pump: stored as PUMPNOTE['r<i>'] = ms. It frees the pump from
 // that moment — but only for the pour it was on; a truck that loads AFTER the press (a top-up) cancels it.
 function pumpRelease(i){ const v=+String(PUMPNOTE['r'+i]||'').trim(); return v>0?v:0; }
+// Pumps already SENT to a request's site before its first truck (they drive there and set up first):
+// PUMPNOTE['s<request id>'] = "56@ms;63@ms" — one entry per pump sent. Such a request holds those pumps
+// from that moment ("Setting up") and is never shown as Late. A send with no truck after 12 h is ignored.
+const SENT_STALE=12*3600000;
+function sentKey(g){ return 's'+(g.esId||g.key); }
+function pumpSent(g){ return String(PUMPNOTE[sentKey(g)]||'').split(';').map(x=>{ const m=x.match(/^(\d+)@(\d+)$/); return m?{len:+m[1],t:+m[2]}:null; }).filter(Boolean); }
 function pumpPlan(now){
   now=now||Date.now();
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
-  const pours=(VD.summary||[]).filter(g=>g.trucks>0 && pumpReq(g.pumps).length && ts(g).length).map(g=>{
-    const a=ts(g), fin=!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
-    return {g, start:Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:pumpFam(g)}; }).sort((a,b)=>a.start-b.start);
+  const pours=(VD.summary||[]).filter(g=>pumpReq(g.pumps).length && (ts(g).length ||
+      (g.trucks===0 && pumpSent(g).some(x=>now-x.t<SENT_STALE)))).map(g=>{
+    const a=ts(g), sent=pumpSent(g), s0=sent.length?Math.min(...sent.map(x=>x.t)):null;
+    if(!a.length) return {g, start:s0, last:s0, end:null, fam:pumpFam(g), setup:true, sentLens:sent.map(x=>x.len)};
+    const fin=!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
+    return {g, start:s0!=null?Math.min(s0,...a):Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:pumpFam(g)}; }).sort((a,b)=>a.start-b.start);
   const busy=PUMPS.map(()=>[]);   // per pump: [{start, free, end, p}]
   const byPour=new Map();
   for(const p of pours){
-    const need=pumpReq(p.g.pumps), got=[], missing=[];
+    const need=p.setup?p.sentLens:pumpReq(p.g.pumps), got=[], missing=[];
     const ok=j=>!got.includes(j) && !pumpBroken(j,p.start) &&
       busy[j].every(b=>(b.free!=null && b.free<=p.start) || b.p.fam===p.fam);
     for(const len of need){
@@ -1607,10 +1621,10 @@ function pumpPlan(now){
     const pn=pumpNote(i), note=pn.text||(pn.code?'Breakdown':''), code=pn.code;
     const live=busy[i].filter(b=>b.start<=now && (b.free==null || now<b.free));
     const cur=live.find(b=>b.end==null&&b.free==null) || live[live.length-1];   // a running pour wins over a washing sibling
-    let st='free', pour=null, until=null;
-    if(cur){ pour=cur.p.g; if(cur.end==null&&cur.free==null) st='on'; else { st='wash'; until=cur.free; } }
+    let st='free', pour=null, until=null, setup=false;
+    if(cur){ pour=cur.p.g; setup=!!cur.p.setup; if(cur.end==null&&cur.free==null) st='on'; else { st='wash'; until=cur.free; } }
     if(note && st==='free') st='down';
-    return {i,len,st,pour,until,note,code};
+    return {i,len,st,pour,until,note,code,setup};
   });
   return {byPour,state};
 }
@@ -1648,23 +1662,25 @@ function upcomingPumpCheck(now){
     for(const len of need){
       const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!claimed.has(s.i) || claimed.get(s.i)===fam));
       // a pump on / washing after the same client + element = this request just carries on with it
-      const sib=s=>!s.note && s.pour && pumpFam(s.pour)===fam && (s.st==='on'||s.st==='wash');
-      const pick=cand.find(s=>sib(s) || (claimed.get(s.i)===fam && s.st!=='down'))
+      const own=s=>s.pour===g;                       // already sent to this request
+      const sib=s=>!own(s) && !s.note && s.pour && pumpFam(s.pour)===fam && (s.st==='on'||s.st==='wash');
+      const pick=cand.find(own) || cand.find(s=>sib(s) || (claimed.get(s.i)===fam && s.st!=='down'))
         || cand.find(s=>s.st==='free')
         || cand.filter(s=>s.st==='wash' && !s.note).sort((a,b)=>a.until-b.until)[0]
         || cand.find(s=>s.st==='on' && !s.note)
         || cand.find(s=>s.note);
       const same=pick && (sib(pick) || (claimed.get(pick.i)===fam && pick.st!=='down'));   // sibling running / ahead in the plan
       if(pick){ claimed.set(pick.i,fam); got.add(pick.i); }
-      res.push({len, kind:!pick?'none':same?'same':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
+      res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
         after:same?(sib(pick)?site(pick.pour):site(g)+' (previous request)'):''});
     }
-    const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same');
+    const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
+    if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(pumpLabel(need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
       out.set(g,{cls:'ok', html:sameOn?`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(pumpLabel(need))}</b>`
                                      :`Pumps ready: <b>${esc(pumpLabel(need))}</b>`}); continue; }
     const byLen={}; res.forEach(r=>{ (byLen[r.len]=byLen[r.len]||[]).push(r); });
-    const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok'||r.kind==='same').length, miss=rs.filter(r=>r.kind!=='ok'&&r.kind!=='same');
+    const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok'||r.kind==='same'||r.kind==='sent').length, miss=rs.filter(r=>r.kind!=='ok'&&r.kind!=='same'&&r.kind!=='sent');
       if(!miss.length) return `${L} ✓`;
       const why=miss.map(r=> r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
                             : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}`
@@ -1694,7 +1710,8 @@ function renderPumps(){
   const short=[...byPour.entries()].filter(([g,a])=>a.end==null && a.missing.length);
   const warn=short.length?`<div class="pm-warn">${short.map(([g,a])=>`⚠ <b>${esc(site(g))}</b> — no ${esc(pumpLabel(a.missing))} pump free`).join('<br>')}</div>`:'';
   const rows=state.filter(keep).map(s=>{
-    const txt = s.st==='on'   ? `<span class="pm-k">On</span> <b>${esc(site(s.pour))}</b>`
+    const txt = s.st==='on'&&s.setup ? `<span class="pm-k">Setting up</span> <b>${esc(site(s.pour))}</b>`
+              : s.st==='on'   ? `<span class="pm-k">On</span> <b>${esc(site(s.pour))}</b>`
               : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
               : s.st==='down' ? '<span class="pm-k">Breakdown</span>' : '<span class="pm-k">Available</span>';
     const editing=pumpEditing===String(s.i);
@@ -2199,7 +2216,7 @@ function collectChecks(pours){
   // requests with a planned time (Upcoming): its time has come -> "Request due" (one notification),
   // still not started 30 min later -> "Late start" (a second one)
   try{ const RT=requestTimes(), now=Date.now();
-    for(const g of (VD.upcoming||[])){ const t=RT.get(g); if(!t||now<t.at) continue;
+    for(const g of (VD.upcoming||[])){ const t=RT.get(g); if(!t||now<t.at||pumpSent(g).length) continue;   // pumps already sent = on time
       const nm=esc((g.client?g.client+' ':'')+g.elem), id=(g.esId||g.key)+'|'+t.at;
       if(now-t.at<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
         txt:`${nm} · planned ${t.time} — it is time to start${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`});
@@ -2370,10 +2387,15 @@ function renderUpcoming(){
     if(ta&&tb) return ta.at-tb.at; if(ta||tb) return ta?-1:1; return (pIdx.get(a)??1e9)-(pIdx.get(b)??1e9); });
   const PC=upcomingPumpCheck();
   const dayLbl=t=>{ const d=new Date(t), n=new Date(); return d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `; };
-  el('upcomingArea').innerHTML='<div class="ucards">'+sorted.map(p=>{ const pc=PC.get(p), rt=RT.get(p);
-    const late=rt&&now>rt.at?Math.round((now-rt.at)/60000):0;
+  // one small chip per requested pump inside the pump box: tap = "sent to site" (tap again = undo)
+  const sendChips=p=>{ const need=pumpReq(p.pumps); if(!need.length) return '';
+    const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
+    return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
+      return `<button class="uc-snd${on?' on':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}" title="${on?'Sent — tap to undo':'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}</button>`; }).join('')}</div>`; };
+  el('upcomingArea').innerHTML='<div class="ucards">'+sorted.map(p=>{ const pc=PC.get(p), rt=RT.get(p), sent=pumpSent(p);
+    const late=rt&&now>rt.at&&!sent.length?Math.round((now-rt.at)/60000):0;   // pumps on their way = not late
     return `
-    <div class="ucard">${rt?`<div class="uc-time${late?' late':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}</div>`:''}
+    <div class="ucard">${rt?`<div class="uc-time${late?' late':''}${sent.length?' setup':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}${sent.length?`<span class="uc-setup">Setting up</span>`:''}</div>`:''}
       <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}</div>
       <div class="uc-req">${fmt(p.planReq,0)} <small>m³</small></div>
       <div class="uc-meta">
@@ -2381,8 +2403,15 @@ function renderUpcoming(){
         ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
         Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b>
         ${p.mix?('<br>Grade: <b>'+esc(p.mix)+'</b>'):''}
-      </div>${pc?`<div class="uc-pump ${pc.cls}">${pc.html}</div>`:''}
+      </div>${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${sendChips(p)}</div>`:''}
     </div>`; }).join('')+'</div>';
+  el('upcomingArea').querySelectorAll('.uc-snd').forEach(b=>b.addEventListener('click',async()=>{
+    const k=decodeURIComponent(b.dataset.k), len=+b.dataset.len;
+    let list=String(PUMPNOTE[k]||'').split(';').filter(x=>/^\d+@\d+$/.test(x));
+    if(b.dataset.on==='1'){ const j=list.map(x=>+x.split('@')[0]).lastIndexOf(len); if(j>=0) list.splice(j,1); }
+    else list.push(len+'@'+Date.now());
+    const val=list.join(';'); if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k];
+    stSet(KEY_PUMP,PUMPNOTE); renderUpcoming(); renderViewTabs(); await syncPush('pump',k,val); }));
 }
 
 /* ---------- print report / PDF ---------- */
@@ -3146,7 +3175,7 @@ function planPhotoRows(){
     return [...s].sort().join(', '); };
   // Working Pumps: the lengths of the pumps the pour got ("63 (x2), 59"); not started / none free -> what it asked for
   const PP=pumpPlan(now).byPour;
-  const pumpsOf=g=>{ const a=PP.get(g); const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps); return pumpLabel(lens); };
+  const pumpsOf=g=>{ const a=g.trucks>0?PP.get(g):null; const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps); return pumpLabel(lens); };
   const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
     qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g),
     time:finished?'':((PR.get(g)||{}).time||'')});   // planned time, written left of the row (not on finished pours)
