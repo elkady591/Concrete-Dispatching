@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000015">
+<meta name="app-build" content="20261018-000016">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -459,6 +459,31 @@
   .uc-k{font-family:var(--mono);font-weight:800;color:var(--cyan);width:24px}
   .uc-st{margin-inline-start:auto;font-family:var(--mono);font-weight:700;color:var(--ink)} .uc-st i{font-style:normal;color:var(--muted)}
   .uc-same{margin-top:6px;font-size:12px;color:var(--muted)}
+  .uc-app{font-family:inherit;font-size:11px;font-weight:800;color:#0b1020;background:#fbbf24;border-radius:6px;padding:1px 7px;vertical-align:2px}
+  .uc-appdel{display:flex;align-items:center;gap:8px;margin:4px 0 2px;font-size:12px;color:var(--muted)}
+  .uc-del{font:inherit;font-size:12px;color:var(--rose);background:transparent;border:1px solid rgba(251,113,133,.45);border-radius:8px;padding:2px 8px;cursor:pointer;margin-inline-start:auto}
+  .uc-maybe{margin:6px 0;padding:7px 9px;border-radius:9px;font-size:12.5px;color:#fb923c;border:1px solid rgba(251,146,60,.45);background:rgba(251,146,60,.08)}
+  .uc-maybe b{color:var(--ink)} .uc-mbtns{display:flex;gap:6px;margin-top:6px}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line2)}
+  /* new request form */
+  .rq-back{position:fixed;inset:0;z-index:9000;background:rgba(5,8,20,.72);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px}
+  .rq-box{width:100%;max-width:560px;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+  .rq-head{display:flex;align-items:center;justify-content:space-between;font-size:16px;margin-bottom:12px}
+  .rq-x{font:inherit;background:transparent;border:0;color:var(--muted);font-size:18px;cursor:pointer}
+  .rq-box{box-sizing:border-box}
+  .rq-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .rq-grid label{min-width:0} .rq-grid input{width:100%;box-sizing:border-box}
+  .rq-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:700}
+  .rq-grid label small{font-weight:500}
+  .rq-grid input{font:inherit;font-size:15px;color:var(--ink);background:var(--bg2,#0f172a);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;color-scheme:dark;min-width:0}
+  .rq-wide{grid-column:1/-1}
+  .rq-pumps{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .rq-ptxt{font-family:var(--mono);font-size:15px;color:var(--ink);min-width:60px}
+  .rq-pb,.rq-pclr{font:inherit;font-family:var(--mono);font-size:13px;font-weight:800;color:var(--ink);background:transparent;border:1px solid var(--line2);border-radius:99px;padding:4px 11px;cursor:pointer}
+  .rq-pclr{color:var(--rose)}
+  .rq-msg{min-height:18px;margin-top:8px;font-size:12.5px;color:var(--rose)}
+  .rq-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
   .uc-plants{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:9px}
   .uc-pl{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;
     border:1px dashed rgba(148,163,184,.5);border-radius:99px;padding:2px 10px;cursor:pointer}
@@ -804,9 +829,33 @@
   <section id="upcomingView">
     <div class="up-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
       <div class="section-title" id="upTitle" style="margin:0">Upcoming — not started yet</div>
-      <a class="btn" id="addRequestBtn" target="_blank" rel="noopener" href="#" title="Open the Plan sheet to add a new pour request" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">➕ ADD Request</a>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="addReqBtn" title="Add a pour request here in the app">➕ ADD Request</button>
+        <a class="btn" id="addRequestBtn" target="_blank" rel="noopener" href="#" title="Open the Plan sheet" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">📄 Sheet</a>
+      </div>
     </div>
     <div id="upcomingArea"></div>
+    <!-- ➕ new request form (app request: saved in the app for every device, not written to the sheet) -->
+    <div id="reqModal" class="rq-back" style="display:none">
+      <form class="rq-box" id="reqForm" autocomplete="off">
+        <div class="rq-head"><b>➕ New request</b><button type="button" class="rq-x" id="reqClose">✕</button></div>
+        <div class="rq-grid">
+          <label>Date<input type="date" id="rqDate" required></label>
+          <label>Time<input id="rqTime" placeholder="15 or 15:30"></label>
+          <label>Contractor<input id="rqClient" list="rqClients" required></label>
+          <label>Code<input id="rqCode" required style="text-transform:uppercase"></label>
+          <label>Quantity m³<input id="rqQty" inputmode="decimal" required></label>
+          <label>Rate m³/h<input id="rqRate" inputmode="decimal"></label>
+          <label>Selection card<input id="rqSc"></label>
+          <label>Temperature °<input id="rqTem" inputmode="decimal"></label>
+          <label class="rq-wide">ES <small>(optional)</small><input id="rqEs" inputmode="numeric"></label>
+          <label class="rq-wide">Pumps<div class="rq-pumps"><span id="rqPumpsTxt" class="rq-ptxt">—</span><span id="rqPumpBtns"></span><button type="button" class="rq-pclr" id="rqPumpClr">✕</button></div></label>
+        </div>
+        <datalist id="rqClients"></datalist>
+        <div class="rq-msg" id="reqMsg"></div>
+        <div class="rq-foot"><button type="button" class="btn alt" id="reqCancel">Cancel</button><button type="submit" class="btn">Save</button></div>
+      </form>
+    </div>
   </section>
 
   <!-- TRUCK TRACKING VIEW -->
@@ -897,6 +946,45 @@ const ACTIVE_WINDOW=2*3600000; // a pour auto-closes 2h after the last truck loa
 /* Built-in plan removed — quantities & rates come only from the Plan Sheet. */
 let PLAN={};       // aggregated: code -> {req(summed), rate, client, count...}
 let PLAN_ROWS=[];  // raw plan rows preserved (duplicate codes kept separate, e.g. 91UPD twice)
+let SHEET_ROWS=null; // the plan rows as read from the sheet; PLAN/PLAN_ROWS = these + the app's own requests
+
+/* ---------- requests added in the app ----------
+   Saved through the sync script (no Google permissions) as PUMPNOTE['q<id>'] = JSON, so every device sees them.
+   They are NOT written to the sheet. When the same request also appears in the sheet it is merged away:
+   same ES  — or same client + element + date and quantity within 1 m³  — the sheet copy wins, and what was
+   chosen on the app copy (planned plants, pumps sent) moves to it. Same client + element + date but a
+   different quantity = "maybe the same": the card asks (Merge / Keep both). */
+function appReqs(){ const out=[]; for(const k in PUMPNOTE){ if(k[0]!=='q'||!/^q[a-z0-9]+$/i.test(k)) continue;
+  try{ const r=JSON.parse(PUMPNOTE[k]); if(r&&r.code) out.push(Object.assign(r,{id:k.slice(1)})); }catch(e){} } return out; }
+const normCl=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+const appEs=r=>r.es?String(r.es).trim():'APP-'+r.id;          // app request without ES: its own key, matches no truck by ES
+let APP_MAYBE=new Map();   // app request id -> sheet row it might duplicate
+function rebuildPlan(){
+  const sheet=SHEET_ROWS||[]; APP_MAYBE=new Map(); const extra=[], merges=[];
+  for(const r of appReqs()){
+    const code=String(r.code).toUpperCase().replace(/\s+/g,''), base=code.replace(/\*+$/,'');
+    const same=sheet.find(s=>r.es&&s.es&&String(s.es).trim()===String(r.es).trim())
+      || sheet.find(s=>normCl(s.client)===normCl(r.client)&&s.base===base&&s.date===r.date&&Math.abs((s.req||0)-(+r.qty||0))<=1);
+    if(same){ merges.push({r,s:same}); continue; }
+    const maybe=!r.keep && sheet.find(s=>normCl(s.client)===normCl(r.client)&&s.base===base&&s.date===r.date);
+    if(maybe) APP_MAYBE.set(r.id,maybe);
+    extra.push({code, es:appEs(r), req:+r.qty||0, rate:+r.rate||0, date:r.date||'', time:normPlanTime(r.time)||'', after:'',
+      mix:'', client:String(r.client||'').trim(), sc:String(r.sc||''), pumps:String(r.pumps||''), tem:r.tem?String(r.tem)+' °':'', app:r.id});
+  }
+  const agg=aggregatePlanRows(sheet.map(s=>Object.assign({},s)).concat(extra));
+  PLAN=agg?agg.plan:{}; PLAN_ROWS=agg?agg.rows:[];
+  if(merges.length) setTimeout(()=>merges.forEach(m=>mergeAppReq(m.r,m.s)),0);   // outside render: writes + re-render
+}
+// move the app copy's marks to the sheet copy, then drop the app copy (every device)
+async function mergeAppReq(r, s){
+  if(!PUMPNOTE['q'+r.id]) return;
+  const to=s.es?String(s.es).trim():('PP:'+s.code), from=appEs(r), push=[];
+  for(const p of ['p','s']){ const v=PUMPNOTE[p+from]; if(v!=null && PUMPNOTE[p+to]==null){ PUMPNOTE[p+to]=v; push.push([p+to,v]); }
+    if(v!=null){ delete PUMPNOTE[p+from]; push.push([p+from,'']); } }
+  delete PUMPNOTE['q'+r.id]; push.push(['q'+r.id,'']);
+  stSet(KEY_PUMP,PUMPNOTE); rerender();
+  for(const [k,v] of push) await syncPush('pump',k,v);
+}
 
 // Merge parsed plan entries: aggregate by code (sum required, keep max rate) AND keep raw rows.
 function aggregatePlanRows(entries){
@@ -1232,6 +1320,7 @@ function buildPours(full, now){
     enrichGroup(p, now);
     p.mix=row.mix; p.client=row.client;   // keep the plan row's grade/client (planLookup can't find the starred code)
     if(row.sc) p.sc=row.sc; if(row.tem) p.tem=row.tem; if(row.pumps) p.pumps=row.pumps;   // …and its own selection card / temperature
+    if(row.app) p.app=row.app;                                                              // added in the app (not in the sheet yet)
     return p;
   }
   // label pours of a base: keep an existing differentiator (90UPN*), else number them #1,#2 in plan order
@@ -1529,6 +1618,7 @@ function render(res){
     return;
   }
   const full=res.list;
+  if(SHEET_ROWS) rebuildPlan();            // sheet plan + the app's own requests (merged / deduplicated)
   if(pruneDone()) stSet(KEY_DONE,DONE);   // drop stale done-marks outside the current plan window
   // pour list from the plan (same-code same-day pours split by waterfall)
   const summary=buildPours(full);
@@ -2624,7 +2714,11 @@ function renderUpcoming(){
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
     return `
     <div class="ucard${multi?' chain':''}">${timeLine(rt,late,sent.length,p)}
-      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}</div>
+      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}${u.some(g=>g.app)?' <span class="uc-app" title="Added in the app — not in the sheet">App</span>':''}</div>
+      ${u.filter(g=>g.app).map(g=>{ const m=APP_MAYBE.get(g.app);
+        return (m?`<div class="uc-maybe">⚠ Same as sheet request? <b>${esc(m.client||'')} ${esc(m.code)}</b> · ${fmt(m.req,0)} m³ (here ${fmt(g.planReq,0)} m³)
+          <div class="uc-mbtns"><button class="btn sm uc-merge" data-id="${g.app}" data-es="${esc(m.es||'')}" data-code="${esc(m.code)}">Merge</button><button class="btn sm alt uc-keep" data-id="${g.app}">Keep both</button></div></div>`:'')
+          +`<div class="uc-appdel">${multi?`#${u.indexOf(g)+1} `:''}added in the app <button class="uc-del" data-id="${g.app}" title="Delete this app request">🗑 Delete</button></div>`; }).join('')}
       <div class="uc-req">${fmt(multi?tot:p.planReq,0)} <small>m³</small></div>
       ${multi?`<div class="uc-steps">${u.map((g,k)=>{ const t=RT.get(g); return `<div class="uc-step"><span class="uc-k">#${k+1}</span><b>${fmt(g.planReq,0)} m³</b><span class="uc-st">${t?(t.est?`<i>${t.time}</i>`:t.time):'—'}</span></div>`; }).join('')}</div>`:''}
       <div class="uc-meta">
@@ -2634,6 +2728,15 @@ function renderUpcoming(){
         ${p.mix?('<br>Grade: <b>'+esc(p.mix)+'</b>'):''}
       </div>${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${(CH.get(p)||{}).prev?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
     </div>`; }).join('')+'</div>';
+  // app requests: delete / merge with the sheet copy / keep both
+  const A=el('upcomingArea');
+  A.querySelectorAll('.uc-del').forEach(b=>b.addEventListener('click',async()=>{ const id=b.dataset.id;
+    if(!confirm('Delete this request added in the app?')) return;
+    delete PUMPNOTE['q'+id]; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump','q'+id,''); }));
+  A.querySelectorAll('.uc-merge').forEach(b=>b.addEventListener('click',()=>{ const r=appReqs().find(x=>x.id===b.dataset.id);
+    if(r) mergeAppReq(r,{es:b.dataset.es,code:b.dataset.code}); }));
+  A.querySelectorAll('.uc-keep').forEach(b=>b.addEventListener('click',async()=>{ const k='q'+b.dataset.id; let r={}; try{ r=JSON.parse(PUMPNOTE[k]); }catch(e){}
+    r.keep=1; const v=JSON.stringify(r); PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,v); }));
   // 🏭 planned plants: tap a plant to add / remove it — the same choice goes to every request of the card
   el('upcomingArea').querySelectorAll('.uc-pl').forEach(b=>b.addEventListener('click',async()=>{
     const keys=decodeURIComponent(b.dataset.k).split('\n'), st=b.dataset.p;
@@ -3171,7 +3274,7 @@ async function loadLive(){
   ]);
   if(planRes && planRes.ok){
     const parsed=parsePlanTab(planRes.cols, planRes.matrix) || parsePlanPositional(planRes.cols, planRes.matrix);
-    if(parsed){ PLAN=parsed.plan; PLAN_ROWS=parsed.rows; stSet(KEY_PLAN,{plan:PLAN,rows:PLAN_ROWS});
+    if(parsed){ PLAN=parsed.plan; PLAN_ROWS=parsed.rows; SHEET_ROWS=parsed.rows.slice(); stSet(KEY_PLAN,{plan:PLAN,rows:PLAN_ROWS});
       try{console.log('Live plan: '+PLAN_ROWS.length+' rows, '+Object.keys(PLAN).length+' unique codes');}catch(e){} }
     else { try{console.log('Plan sheet returned no parseable rows (check columns/sharing).');}catch(e){} }
     // The date filter always opens on TODAY (set in init) and the plan no longer drags it around —
@@ -3313,7 +3416,7 @@ function requireAuth(){
   await requireAuth();          // block the whole app until the password is entered
   REQ=(await stGet(KEY_REQ))||{};
   const savedPlan=await stGet(KEY_PLAN);   // show last-good plan instantly (survives edits / offline)
-  if(savedPlan&&savedPlan.plan){ PLAN=savedPlan.plan; PLAN_ROWS=savedPlan.rows||[]; }
+  if(savedPlan&&savedPlan.plan){ PLAN=savedPlan.plan; PLAN_ROWS=savedPlan.rows||[]; SHEET_ROWS=PLAN_ROWS.filter(r=>!r.app); }
   RATE=(await stGet(KEY_RATE))||{};
   DONE=(await stGet(KEY_DONE))||{};
   PUMPNOTE=(await stGet(KEY_PUMP))||{};
@@ -3564,6 +3667,33 @@ async function planPhoto(){
   }catch(e){ if(e&&e.name==='AbortError') return; say('Could not make the picture: '+(e&&e.message||e)); }
 }
 { const pb=el('planPhotoBtn'); if(pb) pb.addEventListener('click',planPhoto); }
+
+/* ---------- ➕ ADD Request form (an app request, see rebuildPlan) ---------- */
+{
+  const M=el('reqModal'), F=el('reqForm'); let pumps=[];
+  const showP=()=>{ el('rqPumpsTxt').textContent=pumps.length?pumps.join('-'):'—'; };
+  const open=()=>{ const d=new Date(); F.reset(); pumps=[]; showP(); el('reqMsg').textContent='';
+    el('rqDate').value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    // contractors already used in the plan, for quick picking
+    el('rqClients').innerHTML=[...new Set((PLAN_ROWS||[]).map(r=>String(r.client||'').trim()).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}">`).join('');
+    el('rqPumpBtns').innerHTML=[...new Set(PUMPS)].sort((a,b)=>a-b).map(L=>`<button type="button" class="rq-pb" data-l="${L}">+${L}</button>`).join('');
+    M.style.display='flex'; setTimeout(()=>el('rqClient').focus(),50); };
+  const close=()=>{ M.style.display='none'; };
+  const ab=el('addReqBtn'); if(ab) ab.addEventListener('click',open);
+  el('reqClose').addEventListener('click',close); el('reqCancel').addEventListener('click',close);
+  M.addEventListener('click',e=>{ if(e.target===M) close(); });
+  el('rqPumpBtns').addEventListener('click',e=>{ const b=e.target.closest('.rq-pb'); if(!b) return; pumps.push(+b.dataset.l); showP(); });
+  el('rqPumpClr').addEventListener('click',()=>{ pumps=[]; showP(); });
+  F.addEventListener('submit',async e=>{ e.preventDefault();
+    const v=id=>el(id).value.trim(), num=s=>parseFloat(String(s).replace(',','.'));
+    const r={date:v('rqDate'), time:v('rqTime'), client:v('rqClient'), code:v('rqCode').toUpperCase().replace(/\s+/g,''),
+      qty:num(v('rqQty')), rate:num(v('rqRate'))||0, sc:v('rqSc'), tem:v('rqTem'), es:v('rqEs'), pumps:pumps.join('-'), by:ME||'', at:Date.now()};
+    if(!r.client||!r.code||!(r.qty>0)){ el('reqMsg').textContent='Contractor, Code and Quantity are needed.'; return; }
+    if(r.time && !normPlanTime(r.time)){ el('reqMsg').textContent='Time: write it like 15 or 15:30.'; return; }
+    const id=Date.now().toString(36)+Math.random().toString(36).slice(2,5), k='q'+id, val=JSON.stringify(r);
+    PUMPNOTE[k]=val; stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
+    await syncPush('pump',k,val); });
+}
 // 💾 Save = always a .png file on this device; 📋 Copy = always to the clipboard (paste anywhere)
 async function planPhotoBlob(){ const cv=drawPlanPhoto(); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
   const d=new Date(); return {blob, name:`Daily Production Plan ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}.png`}; }
