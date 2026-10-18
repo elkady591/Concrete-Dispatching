@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000006">
+<meta name="app-build" content="20261018-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3294,7 +3294,8 @@ function planPhotoRows(){
   const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
     qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g),
     // a request waiting behind its chain sibling (same client + element) gets no time of its own
-    time:finished||chainNext(g)?'':((PR.get(g)||{}).time||''), after:finished?'':((PR.get(g)||{}).after||'')});   // planned time / "after X", written left of the row (not on finished pours)
+    // the time / "after X" is only for requests that have NOT started yet
+    time:started||chainNext(g)?'':((PR.get(g)||{}).time||''), after:started?'':((PR.get(g)||{}).after||'')});   // planned time / "after X", written left of the row (not on finished pours)
   const pours=(VD.summary||[]).filter(g=>{ const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0; });
   // order: finished by finish time (first to finish on top) → running by start time → not started in plan order
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
@@ -3319,8 +3320,21 @@ function planPhotoRows(){
   }
   fin.sort((a,b)=>last(a)-last(b)); run.sort((a,b)=>first(a)-first(b));
   const up=(VD.upcoming||[]).slice().sort((a,b)=>when(a).localeCompare(when(b))||planIdx(a)-planIdx(b));
-  return fin.map(g=>row(g,true,true,plantsOf(g,false)))
-    .concat(run.map(g=>row(g,true,false,plantsOf(g,true))), up.map(g=>row(g,false,false,'')));
+  const base=fin.map(g=>({g,r:row(g,true,true,plantsOf(g,false))}))
+    .concat(run.map(g=>({g,r:row(g,true,false,plantsOf(g,true))})), up.map(g=>({g,r:row(g,false,false,'')})));
+  // pours that follow each other (same client + element, or an "after" link) stay TOGETHER, in pouring order,
+  // at the place of the first of them — drawn with a bracket arrow on the left like on the paper
+  const LK=pourLinks(), par=new Map(), find=g=>{ while(par.get(g)!==g) g=par.get(g); return g; };
+  base.forEach(x=>par.set(x.g,x.g));
+  const inList=new Set(base.map(x=>x.g)), byFam=new Map();
+  for(const x of base){ const f=pumpFam(x.g); if(byFam.has(f)) par.set(find(x.g),find(byFam.get(f))); else byFam.set(f,x.g);
+    const p=LK.get(x.g); if(p&&inList.has(p)) par.set(find(x.g),find(p)); }
+  const groups=new Map(); base.forEach((x,i)=>{ const k=find(x.g); if(!groups.has(k)) groups.set(k,[]); groups.get(k).push({...x,i}); });
+  const out=[], placed=new Set();
+  for(const x of base){ const k=find(x.g); if(placed.has(k)) continue; placed.add(k);
+    const mem=groups.get(k).sort((a,b)=>(first(a.g)-first(b.g))||(a.i-b.i));   // started ones by start time, then the rest in their order
+    mem.forEach((m,j)=>{ if(mem.length>1) m.r.grp=j===0?'first':(j===mem.length-1?'last':'mid'); out.push(m.r); }); }
+  return out;
 }
 function drawPlanPhoto(rows, at){
   rows=rows||planPhotoRows(); at=at||Date.now();
@@ -3328,7 +3342,8 @@ function drawPlanPhoto(rows, at){
   const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305],['Working\nPumps',170]];
   const tableW=cols.reduce((s,c)=>s+c[1],0), H=HEAD+TH+Math.max(rows.length,1)*RH+PAD;
   // planned times are written OUTSIDE the table, left of their row (like on the paper) — margin only when any
-  const TM=rows.some(r=>r.time||r.after)?96:0, L=PAD+TM;
+  const BR=rows.some(r=>r.grp)?34:0;                       // room for the bracket arrows of pours that follow each other
+  const TM=(rows.some(r=>r.time||r.after)?96:0)+BR, L=PAD+TM, TX=L-14-BR;   // TX = right edge of the time text
   const cv=document.createElement('canvas'); cv.width=(tableW+PAD*2+TM)*S; cv.height=H*S;
   const x=cv.getContext('2d'); x.scale(S,S);
   x.fillStyle='#ffffff'; x.fillRect(0,0,tableW+PAD*2+TM,H);
@@ -3369,9 +3384,19 @@ function drawPlanPhoto(rows, at){
   y+=TH;
   rows.forEach((r,i)=>{
     x.fillStyle=r.finished?'#f1faf4':(r.started?'#f3f8ff':'#ffffff'); x.fillRect(L,y,tableW,RH);
-    if(r.time){ x.save(); x.fillStyle='#1d4ed8'; x.font='700 22px Arial'; x.textAlign='right'; x.fillText(r.time,L-14,y+RH/2+1); x.restore(); }
-    else if(r.after){ x.save(); x.fillStyle='#1d4ed8'; x.textAlign='right'; x.font='600 13px Arial'; x.fillText('after',L-14,y+RH/2-10);
-      x.fillText(fit(r.after,TM+6,'700 17px Arial'),L-14,y+RH/2+10); x.restore(); }
+    if(r.time){ x.save(); x.fillStyle='#1d4ed8'; x.font='700 22px Arial'; x.textAlign='right'; x.fillText(r.time,TX,y+RH/2+1); x.restore(); }
+    else if(r.after && !r.grp){ x.save(); x.fillStyle='#1d4ed8'; x.textAlign='right'; x.font='600 13px Arial'; x.fillText('after',TX,y+RH/2-10);
+      x.fillText(fit(r.after,TM-BR+6,'700 17px Arial'),TX,y+RH/2+10); x.restore(); }
+    if(r.grp){   // bracket: out of the first row, down, and an arrow into each following row
+      // smooth: every turn is a rounded corner (like the icons' corners), soft round arrowheads
+      const ym=y+RH/2, xv=L-24, xe=L-5, R=9; x.save(); x.strokeStyle='#1d4ed8'; x.fillStyle='#1d4ed8'; x.lineWidth=2.2; x.lineCap='round'; x.lineJoin='round'; x.beginPath();
+      if(r.grp==='first'){ x.moveTo(xe,ym); x.lineTo(xv+R,ym); x.arcTo(xv,ym,xv,ym+R,R); x.lineTo(xv,y+RH); }
+      else {
+        if(r.grp==='mid'){ x.moveTo(xv,y); x.lineTo(xv,y+RH); x.moveTo(xv,ym-R); x.arcTo(xv,ym,xv+R,ym,R); x.lineTo(xe-7,ym); }
+        else { x.moveTo(xv,y); x.lineTo(xv,ym-R); x.arcTo(xv,ym,xv+R,ym,R); x.lineTo(xe-7,ym); } }
+      x.stroke();
+      if(r.grp!=='first'){ x.beginPath(); x.moveTo(xe,ym); x.lineTo(xe-8,ym-4.5); x.lineTo(xe-8,ym+4.5); x.closePath(); x.lineWidth=1.6; x.fill(); x.stroke(); }
+      x.restore(); }
     const v=[r.started?'✓':'', r.finished?'✓':'', r.sc, r.client, r.code, r.qty!=null?fmt(r.qty,0)+' m³':'—', r.tem||'—', r.rate?fmt(r.rate,0)+' m³/h':'—', r.plants, r.pumps||'—'];
     cx=L;
     v.forEach((val,k)=>{ const w=cols[k][1];
