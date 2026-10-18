@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000010">
+<meta name="app-build" content="20261018-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -465,13 +465,18 @@
   .uc-late{font-family:inherit;font-size:12px;font-weight:800;color:#fb923c;border:1px solid rgba(251,146,60,.5);background:rgba(251,146,60,.1);border-radius:99px;padding:1px 9px}
   .vtab .pm-alert{color:#fb923c;margin-inline-start:4px}
   .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .pm-row.st-noop{--sc:#94a3b8}
+  .pm-wash-opts.pm-ops-opts{display:grid;grid-template-columns:repeat(6,1fr);gap:2px 4px}
+  .pm-ops-opts .pm-wopt{min-width:34px;text-align:center}
+  .pm-ctls{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:flex-start;margin-inline-start:auto}
+  .pm-ops-btn{border-color:rgba(148,163,184,.5)} .pm-ops-btn b{color:var(--ink)}
   .pm-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}
   .pm-wash{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-inline-start:auto}
   .pm-wash-btn{font:inherit;font-size:12px;font-weight:700;color:var(--ink);background:var(--glass,rgba(24,30,50,.5));
     border:1px solid rgba(251,146,60,.5);border-radius:99px;padding:4px 12px;cursor:pointer;white-space:nowrap}
   .pm-wash-btn b{font-family:var(--mono);color:#fb923c} .pm-caret{color:var(--faint);font-size:10px}
   .pm-wash-btn.open{box-shadow:0 0 0 2px rgba(251,146,60,.35)}
-  .pm-wash-opts{display:flex;gap:4px;padding:4px;border:1px solid var(--line2);border-radius:99px;background:var(--glass,rgba(24,30,50,.7))}
+  .pm-wash-opts{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;padding:4px;max-width:330px;border:1px solid var(--line2);border-radius:16px;background:var(--glass,rgba(24,30,50,.7))}
   .pm-wopt{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;border:0;border-radius:99px;padding:4px 9px;cursor:pointer}
   .pm-wopt.on{color:#0b1020;background:#fb923c}
   .pm-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);border:1px solid var(--line2);border-radius:99px;padding:3px 10px;cursor:pointer;user-select:none}
@@ -1587,6 +1592,11 @@ const PUMPS=[48,56,59,59,63,63,63,63,63,63];
 // Pumps page (⏱ chip); it is shared with every device through the sync script as PUMPNOTE['wash'] = hours.
 const WASH_DEFAULT=2.5, WASH_CHOICES=[1.5,2,2.5,3,3.5,4];
 function washHours(){ const h=parseFloat(PUMPNOTE['wash']); return h>0&&h<=12?h:WASH_DEFAULT; }
+// Pump operators: only this many pumps can be manned at once (user's 👷 setting, shared as PUMPNOTE['ops']).
+// Every pump working / setting up / waiting / washing keeps its operator; free pumps beyond what is left
+// are "Available · no operator".
+const OPS_DEFAULT=7, OPS_CHOICES=[1,2,3,4,5,6,7,8,9,10,11,12];
+function opsCount(){ const n=parseInt(PUMPNOTE['ops'],10); return n>0&&n<=20?n:OPS_DEFAULT; }
 const hLabel=h=>{ const m=Math.round(h*60); return Math.floor(m/60)+':'+String(m%60).padStart(2,'0'); };
 let PUMPNOTE={};                 // pump index (0-based, as a string) -> problem note, shared via the sync script
 function pumpReq(s){             // "63, 59" / "63+59" / "2x63" / "63x2" -> [63,59] / [63,63]
@@ -1650,6 +1660,17 @@ function pumpPlan(now){
       // first the pumps its sibling (same client + element) is holding, then the first free one in order
       let i=PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>at)));
       if(i<0) i=PUMPS.findIndex((L,j)=>L===len && ok(j));
+      // none free, but the pour has STARTED (or its pumps were sent): the pump is obviously there, so its washing
+      // ended early — take the washing one of that length that would be free first, and end its washing at this moment.
+      // Never a Breakdown pump, never one still on another unfinished pour or waiting for its chain sibling.
+      if(i<0){
+        let best=-1, bestFree=Infinity;
+        PUMPS.forEach((L,j)=>{ if(L!==len || got.includes(j) || pumpBroken(j,at)) return;
+          const blocking=busy[j].filter(b=>!(b.free!=null && b.free<=at) && b.p.fam!==p.fam);
+          if(!blocking.length || !blocking.every(b=>b.end!=null && b.free!=null)) return;   // only washing ones may be cut short
+          const f=Math.max(...blocking.map(b=>b.free)); if(f<bestFree){ bestFree=f; best=j; } });
+        if(best>=0){ busy[best].forEach(b=>{ if(b.end!=null && b.free!=null && b.free>at) b.free=at; }); i=best; }
+      }
       if(i<0){ missing.push(len); continue; }
       const hold=p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
       let free=p.end==null||hold?null:p.end+WASH;
@@ -1670,6 +1691,10 @@ function pumpPlan(now){
     if(note && st==='free') st='down';
     return {i,len,st,pour,until,note,code,setup,next};
   });
+  // operators: the busy pumps keep theirs; what is left goes to the free pumps BIGGEST first (63 → 59 → 56 → 48),
+  // the rest have none
+  let opsLeft=opsCount()-state.filter(s=>s.st==='on'||s.st==='wash').length;
+  state.filter(s=>s.st==='free').sort((a,b)=>(b.len-a.len)||(a.i-b.i)).forEach(s=>{ if(opsLeft>0) opsLeft--; else s.noop=true; });
   return {byPour,state};
 }
 // Planned time of each pour (plan "TIME" column + its DATE, today when the date is empty)
@@ -1787,13 +1812,14 @@ function upcomingPumpCheck(now){
       const own=s=>s.pour===g;                       // already sent to this request
       const sib=s=>!own(s) && !s.note && s.pour && SF(s.pour)===fam && (s.st==='on'||s.st==='wash');
       const pick=cand.find(own) || cand.find(s=>sib(s) || (claimed.get(s.i)===fam && s.st!=='down'))
-        || cand.find(s=>s.st==='free')
+        || cand.find(s=>s.st==='free'&&!s.noop)
         || cand.filter(s=>s.st==='wash' && !s.note).sort((a,b)=>a.until-b.until)[0]
         || cand.find(s=>s.st==='on' && !s.note)
+        || cand.find(s=>s.noop)                   // a free pump, but nobody to run it
         || cand.find(s=>s.note);
       const same=pick && (sib(pick) || (claimed.get(pick.i)===fam && pick.st!=='down'));   // sibling running / ahead in the plan
       if(pick){ claimed.set(pick.i,fam); got.add(pick.i); }
-      res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
+      res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
@@ -1806,7 +1832,7 @@ function upcomingPumpCheck(now){
       if(!miss.length) return `${L} ✓`;
       const why=miss.map(r=> r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
                             : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}`
-                            : r.kind==='down' ? 'Breakdown' : 'no pump');
+                            : r.kind==='down' ? 'Breakdown' : r.kind==='noop' ? 'free but no operator' : 'no pump');
       const uniq=[...new Set(why)].join(' · ');
       return rs.length>1 ? `${L}: ${okN} of ${rs.length} free · ${uniq}` : `${L} ${uniq}`; });
     out.set(g,{cls:bad.every(r=>r.kind==='wash')?'warn':'bad', html:parts.join('<br>')});
@@ -1815,6 +1841,7 @@ function upcomingPumpCheck(now){
 }
 let pumpEditing=null;            // index of the note box being typed in — a refresh must not wipe it
 let pumpWashOpen=false;          // the ⏱ washing-time choices are showing
+let pumpOpsOpen=false;           // the 👷 operators choices are showing
 let pumpDraft=null;             // {code,text} typed in the open editor, kept across a data refresh
 let pumpFilter=null;            // 'on' | 'wash' | 'free' | 'down' (has a note) | null = all pumps
 function renderPumps(){
@@ -1827,11 +1854,14 @@ function renderPumps(){
   // compact: one line of counts, then one short row per pump; the note box opens only from ✎
   // the count chips are filters: tap = show only those pumps, tap again (or "All ✕") = every pump
   const chip=(k,c,v,l)=>`<span class="pm-chip${pumpFilter===k?' sel':''}${pumpFilter&&pumpFilter!==k?' dim':''}" data-f="${k}" style="--sc:${c}"><i></i><b>${v}</b> ${l}</span>`;
-  const counts=`<div class="pm-chips">${chip('on','var(--cyan)',n('on'),'Working')}${chip('wash','#fb923c',n('wash'),'Washing')}${chip('free','var(--green)',n('free'),'Available')}${chip('down','var(--rose)',down,'Breakdown')}${pumpFilter?'<span class="pm-chip pm-all" data-f="">All ✕</span>':''}</div>`;
+  const noop=state.filter(s=>s.noop).length, ops=opsCount(), opsBusy=state.filter(s=>s.st==='on'||s.st==='wash').length;
+  const counts=`<div class="pm-chips">${chip('on','var(--cyan)',n('on'),'Working')}${chip('wash','#fb923c',n('wash'),'Washing')}${chip('free','var(--green)',n('free')-noop,'Available')}${noop?chip('noop','#94a3b8',noop,'No operator'):''}${chip('down','var(--rose)',down,'Breakdown')}${pumpFilter?'<span class="pm-chip pm-all" data-f="">All ✕</span>':''}</div>`;
+  // 👷 operators: how many are busy out of the user's number; tap to change the number
+  const opsCtl=`<div class="pm-wash"><button class="pm-wash-btn pm-ops-btn${pumpOpsOpen?' open':''}" title="Pump operators: busy / total">👷 Operators <b>${Math.min(opsBusy,ops)}/${ops}</b> <span class="pm-caret">▾</span></button>${pumpOpsOpen?`<div class="pm-wash-opts pm-ops-opts">${OPS_CHOICES.map(k=>`<button class="pm-oopt pm-wopt${k===ops?' on':''}" data-n="${k}">${k}</button>`).join('')}</div>`:''}</div>`;
   // ⏱ washing time: one tap opens the choices, one tap on a choice sets it for every device
   const wh=washHours();
   const washCtl=`<div class="pm-wash"><button class="pm-wash-btn${pumpWashOpen?' open':''}" title="How long a pump stays busy after its last truck">⏱ Washing <b>${hLabel(wh)}</b> h <span class="pm-caret">▾</span></button>${pumpWashOpen?`<div class="pm-wash-opts">${WASH_CHOICES.map(h=>`<button class="pm-wopt${h===wh?' on':''}" data-h="${h}">${hLabel(h)}</button>`).join('')}</div>`:''}</div>`;
-  const keep=s=>!pumpFilter || (pumpFilter==='down'?!!s.note:s.st===pumpFilter);
+  const keep=s=>!pumpFilter || (pumpFilter==='down'?!!s.note:pumpFilter==='noop'?!!s.noop:pumpFilter==='free'?(s.st==='free'&&!s.noop):s.st===pumpFilter);
   // running pours that asked for a length nobody could give
   const short=[...byPour.entries()].filter(([g,a])=>a.end==null && a.missing.length);
   const warn=short.length?`<div class="pm-warn">${short.map(([g,a])=>`⚠ <b>${esc(site(g))}</b> — no ${esc(pumpLabel(a.missing))} pump free`).join('<br>')}</div>`:'';
@@ -1846,20 +1876,25 @@ function renderPumps(){
               : s.st==='on'&&s.setup ?`<span class="pm-k">Setting up</span> <b>${esc(site(s.pour))}</b>`
               : s.st==='on'   ? `<span class="pm-k">On</span> <b>${esc(site(s.pour))}</b>`
               : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
-              : s.st==='down' ? '<span class="pm-k">Breakdown</span>' : '<span class="pm-k">Available</span>';
+              : s.st==='down' ? '<span class="pm-k">Breakdown</span>'
+              : s.noop ? '<span class="pm-k">Available</span> <span class="tc-dim">· no operator</span>' : '<span class="pm-k">Available</span>';
     const editing=pumpEditing===String(s.i);
     const pn=pumpNote(s.i), d=editing&&pumpDraft?pumpDraft:{code:pn.code, text:pn.text};
     const editor=`<div class="pm-edit"><select class="pm-code" title="Which pump (code)"><option value="">code…</option>${codesFor(s.len).map(c=>`<option${c===d.code?' selected':''}>${c}</option>`).join('')}</select>
         <input class="pm-note" placeholder="problem…" value="${esc(d.text)}"><button class="pm-ok" title="Save">✓</button></div>`;
-    return `<div class="pm-row st-${s.st}">
+    return `<div class="pm-row st-${s.noop?'noop':s.st}">
       <div class="pm-top"><div class="pm-len">${s.len}${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
       <button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div>
       <div class="pm-mid">${editing?editor
         :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div>
       ${!editing&&(s.st==='on'||s.st==='wash')?`<button class="pm-free" data-i="${s.i}" title="Finished early — make it available now">✓ Available now</button>`:''}</div>`; }).join('');
-  area.innerHTML=`<div class="pm-head">${counts}${washCtl}</div>`+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
-  const wb=area.querySelector('.pm-wash-btn'); if(wb) wb.addEventListener('click',()=>{ pumpWashOpen=!pumpWashOpen; renderPumps(); });
-  area.querySelectorAll('.pm-wopt').forEach(b=>b.addEventListener('click',async()=>{
+  area.innerHTML=`<div class="pm-head">${counts}<div class="pm-ctls">${opsCtl}${washCtl}</div></div>`+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
+  const wb=area.querySelector('.pm-wash-btn:not(.pm-ops-btn)'); if(wb) wb.addEventListener('click',()=>{ pumpWashOpen=!pumpWashOpen; pumpOpsOpen=false; renderPumps(); });
+  const ob=area.querySelector('.pm-ops-btn'); if(ob) ob.addEventListener('click',()=>{ pumpOpsOpen=!pumpOpsOpen; pumpWashOpen=false; renderPumps(); });
+  area.querySelectorAll('.pm-oopt').forEach(b=>b.addEventListener('click',async()=>{
+    const k=String(+b.dataset.n); pumpOpsOpen=false; PUMPNOTE['ops']=k; stSet(KEY_PUMP,PUMPNOTE);
+    renderPumps(); renderViewTabs(); await syncPush('pump','ops',k); }));
+  area.querySelectorAll('.pm-wopt:not(.pm-oopt)').forEach(b=>b.addEventListener('click',async()=>{
     const h=String(+b.dataset.h); pumpWashOpen=false; PUMPNOTE['wash']=h; stSet(KEY_PUMP,PUMPNOTE);
     renderPumps(); renderViewTabs(); await syncPush('pump','wash',h); }));
   // finished early: free the pump now (shared like the notes; a later top-up truck cancels it)
@@ -2537,7 +2572,7 @@ function renderUpcoming(){
   for(const p of sorted){ if(inUnit.has(p)) continue;
     const ch=CH.get(p), mem=ch?ch.members.filter(m=>m.trucks===0 && rest.includes(m)):[p];
     if(mem.length>1){ mem.forEach(m=>inUnit.add(m)); units.push(mem); } else { inUnit.add(p); units.push([p]); } }
-  const timeLine=(rt,late,sent,p)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(afterName(rt.after,p))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
+  const timeLine=(rt,late,sent,p)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span><span class="uc-after">expected start ≈ now</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(afterName(rt.after,p))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
   el('upcomingArea').innerHTML='<div class="ucards">'+units.map(u=>{ const p=u[0], pc=PC.get(p), rt=RT.get(p), sent=pumpSent(p);
     const late=rt&&!rt.est&&now>rt.at&&!sent.length?Math.round((now-rt.at)/60000):0;   // pumps on their way / waiting behind its chain = not late
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
@@ -2551,7 +2586,7 @@ function renderUpcoming(){
         ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
         Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b>
         ${p.mix?('<br>Grade: <b>'+esc(p.mix)+'</b>'):''}
-      </div>${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
+      </div>${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${(CH.get(p)||{}).prev?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
     </div>`; }).join('')+'</div>';
   el('upcomingArea').querySelectorAll('.uc-snd').forEach(b=>b.addEventListener('click',async()=>{
     const k=decodeURIComponent(b.dataset.k), len=+b.dataset.len;
