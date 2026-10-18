@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000001">
+<meta name="app-build" content="20261018-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -444,6 +444,9 @@
   .uc-pump.warn{color:#fb923c;border-color:rgba(251,146,60,.45);background:rgba(251,146,60,.08)}
   .uc-pump.bad{color:var(--rose);border-color:rgba(251,113,133,.45);background:rgba(251,113,133,.08)}
   .uc-pump::before{content:"🏗 "}
+  .uc-time{font-family:var(--mono);font-size:22px;font-weight:800;color:var(--cyan);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .uc-time.late{color:#fb923c}
+  .uc-late{font-family:inherit;font-size:12px;font-weight:800;color:#fb923c;border:1px solid rgba(251,146,60,.5);background:rgba(251,146,60,.1);border-radius:99px;padding:1px 9px}
   .vtab .pm-alert{color:#fb923c;margin-inline-start:4px}
   .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
   .pm-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);border:1px solid var(--line2);border-radius:99px;padding:3px 10px;cursor:pointer;user-select:none}
@@ -885,6 +888,7 @@ function parsePlanTab(cols, matrix){
     pumps:findCol(header,['pump','مضخ','طلمب']),
     tem:findCol(header,['tem','temp','حرار']),
     date:findCol(header,['date','تاريخ','day','يوم']),          // per-request date -> filters the Upcoming tab
+    time:header.findIndex(h=>/^\s*(time|وقت|الوقت|ميعاد)\s*$/i.test(String(h||''))),   // planned start time (optional)
     es:header.findIndex(h=>/^\s*es\s*$/i.test(String(h||''))),   // unique per-pour ID (matches the trucks' ES)
   };
   if(c.code<0||c.req<0) return null;
@@ -897,7 +901,7 @@ function parsePlanTab(cols, matrix){
     const code=String(row[c.code]||'').trim().toUpperCase().replace(/\s+/g,'');
     if(!code) continue;
     entries.push({ code, es: c.es>=0?String(row[c.es]||'').trim():'', req: num(row[c.req]), rate: c.rate>=0?num(row[c.rate]):0,
-      date: c.date>=0?normPlanDate(row[c.date]):'',
+      date: c.date>=0?normPlanDate(row[c.date]):'', time: c.time>=0?normPlanTime(row[c.time]):'',
       mix: c.mix>=0?String(row[c.mix]||'').trim():'', client: c.client>=0?String(row[c.client]||'').trim():'',
       sc: c.sc>=0?String(row[c.sc]||'').trim():'', pumps: pumpCols.map(j=>String(row[j]==null?'':row[j]).trim()).find(v=>v&&v!=='-')||'',
       tem: c.tem>=0?String(row[c.tem]||'').trim():'' });
@@ -1000,6 +1004,15 @@ function normPlanDate(v){
   if(m){ const mo=MONTHS[m[2].toLowerCase()]; if(mo) return `${m[3]}-${pad(mo)}-${pad(+m[1])}`; }
   m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/); if(m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
   return '';
+}
+// Plan "Time" cell ("15:00", "3:00 PM", "3 pm", "7 م", "19.30") -> "HH:MM" 24 h ('' = no time)
+function normPlanTime(v){
+  let s=String(v==null?'':v).trim().toLowerCase(); if(!s||s==='-') return '';
+  const pm=/(pm|p\.m|م|مساء)/.test(s), am=/(am|a\.m|ص|صباح)/.test(s);
+  const m=s.match(/(\d{1,2})(?:[:.](\d{2}))?/); if(!m) return '';
+  let h=+m[1], mi=+(m[2]||0); if(h>23||mi>59) return '';
+  if(pm&&h<12) h+=12; if(am&&h===12) h=0;
+  return pad(h)+':'+pad(mi);
 }
 // Collect ALL dates in the plan sheet -> {min,max} "YYYY-MM-DD"
 function findPlanDateRange(matrix){
@@ -1600,19 +1613,37 @@ function pumpPlan(now){
   });
   return {byPour,state};
 }
-// Upcoming requests: are the pumps they ask for ready NOW? Requests are served in plan order and each
+// Planned time of each pour (plan "TIME" column + its DATE, today when the date is empty)
+// -> Map(pour -> {time:'HH:MM', at:ms}) — only pours that have a time
+const LATE_START=30*60000;       // not started this long after its planned time -> a Data check / notification
+function requestTimes(){
+  const out=new Map(), used=new Set(), today=new Date();
+  for(const g of (VD.summary||[])){
+    const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) && (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es))));
+    if(i<0) continue; used.add(i);
+    const r=PLAN_ROWS[i]; if(!r.time) continue;
+    const [hh,mi]=r.time.split(':').map(Number), d=r.date?r.date.split('-').map(Number):null;
+    const at=d?new Date(d[0],d[1]-1,d[2],hh,mi).getTime():new Date(today.getFullYear(),today.getMonth(),today.getDate(),hh,mi).getTime();
+    out.set(g,{time:r.time, at});
+  }
+  return out;
+}
+// Upcoming requests: are the pumps they ask for ready NOW (or, when the request has a time, AT that time)? Requests are served in plan order and each
 // pump counts for one request only (two requests for 63 + one free 63 = the second one is short).
 // -> Map(pour -> {cls:'ok'|'warn'|'bad', html})
 function upcomingPumpCheck(now){
   now=now||Date.now();
-  const {state}=pumpPlan(now), claimed=new Map(), out=new Map();   // pump -> family of the request that took it
+  const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
+  const RT=requestTimes(), stAt={};
+  const stateFor=g=>{ const t=RT.get(g); if(!t||t.at<=now) return base;      // timed request: the pumps as they will be then
+    return stAt[t.at]||(stAt[t.at]=pumpPlan(t.at).state); };
   const used=new Set(), rowOf=g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) &&
       (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es)))); if(i>=0) used.add(i); return i<0?1e9:i; };
   const list=(VD.upcoming||[]).map(g=>({g,i:rowOf(g)})).sort((a,b)=>a.i-b.i).map(x=>x.g);
   const site=g=>(g.client?g.client+' ':'')+g.elem;
   for(const g of list){
     const need=pumpReq(g.pumps); if(!need.length) continue;
-    const fam=pumpFam(g), got=new Set(), res=[];   // per requested pump: {len, kind, s}
+    const fam=pumpFam(g), got=new Set(), res=[], state=stateFor(g);   // per requested pump: {len, kind, s}
     for(const len of need){
       const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!claimed.has(s.i) || claimed.get(s.i)===fam));
       // a pump on / washing after the same client + element = this request just carries on with it
@@ -2164,6 +2195,15 @@ function collectChecks(pours){
     }
     for(const r of rows){ for(const f of (r.l.f||[])) items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`}); }
   }
+  // requests with a planned time (Upcoming): its time has come -> "Request due" (one notification),
+  // still not started 30 min later -> "Late start" (a second one)
+  try{ const RT=requestTimes(), now=Date.now();
+    for(const g of (VD.upcoming||[])){ const t=RT.get(g); if(!t||now<t.at) continue;
+      const nm=esc((g.client?g.client+' ':'')+g.elem), id=(g.esId||g.key)+'|'+t.at;
+      if(now-t.at<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
+        txt:`${nm} · planned ${t.time} — it is time to start${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`});
+      else items.push({id:`late|${id}`, kind:'Late start', cls:'gap',
+        txt:`${nm} · planned ${t.time} — not started yet (${mins(now-t.at)} late)`}); } }catch(e){}
   return items;
 }
 function renderCheckList(cb, items){
@@ -2322,10 +2362,17 @@ function renderUpcoming(){
   const ab=el('addRequestBtn'); if(ab) ab.href = planId ? `https://docs.google.com/spreadsheets/d/${planId}/edit` : '#';
   el('upTitle').textContent=`Upcoming — not started yet (${rest.length})`;
   if(!rest.length){ el('upcomingArea').innerHTML='<div class="state"><h3>All planned pours have started</h3></div>'; return; }
-  const sorted=rest.slice().sort((a,b)=>(b.planReq||0)-(a.planReq||0));
+  // order: requests with a time first (earliest on top), then the ones without a time in plan order
+  const RT=requestTimes(), now=Date.now(), used=new Set();
+  const pIdx=new Map((VD.summary||[]).map(g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) && (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es)))); if(i>=0) used.add(i); return [g,i<0?1e9:i]; }));
+  const sorted=rest.slice().sort((a,b)=>{ const ta=RT.get(a), tb=RT.get(b);
+    if(ta&&tb) return ta.at-tb.at; if(ta||tb) return ta?-1:1; return (pIdx.get(a)??1e9)-(pIdx.get(b)??1e9); });
   const PC=upcomingPumpCheck();
-  el('upcomingArea').innerHTML='<div class="ucards">'+sorted.map(p=>{ const pc=PC.get(p); return `
-    <div class="ucard">
+  const dayLbl=t=>{ const d=new Date(t), n=new Date(); return d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `; };
+  el('upcomingArea').innerHTML='<div class="ucards">'+sorted.map(p=>{ const pc=PC.get(p), rt=RT.get(p);
+    const late=rt&&now>rt.at?Math.round((now-rt.at)/60000):0;
+    return `
+    <div class="ucard">${rt?`<div class="uc-time${late?' late':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:''}</div>`:''}
       <div class="uc-code">${p.elem}</div>
       <div class="uc-req">${fmt(p.planReq,0)} <small>m³</small></div>
       <div class="uc-meta">
@@ -3101,26 +3148,30 @@ function planPhotoRows(){
   const PP=pumpPlan(now).byPour;
   const pumpsOf=g=>{ const a=PP.get(g); const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps); return pumpLabel(lens); };
   const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
-    qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g)});
+    qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g),
+    time:finished?'':((PR.get(g)||{}).time||'')});   // planned time, written left of the row (not on finished pours)
   const pours=(VD.summary||[]).filter(g=>{ const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0; });
   // order: finished by finish time (first to finish on top) → running by start time → not started in plan order
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
   const first=g=>{ const a=ts(g); return a.length?Math.min(...a):Infinity; };
   const last=g=>{ const a=ts(g); return a.length?Math.max(...a):Infinity; };
   // plan row of each upcoming pour: by its ES, else by its code (split pours "30UMA #2" by base); each row used once
-  const usedRow=new Set(), PI=new Map();
-  for(const g of (VD.upcoming||[])){
+  const usedRow=new Set(), PI=new Map(), PR=new Map();
+  for(const g of (VD.summary||[])){
     const i=(PLAN_ROWS||[]).findIndex((r,j)=>!usedRow.has(j) && (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es))));
-    if(i>=0) usedRow.add(i); PI.set(g,i<0?1e9:i);
+    if(i>=0){ usedRow.add(i); PR.set(g,PLAN_ROWS[i]); } PI.set(g,i<0?1e9:i);
   }
-  const planIdx=g=>PI.get(g);
+  const planIdx=g=>PI.has(g)?PI.get(g):1e9;
+  // not started: the ones with a time first, by date + time; the rest after them in plan order
+  const today=new Date(), todayKey=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  const when=g=>{ const r=PR.get(g); return r&&r.time ? (r.date||todayKey)+' '+r.time : '~'; };
   const fin=[], run=[];
   for(const g of pours){
     const done=!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
     (done?fin:run).push(g);
   }
   fin.sort((a,b)=>last(a)-last(b)); run.sort((a,b)=>first(a)-first(b));
-  const up=(VD.upcoming||[]).slice().sort((a,b)=>planIdx(a)-planIdx(b));
+  const up=(VD.upcoming||[]).slice().sort((a,b)=>when(a).localeCompare(when(b))||planIdx(a)-planIdx(b));
   return fin.map(g=>row(g,true,true,plantsOf(g,false)))
     .concat(run.map(g=>row(g,true,false,plantsOf(g,true))), up.map(g=>row(g,false,false,'')));
 }
@@ -3129,21 +3180,23 @@ function drawPlanPhoto(rows, at){
   const S=2, W=1500, PAD=40, HEAD=150, TH=64, RH=58;
   const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305],['Working\nPumps',170]];
   const tableW=cols.reduce((s,c)=>s+c[1],0), H=HEAD+TH+Math.max(rows.length,1)*RH+PAD;
-  const cv=document.createElement('canvas'); cv.width=(tableW+PAD*2)*S; cv.height=H*S;
+  // planned times are written OUTSIDE the table, left of their row (like on the paper) — margin only when any
+  const TM=rows.some(r=>r.time)?96:0, L=PAD+TM;
+  const cv=document.createElement('canvas'); cv.width=(tableW+PAD*2+TM)*S; cv.height=H*S;
   const x=cv.getContext('2d'); x.scale(S,S);
-  x.fillStyle='#ffffff'; x.fillRect(0,0,tableW+PAD*2,H);
+  x.fillStyle='#ffffff'; x.fillRect(0,0,tableW+PAD*2+TM,H);
   // header
   x.textBaseline='alphabetic';
   if(NCM_LOGO.complete && NCM_LOGO.naturalWidth){ const lh=72, lw=lh*NCM_LOGO.naturalWidth/NCM_LOGO.naturalHeight; x.drawImage(NCM_LOGO,PAD,PAD-4,lw,lh); }
   else { x.fillStyle='#1d9bd1'; x.font='800 54px Arial'; x.fillText('NCM',PAD,PAD+48);
     x.fillStyle='#8a9aa8'; x.font='600 12px Arial'; x.fillText('NUCLEAR CONCRETE MIXES',PAD+2,PAD+68); }
   const d=new Date(at); const dd=`${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()}`;
-  x.fillStyle='#1f2a44'; x.textAlign='center'; x.font='700 26px Arial'; x.fillText('Daily Production Plan',PAD+tableW/2,PAD+58);
-  x.font='600 18px Arial'; x.fillStyle='#3a4a63'; x.fillText('Date: '+dd,PAD+tableW/2,PAD+26);
+  x.fillStyle='#1f2a44'; x.textAlign='center'; x.font='700 26px Arial'; x.fillText('Daily Production Plan',L+tableW/2,PAD+58);
+  x.font='600 18px Arial'; x.fillStyle='#3a4a63'; x.fillText('Date: '+dd,L+tableW/2,PAD+26);
   x.textAlign='left';
   // table header
-  let y=HEAD, cx=PAD;
-  x.fillStyle='#dbe7f5'; x.fillRect(PAD,y,tableW,TH);
+  let y=HEAD, cx=L;
+  x.fillStyle='#dbe7f5'; x.fillRect(L,y,tableW,TH);
   x.strokeStyle='#5b6b80'; x.lineWidth=1.2;
   x.fillStyle='#1f2a44'; x.font='700 16px Arial'; x.textAlign='center'; x.textBaseline='middle';
   cols.forEach(([t,w])=>{ const ls=t.split('\n'); ls.forEach((l,i)=>x.fillText(l,cx+w/2,y+TH/2+(i-(ls.length-1)/2)*19)); cx+=w; });
@@ -3168,9 +3221,10 @@ function drawPlanPhoto(rows, at){
   const fit=(s,w,font)=>{ x.font=font; s=String(s==null?'':s); if(x.measureText(s).width<=w-14) return s; while(s.length>1&&x.measureText(s+'…').width>w-14) s=s.slice(0,-1); return s+'…'; };
   y+=TH;
   rows.forEach((r,i)=>{
-    x.fillStyle=r.finished?'#f1faf4':(r.started?'#f3f8ff':'#ffffff'); x.fillRect(PAD,y,tableW,RH);
+    x.fillStyle=r.finished?'#f1faf4':(r.started?'#f3f8ff':'#ffffff'); x.fillRect(L,y,tableW,RH);
+    if(r.time){ x.save(); x.fillStyle='#1d4ed8'; x.font='700 22px Arial'; x.textAlign='right'; x.fillText(r.time,L-14,y+RH/2+1); x.restore(); }
     const v=[r.started?'✓':'', r.finished?'✓':'', r.sc, r.client, r.code, r.qty!=null?fmt(r.qty,0)+' m³':'—', r.tem||'—', r.rate?fmt(r.rate,0)+' m³/h':'—', r.plants, r.pumps||'—'];
-    cx=PAD;
+    cx=L;
     v.forEach((val,k)=>{ const w=cols[k][1];
       const check=k<2, font=check?'800 30px Arial':(k===4?'700 21px Arial':'500 20px Arial');
       x.fillStyle=check?'#15803d':'#1f2a44';
@@ -3186,11 +3240,11 @@ function drawPlanPhoto(rows, at){
       cx+=w; });
     y+=RH;
   });
-  if(!rows.length){ x.fillStyle='#6b7a90'; x.font='italic 18px Arial'; x.fillText('No pours today',PAD+tableW/2,y+RH/2); y+=RH; }
+  if(!rows.length){ x.fillStyle='#6b7a90'; x.font='italic 18px Arial'; x.fillText('No pours today',L+tableW/2,y+RH/2); y+=RH; }
   // grid
   const top=HEAD, bot=y; x.beginPath();
-  for(let yy=top; yy<=bot+0.1; yy+= (yy===top?TH:RH)) { x.moveTo(PAD,yy); x.lineTo(PAD+tableW,yy); }
-  cx=PAD; x.moveTo(cx,top); x.lineTo(cx,bot); cols.forEach(([t,w])=>{ cx+=w; x.moveTo(cx,top); x.lineTo(cx,bot); });
+  for(let yy=top; yy<=bot+0.1; yy+= (yy===top?TH:RH)) { x.moveTo(L,yy); x.lineTo(L+tableW,yy); }
+  cx=L; x.moveTo(cx,top); x.lineTo(cx,bot); cols.forEach(([t,w])=>{ cx+=w; x.moveTo(cx,top); x.lineTo(cx,bot); });
   x.stroke();
   return cv;
 }
