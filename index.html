@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261017-000012">
+<meta name="app-build" content="20261018-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -463,6 +463,8 @@
   .pm-ed{flex:none;width:24px;height:22px;padding:0;border-radius:6px;border:1px solid var(--line2);background:transparent;color:var(--faint);font-size:12px;cursor:pointer}
   .pm-ed.on{color:var(--rose);border-color:var(--rose)}
   .pm-note{width:100%;margin-top:3px;font:inherit;font-size:12.5px;color:var(--ink);background:transparent;border:1px solid var(--rose);border-radius:8px;padding:5px 8px}
+  .pm-free{margin-top:5px;width:100%;font:inherit;font-size:11.5px;font-weight:700;color:var(--green);background:transparent;
+    border:1px solid rgba(52,211,153,.45);border-radius:7px;padding:3px 6px;cursor:pointer}
   .pm-edit{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;align-items:stretch}
   .pm-edit .pm-note{flex:1;min-width:0;margin-top:0}
   .pm-code{flex:1 1 100%;font:inherit;font-size:12.5px;color:var(--ink);background:var(--bg2,#0f172a);border:1px solid var(--rose);border-radius:8px;padding:4px 4px}
@@ -476,7 +478,7 @@
     .pm-st{font-size:15.5px;margin-top:4px} .pm-nt{font-size:13.5px;margin-top:2px}
     .pm-ed{width:30px;height:28px;font-size:14px}
     .pm-chip{font-size:14px;padding:5px 14px} .pm-note{font-size:14px}
-    .pm-bd{font-size:11.5px} .pm-code-tag{font-size:12.5px} .pm-code{font-size:14px}
+    .pm-bd{font-size:11.5px} .pm-code-tag{font-size:12.5px} .pm-code{font-size:14px} .pm-free{font-size:13px;padding:4px 8px}
   }
   .pm-warn{margin-top:12px;padding:9px 12px;border-radius:11px;font-size:13px;color:#fb923c;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.35)}
   .tc-sortbar{display:flex;justify-content:flex-end;margin:0 0 8px}
@@ -886,6 +888,9 @@ function parsePlanTab(cols, matrix){
     es:header.findIndex(h=>/^\s*es\s*$/i.test(String(h||''))),   // unique per-pour ID (matches the trucks' ES)
   };
   if(c.code<0||c.req<0) return null;
+  // there may be more than one "Pumps" column (an old formula one, hidden, + one typed by hand):
+  // per row, the RIGHT-most one that holds something wins
+  const pumpCols=header.map((h,j)=>/pump|مضخ|طلمب/i.test(String(h||''))?j:-1).filter(j=>j>=0).reverse();
   const entries=[];
   for(const row of rows){
     if(!row) continue;
@@ -894,7 +899,7 @@ function parsePlanTab(cols, matrix){
     entries.push({ code, es: c.es>=0?String(row[c.es]||'').trim():'', req: num(row[c.req]), rate: c.rate>=0?num(row[c.rate]):0,
       date: c.date>=0?normPlanDate(row[c.date]):'',
       mix: c.mix>=0?String(row[c.mix]||'').trim():'', client: c.client>=0?String(row[c.client]||'').trim():'',
-      sc: c.sc>=0?String(row[c.sc]||'').trim():'', pumps: c.pumps>=0?String(row[c.pumps]||'').trim():'',
+      sc: c.sc>=0?String(row[c.sc]||'').trim():'', pumps: pumpCols.map(j=>String(row[j]==null?'':row[j]).trim()).find(v=>v&&v!=='-')||'',
       tem: c.tem>=0?String(row[c.tem]||'').trim():'' });
   }
   return aggregatePlanRows(entries);
@@ -1554,29 +1559,42 @@ function pumpNote(i){ const v=String(PUMPNOTE[String(i)]||''), m=v.match(/^(\d{1
   return c?{t, code:c[1].trim(), text:c[2].trim()}:{t, code:'', text:raw}; }
 function pumpBroken(i,at){ const n=pumpNote(i); return !!(n.text||n.code) && (at==null || at>=n.t); }
 // -> { byPour: Map(pour -> {need:[len], got:[pumpIdx], missing:[len]}), state:[{i,len,st,pour,until,note}] }
+// Same client + same element (e.g. 3 requests of Nikimt 10UQA poured one after the other): they keep the
+// SAME pumps, so a follow-up request may take pumps still busy/washing on its sibling.
+function pumpFam(g){ return String(g.client||'').trim().toLowerCase()+'|'+
+  String(g.base||g.elem||'').replace(/\s*#\d+$/,'').replace(/\*+$/,'').trim().toUpperCase(); }
+// "Available now" pressed on a busy/washing pump: stored as PUMPNOTE['r<i>'] = ms. It frees the pump from
+// that moment — but only for the pour it was on; a truck that loads AFTER the press (a top-up) cancels it.
+function pumpRelease(i){ const v=+String(PUMPNOTE['r'+i]||'').trim(); return v>0?v:0; }
 function pumpPlan(now){
   now=now||Date.now();
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
   const pours=(VD.summary||[]).filter(g=>g.trucks>0 && pumpReq(g.pumps).length && ts(g).length).map(g=>{
     const a=ts(g), fin=!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
-    return {g, start:Math.min(...a), end:fin?Math.max(...a):null}; }).sort((a,b)=>a.start-b.start);
-  const busy=PUMPS.map(()=>[]);   // per pump: [{start, free, p}]
+    return {g, start:Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:pumpFam(g)}; }).sort((a,b)=>a.start-b.start);
+  const busy=PUMPS.map(()=>[]);   // per pump: [{start, free, end, p}]
   const byPour=new Map();
   for(const p of pours){
     const need=pumpReq(p.g.pumps), got=[], missing=[];
+    const ok=j=>!got.includes(j) && !pumpBroken(j,p.start) &&
+      busy[j].every(b=>(b.free!=null && b.free<=p.start) || b.p.fam===p.fam);
     for(const len of need){
-      const i=PUMPS.findIndex((L,j)=>L===len && !got.includes(j) && !pumpBroken(j,p.start) &&
-        busy[j].every(b=>b.free!=null && b.free<=p.start));
+      // first the pumps its sibling (same client + element) is holding, then the first free one in order
+      let i=PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>p.start)));
+      if(i<0) i=PUMPS.findIndex((L,j)=>L===len && ok(j));
       if(i<0){ missing.push(len); continue; }
-      got.push(i); busy[i].push({start:p.start, free:p.end==null?null:p.end+PUMP_WASH, end:p.end, p});
+      let free=p.end==null?null:p.end+PUMP_WASH;
+      const rel=pumpRelease(i); if(rel && rel>=p.start && rel>=p.last) free=free==null?rel:Math.min(free,rel);
+      got.push(i); busy[i].push({start:p.start, free, end:p.end, p});
     }
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
   }
   const state=PUMPS.map((len,i)=>{
     const pn=pumpNote(i), note=pn.text||(pn.code?'Breakdown':''), code=pn.code;
-    const cur=busy[i].find(b=>b.start<=now && (b.free==null || now<b.free));
+    const live=busy[i].filter(b=>b.start<=now && (b.free==null || now<b.free));
+    const cur=live.find(b=>b.end==null&&b.free==null) || live[live.length-1];   // a running pour wins over a washing sibling
     let st='free', pour=null, until=null;
-    if(cur){ pour=cur.p.g; if(cur.end==null) st='on'; else { st='wash'; until=cur.free; } }
+    if(cur){ pour=cur.p.g; if(cur.end==null&&cur.free==null) st='on'; else { st='wash'; until=cur.free; } }
     if(note && st==='free') st='down';
     return {i,len,st,pour,until,note,code};
   });
@@ -1587,27 +1605,34 @@ function pumpPlan(now){
 // -> Map(pour -> {cls:'ok'|'warn'|'bad', html})
 function upcomingPumpCheck(now){
   now=now||Date.now();
-  const {state}=pumpPlan(now), claimed=new Set(), out=new Map();
+  const {state}=pumpPlan(now), claimed=new Map(), out=new Map();   // pump -> family of the request that took it
   const used=new Set(), rowOf=g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) &&
       (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es)))); if(i>=0) used.add(i); return i<0?1e9:i; };
   const list=(VD.upcoming||[]).map(g=>({g,i:rowOf(g)})).sort((a,b)=>a.i-b.i).map(x=>x.g);
   const site=g=>(g.client?g.client+' ':'')+g.elem;
   for(const g of list){
     const need=pumpReq(g.pumps); if(!need.length) continue;
-    const res=[];                                    // per requested pump: {len, kind, s}
+    const fam=pumpFam(g), got=new Set(), res=[];   // per requested pump: {len, kind, s}
     for(const len of need){
-      const cand=state.filter(s=>s.len===len && !claimed.has(s.i));
-      const pick=cand.find(s=>s.st==='free')
+      const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!claimed.has(s.i) || claimed.get(s.i)===fam));
+      // a pump on / washing after the same client + element = this request just carries on with it
+      const sib=s=>!s.note && s.pour && pumpFam(s.pour)===fam && (s.st==='on'||s.st==='wash');
+      const pick=cand.find(s=>sib(s) || (claimed.get(s.i)===fam && s.st!=='down'))
+        || cand.find(s=>s.st==='free')
         || cand.filter(s=>s.st==='wash' && !s.note).sort((a,b)=>a.until-b.until)[0]
         || cand.find(s=>s.st==='on' && !s.note)
         || cand.find(s=>s.note);
-      if(pick) claimed.add(pick.i);
-      res.push({len, kind:!pick?'none':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick});
+      const same=pick && (sib(pick) || (claimed.get(pick.i)===fam && pick.st!=='down'));   // sibling running / ahead in the plan
+      if(pick){ claimed.set(pick.i,fam); got.add(pick.i); }
+      res.push({len, kind:!pick?'none':same?'same':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
+        after:same?(sib(pick)?site(pick.pour):site(g)+' (previous request)'):''});
     }
-    const bad=res.filter(r=>r.kind!=='ok');
-    if(!bad.length){ out.set(g,{cls:'ok', html:`Pumps ready: <b>${esc(pumpLabel(need))}</b>`}); continue; }
+    const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same');
+    if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
+      out.set(g,{cls:'ok', html:sameOn?`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(pumpLabel(need))}</b>`
+                                     :`Pumps ready: <b>${esc(pumpLabel(need))}</b>`}); continue; }
     const byLen={}; res.forEach(r=>{ (byLen[r.len]=byLen[r.len]||[]).push(r); });
-    const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok').length, miss=rs.filter(r=>r.kind!=='ok');
+    const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok'||r.kind==='same').length, miss=rs.filter(r=>r.kind!=='ok'&&r.kind!=='same');
       if(!miss.length) return `${L} ✓`;
       const why=miss.map(r=> r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
                             : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}`
@@ -1648,8 +1673,14 @@ function renderPumps(){
       <div class="pm-top"><div class="pm-len">${s.len}${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
       <button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div>
       <div class="pm-mid">${editing?editor
-        :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div></div>`; }).join('');
+        :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div>
+      ${!editing&&(s.st==='on'||s.st==='wash')?`<button class="pm-free" data-i="${s.i}" title="Finished early — make it available now">✓ Available now</button>`:''}</div>`; }).join('');
   area.innerHTML=counts+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
+  // finished early: free the pump now (shared like the notes; a later top-up truck cancels it)
+  area.querySelectorAll('.pm-free').forEach(b=>b.addEventListener('click',async()=>{
+    const i=b.dataset.i; if(!confirm(`Make pump ${PUMPS[i]} available now?`)) return;
+    const val=String(Date.now()); PUMPNOTE['r'+i]=val; stSet(KEY_PUMP,PUMPNOTE); renderPumps();
+    await syncPush('pump','r'+i,val); }));
   area.querySelectorAll('.pm-chip[data-f]').forEach(c=>c.addEventListener('click',()=>{
     const f=c.dataset.f||null; pumpFilter=(pumpFilter===f)?null:f; renderPumps(); }));
   // ✎ opens the editor (code + problem); ✓ or Enter saves, ✎ again or Esc closes without saving.
