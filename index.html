@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000008">
+<meta name="app-build" content="20261019-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -726,6 +726,7 @@
   .cl-act .btn{padding:3px 10px;font-size:12px}
   .cl-foot{padding:8px 0 2px;font-size:12px}
   .cl-auto{font-size:10.5px;font-weight:700;color:var(--amber);margin-top:2px}
+  .cl-idle{font-size:10.5px;font-weight:700;color:var(--muted);margin-top:2px}
   .cl-row>div:first-child{min-width:0}
   @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
     /* older engines: fall back to solid panels so nothing turns unreadable */
@@ -2525,18 +2526,22 @@ function renderSummary(){
 
   // Closed Pours (read-only): each pour the user closed + what it actually poured. A small Re-open per row.
   // Hide = off this list AND off the WhatsApp plan photo, on every device (still counted everywhere else)
-  const dlAll=(VD.doneList||[]).slice().sort((a,b)=>(b.endMax||0)-(a.endMax||0));
+  // + the auto-closed ones (no truck for 2 h, quantity not reached): they are finished for the photo too, so list them here
+  const dlAll=(VD.doneList||[]).concat((VD.closed||[]).filter(g=>!DONE[doneKey(g)])).sort((a,b)=>(b.endMax||0)-(a.endMax||0));
+  const isAuto=g=>!DONE[doneKey(g)];
   const dl=dlAll.filter(g=>!closedHidden(g)), hid=dlAll.filter(closedHidden);
   if(el('closedCard')) el('closedCard').style.display = dlAll.length ? '' : 'none';
   const closedRow=(g,h)=>`<div class="cl-row${h?' cl-hid':''}">
-      <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${h&&PUMPNOTE[hideKey(g)]!=='1'?`<div class="cl-auto">auto · finished before ${cutLabel(planCutAt())}</div>`:''}${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${isAuto(g)?`<div class="cl-idle">auto-closed · no truck since ${cutLabel(g.endMax)}${g.required!=null?` · ${fmt(g.delivered,0)} of ${fmt(g.required,0)} m³`:''}</div>`:''}${h&&PUMPNOTE[hideKey(g)]!=='1'?`<div class="cl-auto">auto · finished before ${cutLabel(planCutAt())}</div>`:''}${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div class="cl-act"><span style="font-family:var(--mono);font-size:13px"><b style="color:var(--green)">${fmt(g.delivered,0)}</b> m³<span class="cl-pw"> poured</span></span>
         <button class="btn ghost hide-btn" data-h="${encodeURIComponent(hideKey(g))}" data-on="${h?(autoHidden(g)?'0':''):'1'}" title="${h?'Show it again in this list and in the plan photo':'Take it off this list and off the plan photo (every device)'}">${h?'Show':'Hide'}</button>
-        <button class="btn ghost reopen-btn" data-e="${encodeURIComponent(doneKey(g))}">Re-open</button></div>
+        ${isAuto(g)?`<button class="btn ghost close-btn" data-e="${encodeURIComponent(doneKey(g))}" title="Close it for good (Done)">✓ Done</button>`
+          :`<button class="btn ghost reopen-btn" data-e="${encodeURIComponent(doneKey(g))}">Re-open</button>`}</div>
     </div>`;
   el('closedList').innerHTML = (dl.length?dl.map(g=>closedRow(g,false)).join(''):'<div class="muted" style="font-size:13px;padding:8px 0">All closed pours are hidden.</div>')
     + (hid.length?`<div class="cl-foot"><span class="filter-clear" id="clHidTog">${showHiddenClosed?'Hide':'Show'} hidden (${hid.length})</span></div>${showHiddenClosed?hid.map(g=>closedRow(g,true)).join(''):''}`:'');
   el('closedList').querySelectorAll('.reopen-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), false)));
+  el('closedList').querySelectorAll('.close-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), true)));
   el('closedList').querySelectorAll('.hide-btn').forEach(b=>b.addEventListener('click',async()=>{
     const k=decodeURIComponent(b.dataset.h), v=b.dataset.on;   // '1' hide · '0' show although before the auto-hide time · '' back to normal
     if(v) PUMPNOTE[k]=v; else delete PUMPNOTE[k];
@@ -3309,7 +3314,7 @@ function cutTemp(){ const m=String(PUMPNOTE['hcut']||'').match(/^(\d{4})-(\d{2})
   return (till!=null && Date.now()>=till) ? null : {at,till}; }                               // expired -> the daily one again
 function planCutAt(){ const tmp=cutTemp(); if(tmp) return tmp.at; const hm=cutDaily(); return hm?lastDailyCut(hm,Date.now()):null; }
 const cutLabel=t=>{ const d=new Date(t), n=new Date(); return (d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `)+timeShort(t); };
-const pourFinished=g=>!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
+const pourFinished=g=>pourDone(g);
 function autoHidden(g){ const c=planCutAt(); return c!=null && pourFinished(g) && g.endMax!=null && g.endMax<c; }
 function closedHidden(g){ const v=PUMPNOTE[hideKey(g)]; if(v==='1') return pourFinished(g); if(v==='0') return false; return autoHidden(g); }
 let cutEditing=false;   // the "Change for now" picker is open
@@ -3990,8 +3995,7 @@ function planPhotoRows(){
   const fin=[], run=[];
   for(const g of pours){
     if(closedHidden(g)) continue;   // hidden from Closed Pours (by hand, or finished before the auto-hide time) = not in the photo either
-    const done=!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
-    (done?fin:run).push(g);
+    (pourDone(g)?fin:run).push(g);   // closed, quantity reached, or auto-closed (no truck for 2 h) = finished
   }
   fin.sort((a,b)=>last(a)-last(b)); run.sort((a,b)=>first(a)-first(b));
   const up=(VD.upcoming||[]).slice().sort((a,b)=>when(a).localeCompare(when(b))||planIdx(a)-planIdx(b));
