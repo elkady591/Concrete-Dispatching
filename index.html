@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000003">
+<meta name="app-build" content="20261019-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -542,6 +542,8 @@
   .uc-pl{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;
     border:1px dashed rgba(148,163,184,.5);border-radius:99px;padding:2px 10px;cursor:pointer}
   .uc-pl.on{color:#0b1020;background:#a78bfa;border:1px solid #a78bfa}
+  .uc-pl.uc-plsame{font-family:inherit;font-size:11.5px;border-style:dashed}
+  .uc-pl.uc-plsame.on{color:#0b1020;background:#34d399;border:1px solid #34d399}
   .uc-plwarn{margin-top:6px;font-size:12px;line-height:1.5;color:#fb923c} .uc-plwarn b{font-family:var(--mono)}
   .uc-sends{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px;padding-top:7px;border-top:1px dashed rgba(148,163,184,.25)}
   .uc-snd{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;
@@ -1099,18 +1101,40 @@ function parsePlanTab(cols, matrix){
   // there may be more than one "Pumps" column (an old formula one, hidden, + one typed by hand):
   // per row, the RIGHT-most one that holds something wins
   const pumpCols=header.map((h,j)=>/pump|مضخ|طلمب/i.test(String(h||''))?j:-1).filter(j=>j>=0).reverse();
-  const entries=[];
+  const entries=[], csvP=planCsvPumps();
   for(const row of rows){
     if(!row) continue;
     const code=String(row[c.code]||'').trim().toUpperCase().replace(/\s+/g,'');
     if(!code) continue;
-    entries.push({ code, es: c.es>=0?String(row[c.es]||'').trim():'', req: num(row[c.req]), rate: c.rate>=0?num(row[c.rate]):0,
+    const es0=c.es>=0?String(row[c.es]||'').trim():'', req0=num(row[c.req]);
+    let pumps=pumpCols.map(j=>String(row[j]==null?'':row[j]).trim()).find(v=>v&&v!=='-')||'';
+    if(!pumps) pumps=csvP(es0,code,req0);   // gviz drops "63-63" in a column of plain numbers — the CSV copy keeps it
+    entries.push({ code, es: es0, req: req0, rate: c.rate>=0?num(row[c.rate]):0,
       date: c.date>=0?normPlanDate(row[c.date]):'', time: c.time>=0?normPlanTime(row[c.time]):'', after: c.time>=0?normPlanAfter(row[c.time]):'',
       mix: c.mix>=0?String(row[c.mix]||'').trim():'', client: c.client>=0?String(row[c.client]||'').trim():'',
-      sc: c.sc>=0?String(row[c.sc]||'').trim():'', pumps: pumpCols.map(j=>String(row[j]==null?'':row[j]).trim()).find(v=>v&&v!=='-')||'',
+      sc: c.sc>=0?String(row[c.sc]||'').trim():'', pumps,
       tem: c.tem>=0?String(row[c.tem]||'').trim():'' });
   }
   return aggregatePlanRows(entries);
+}
+// The plan's Pumps column mixes numbers ("63") and text ("63-63"); gviz types the column as a number and returns
+// the text ones EMPTY. /export?format=csv keeps every cell as written, so the pumps are also read from there.
+let PLAN_CSV=null;   // rows of the plan's first tab as CSV (filled by loadPlanCsv on every pull)
+async function loadPlanCsv(sid){
+  try{ const r=await fetch(`https://docs.google.com/spreadsheets/d/${sid}/export?format=csv&_=${Date.now()}`,{cache:'no-store'});
+    if(!r.ok) return; const t=await r.text(); if(/^\s*</.test(t)) return;   // a sign-in page, not CSV
+    PLAN_CSV=t.split(/\r?\n/).map(parseCsvLine); }catch(e){}
+}
+// -> function(es, code, req) -> the pumps written for that request ('' when none / no CSV). Each CSV row is used once.
+function planCsvPumps(){
+  const M=PLAN_CSV; if(!M||!M.length) return ()=>'';
+  const hi=M.findIndex(r=>r.some(x=>/pump/i.test(x))&&r.some(x=>/code/i.test(x))); if(hi<0) return ()=>'';
+  const H=M[hi], pc=H.map((h,j)=>/pump|مضخ|طلمب/i.test(h)?j:-1).filter(j=>j>=0).reverse();
+  const ci=H.findIndex(h=>/code/i.test(h)), ei=H.findIndex(h=>/^\s*es\s*$/i.test(h)), qi=H.findIndex(h=>/quant|qty|m3/i.test(h));
+  const list=M.slice(hi+1).map(r=>({es:ei>=0?String(r[ei]||'').trim():'', code:String(r[ci]||'').trim().toUpperCase().replace(/\s+/g,''),
+    q:qi>=0?num(r[qi]):0, p:pc.map(j=>String(r[j]||'').trim()).find(v=>v&&v!=='-')||'', used:false})).filter(x=>x.code);
+  return (es,code,req)=>{ const x=list.find(x=>!x.used && (es&&x.es?x.es===es:(x.code===code&&Math.abs(x.q-req)<0.5)));
+    if(!x) return ''; x.used=true; return x.p; };
 }
 
 // Fallback parser for a positional plan sheet with no clear headers:
@@ -1810,7 +1834,19 @@ function sentKey(g){ return 's'+(g.esId||g.key); }
 // Planned plants of a request, chosen in the app (Upcoming card chips), shared like the pump notes:
 // PUMPNOTE['p<request id>'] = "L1,V3". Shown light in the plan picture until the pour starts (then the real ones).
 function plantKey(g){ return 'p'+(g.esId||g.key); }
-function planPlants(k){ return String(PUMPNOTE[k]||'').split(',').map(s=>s.trim()).filter(Boolean); }
+// planned plants of a request; '=same' = "Same working plants": whatever the request it follows (same client +
+// element before it, or its "after" link) is ACTUALLY loading from now — follows it by itself as that changes
+const SAME_PL='=same';
+function planPlants(k,d){ const v=String(PUMPNOTE[k]||'');
+  if(v===SAME_PL){ const g=(VD.summary||[]).find(x=>plantKey(x)===k); return g?samePlants(g,(d||0)+1):[]; }
+  return v.split(',').map(s=>s.trim()).filter(Boolean); }
+function plantPred(g){ const c=pourChains().get(g); if(c&&c.prev) return c.prev; return pourLinks().get(g)||null; }
+function samePlants(g,d){ const p=plantPred(g); if(!p||(d||0)>6) return [];
+  if(p.trucks>0){ const ts=(p.loads||[]).map(l=>l.t).filter(t=>t!=null), last=ts.length?Math.max(...ts):0;
+    // the plants of its recent trucks (the last 2 h of that pour), else every plant it used
+    const rec=[...new Set((p.loads||[]).filter(l=>l.p&&l.t!=null&&last-l.t<ACTIVE_WINDOW).map(l=>l.p))];
+    return (rec.length?rec:[...new Set((p.loads||[]).map(l=>l.p).filter(Boolean))]).sort(); }
+  return planPlants(plantKey(p),d); }
 // Is a plant busy at a given moment? = it loaded a pour that is still open within the last 2 h, and that pour is
 // expected to end after the moment (actual-rate finish, else target). -> {g, till} or null
 function plantBusy(st, at){
@@ -2884,8 +2920,10 @@ function renderUpcoming(){
   // 🏭 one chip per plant; lit = planned for this card's requests
   // + a warning for each chosen plant still busy on another open pour at this request's time (now if it has none)
   const plantChips=u=>{ const keys=u.map(g=>plantKey(g)), on=planPlants(keys[0]), t=RT.get(u[0]), at=t&&t.at>now?t.at:now;
-    const warns=on.map(st=>{ const b=plantBusy(st,at); return b&&!u.includes(b.g)?`⚠ <b>${esc(st)}</b> busy on ${esc((b.g.client?b.g.client+' ':'')+b.g.elem)}${b.till?` till ≈${timeShort(b.till)}`:''}`:''; }).filter(Boolean);
-    return `<div class="uc-plants">🏭 ${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="Planned plant">${esc(st)}</button>`).join('')}</div>${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
+    const pred=plantPred(u[0]), same=PUMPNOTE[keys[0]]===SAME_PL;
+    const warns=on.map(st=>{ const b=plantBusy(st,at); return b&&!u.includes(b.g)&&b.g!==pred?`⚠ <b>${esc(st)}</b> busy on ${esc((b.g.client?b.g.client+' ':'')+b.g.elem)}${b.till?` till ≈${timeShort(b.till)}`:''}`:''; }).filter(Boolean);
+    const sameBtn=pred?`<button class="uc-pl uc-plsame${same?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-same="1" title="Use the plants ${esc(site(pred))} is working with — follows them by itself">${same?'✓ ':''}Same working plants</button>`:'';
+    return `<div class="uc-plants">🏭 ${sameBtn}${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="Planned plant">${esc(st)}</button>`).join('')}</div>${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
   const sendChips=p=>{ const need=pumpReq(p.pumps); if(!need.length) return '';
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
@@ -2930,8 +2968,11 @@ function renderUpcoming(){
   // 🏭 planned plants: tap a plant to add / remove it — the same choice goes to every request of the card
   el('upcomingArea').querySelectorAll('.uc-pl').forEach(b=>b.addEventListener('click',async()=>{
     const keys=decodeURIComponent(b.dataset.k).split('\n'), st=b.dataset.p;
-    const cur=planPlants(keys[0]), next=cur.includes(st)?cur.filter(x=>x!==st):PLANT_LIST().filter(x=>x===st||cur.includes(x));
-    const val=next.join(',');
+    let val;
+    if(b.dataset.same) val=PUMPNOTE[keys[0]]===SAME_PL?'':SAME_PL;   // "Same working plants" on / off
+    else { // a plant tapped while following: carry on from what it shows now, by hand
+      const cur=planPlants(keys[0]), next=cur.includes(st)?cur.filter(x=>x!==st):PLANT_LIST().filter(x=>x===st||cur.includes(x));
+      val=next.join(','); }
     for(const k of keys){ if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k]; }
     stSet(KEY_PUMP,PUMPNOTE); renderUpcoming();
     for(const k of keys) await syncPush('pump',k,val); }));
@@ -3483,7 +3524,8 @@ async function loadLive(){
   const [results, planRes]=await Promise.all([
     Promise.all(tabs.map(t=>fetchTab(id,t))),
     fetchTab(planSid, ''),
-    syncPull(),         // shared Done/Required/Rate from the sheet (no-op when Sync URL is empty)
+    loadPlanCsv(planSid),   // same plan as CSV: keeps "63-63" pumps that gviz drops
+    syncPull(),        // shared Done/Required/Rate from the sheet (no-op when Sync URL is empty)
     loadProduction(),   // MTD / today straight from the sheet's own daily production table
     loadTrucks(),       // live truck tracking (loaded / empty) from the "Trucks Tracking" tab
     loadProductivity()  // per-truck month-to-date productivity from the "Productivity" tab
