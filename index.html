@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000002">
+<meta name="app-build" content="20261019-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -552,6 +552,10 @@
   .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
   .pm-row.st-noop{--sc:#94a3b8}
   @media (max-width:640px){ .pic-btns{display:grid!important;grid-template-columns:1fr 1fr} }   /* picture buttons 2 × 2 on phones */
+  .pic-cut{text-align:center;margin-top:10px;font-size:13px;color:var(--muted)}
+  .pic-cut select{font:inherit;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line2);
+    border-radius:10px;padding:5px 8px;margin:0 4px;cursor:pointer}
+  .pic-cut select option{background:#1a1f2e;color:#fff}
   .pm-wash-opts.pm-ops-opts{display:grid;grid-template-columns:repeat(6,1fr);gap:2px 4px}
   .pm-ops-opts .pm-wopt{min-width:34px;text-align:center}
   .pm-ctls{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:flex-start;margin-inline-start:auto}
@@ -678,6 +682,8 @@
   .cl-act span{margin-inline-end:6px}
   .cl-act .btn{padding:3px 10px;font-size:12px}
   .cl-foot{padding:8px 0 2px;font-size:12px}
+  .cl-auto{font-size:10.5px;font-weight:700;color:var(--amber);margin-top:2px}
+  .cl-row>div:first-child{min-width:0}
   @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
     /* older engines: fall back to solid panels so nothing turns unreadable */
     .panel,.top,.config,.card,.tbl-wrap,.ucard,.kpi{ background:linear-gradient(180deg,var(--panel),var(--panel2)) !important }
@@ -874,6 +880,7 @@
       <button class="btn" id="planOpenBtn" style="padding:12px 18px;font-size:14px" title="Open the picture full size">🔍 Open</button>
     </div>
     <div id="planPhotoMsg" class="muted" style="text-align:center;font-size:12px;margin-top:6px"></div>
+    <div class="pic-cut"><label>🕗 Auto-hide pours finished before <select id="planCutSel" title="Finished pours whose last truck was before this time today leave the picture and Closed Pours (every device)"></select> today</label></div>
   </section>
 
   <!-- ALL POURS VIEW -->
@@ -2445,19 +2452,20 @@ function renderSummary(){
   const dl=dlAll.filter(g=>!closedHidden(g)), hid=dlAll.filter(closedHidden);
   if(el('closedCard')) el('closedCard').style.display = dlAll.length ? '' : 'none';
   const closedRow=(g,h)=>`<div class="cl-row${h?' cl-hid':''}">
-      <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${h&&PUMPNOTE[hideKey(g)]!=='1'?`<div class="cl-auto">auto · finished before ${timeShort(planCutAt())}</div>`:''}${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div class="cl-act"><span style="font-family:var(--mono);font-size:13px"><b style="color:var(--green)">${fmt(g.delivered,0)}</b> m³<span class="cl-pw"> poured</span></span>
-        <button class="btn ghost hide-btn" data-h="${encodeURIComponent(hideKey(g))}" data-on="${h?'':'1'}" title="${h?'Show it again in this list and in the plan photo':'Take it off this list and off the plan photo (every device)'}">${h?'Show':'Hide'}</button>
+        <button class="btn ghost hide-btn" data-h="${encodeURIComponent(hideKey(g))}" data-on="${h?(autoHidden(g)?'0':''):'1'}" title="${h?'Show it again in this list and in the plan photo':'Take it off this list and off the plan photo (every device)'}">${h?'Show':'Hide'}</button>
         <button class="btn ghost reopen-btn" data-e="${encodeURIComponent(doneKey(g))}">Re-open</button></div>
     </div>`;
   el('closedList').innerHTML = (dl.length?dl.map(g=>closedRow(g,false)).join(''):'<div class="muted" style="font-size:13px;padding:8px 0">All closed pours are hidden.</div>')
     + (hid.length?`<div class="cl-foot"><span class="filter-clear" id="clHidTog">${showHiddenClosed?'Hide':'Show'} hidden (${hid.length})</span></div>${showHiddenClosed?hid.map(g=>closedRow(g,true)).join(''):''}`:'');
   el('closedList').querySelectorAll('.reopen-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), false)));
   el('closedList').querySelectorAll('.hide-btn').forEach(b=>b.addEventListener('click',async()=>{
-    const k=decodeURIComponent(b.dataset.h), v=b.dataset.on?'1':'';
+    const k=decodeURIComponent(b.dataset.h), v=b.dataset.on;   // '1' hide · '0' show although before the auto-hide time · '' back to normal
     if(v) PUMPNOTE[k]=v; else delete PUMPNOTE[k];
     stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,v); }));
   const ht=el('clHidTog'); if(ht) ht.addEventListener('click',()=>{ showHiddenClosed=!showHiddenClosed; rerender(); });
+  renderPlanCut();
 }
 
 /* ---------- data checks (All Pours view) ----------
@@ -3194,8 +3202,19 @@ async function syncClear(type){
 // Central close/re-open used by every Done checkbox + the Undo button. Tracks the order pours were
 // closed (DONE_ORDER) so Undo can re-open the most recent one, and shares the change to every device.
 // a closed pour hidden from Closed Pours + the plan photo: PUMPNOTE['h<done key>']='1' (shared)
+// …plus the automatic cut under the picture: PUMPNOTE['hcut']='08:00' = every pour that FINISHED (closed, or its
+// quantity reached) with its last truck before 8:00 today is hidden the same way. 'h<key>'='0' = shown anyway.
 const hideKey=g=>'h'+doneKey(g);
-const closedHidden=g=>!!PUMPNOTE[hideKey(g)];
+const CUT_CHOICES=['','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','14:00','16:00','18:00','20:00'];
+function planCutAt(){ const m=String(PUMPNOTE['hcut']||'').match(/^(\d{1,2}):(\d{2})$/); if(!m) return null;
+  const d=new Date(); d.setHours(+m[1],+m[2],0,0); return d.getTime(); }
+const pourFinished=g=>!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
+function autoHidden(g){ const c=planCutAt(); return c!=null && pourFinished(g) && g.endMax!=null && g.endMax<c; }
+function closedHidden(g){ const v=PUMPNOTE[hideKey(g)]; if(v==='1') return pourFinished(g); if(v==='0') return false; return autoHidden(g); }
+function renderPlanCut(){ const s=el('planCutSel'); if(!s) return; const cur=String(PUMPNOTE['hcut']||'');
+  s.innerHTML=CUT_CHOICES.map(v=>`<option value="${v}"${v===cur?' selected':''}>${v?timeShort(new Date(2000,0,1,+v.slice(0,2),+v.slice(3)).getTime()):'Off'}</option>`).join('');
+  if(!s.dataset.on){ s.dataset.on='1'; s.addEventListener('change',async()=>{ const v=s.value;
+    if(v) PUMPNOTE['hcut']=v; else delete PUMPNOTE['hcut']; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump','hcut',v); }); } }
 let showHiddenClosed=false;
 function toggleDone(k, on){
   if(on){ DONE[k]=true; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); DONE_ORDER.push(k); }
@@ -3737,7 +3756,7 @@ function planPhotoRows(){
   const when=g=>{ const t=RTp.get(g); return t ? String(t.at).padStart(15,'0') : '~'; };
   const fin=[], run=[];
   for(const g of pours){
-    if(DONE[doneKey(g)] && closedHidden(g)) continue;   // hidden from Closed Pours = not in the photo either
+    if(closedHidden(g)) continue;   // hidden from Closed Pours (by hand, or finished before the auto-hide time) = not in the photo either
     const done=!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
     (done?fin:run).push(g);
   }
