@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261018-000016">
+<meta name="app-build" content="20261019-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -217,6 +217,10 @@
   .spot-cell.hi .s-val{font-size:26px}
   .spot-cell.hi .s-lab{color:#c7cbff}
   .spot-bar{margin-top:16px}
+  .spot-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .spot-done{font:inherit;font-size:13px;font-weight:700;padding:7px 14px;border-radius:10px;cursor:pointer;margin-top:8px;
+    border:1px solid rgba(34,197,94,.5);background:rgba(34,197,94,.14);color:var(--green)}
+  .spot-done:hover{background:rgba(34,197,94,.24)}
 
   /* Active list */
   .alist{margin-top:14px}
@@ -301,9 +305,41 @@
   .tl-tbl tbody tr.rej td.tl-q{text-decoration:line-through;color:var(--rose)}
   .chk-box.clear{border-color:var(--line2);background:rgba(255,255,255,.03)} .chk-box.clear .chk-head{color:var(--green)}
   .chk-txt{flex:1;min-width:160px}
+  /* check cards */
+  .chk-box{border-color:var(--line2);background:rgba(255,255,255,.025)}
+  .chk-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;color:var(--ink);margin-bottom:10px}
+  .ck-pills{display:flex;gap:6px;flex-wrap:wrap}
+  .ck-pill{font-size:11px;font-weight:800;padding:2px 9px;border-radius:99px;border:1px solid}
+  .ck-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+  .ck{--c:var(--amber);display:flex;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--line2);
+    border-inline-start:4px solid var(--c);background:color-mix(in srgb,var(--c) 7%,transparent)}
+  .ck-red,.ck-pill.ck-red{--c:var(--rose)} .ck-amber,.ck-pill.ck-amber{--c:var(--amber)}
+  .ck-blue,.ck-pill.ck-blue{--c:var(--cyan)} .ck-ok{--c:var(--green)}
+  .ck-pill{color:var(--c);border-color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent)}
+  .ck.clk{cursor:pointer} .ck.clk:hover{background:color-mix(in srgb,var(--c) 13%,transparent)}
+  .ck.skipped{opacity:.5}
+  .ck-ic{font-size:20px;line-height:1.2;flex:none}
+  .ck-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+  .ck-top{display:flex;align-items:baseline;gap:8px}
+  .ck-head{font-weight:800;font-size:14px;color:var(--c)}
+  .ck-when{margin-inline-start:auto;font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .ck-tags{display:flex;flex-wrap:wrap;gap:5px}
+  .ck-tag{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:7px;background:rgba(255,255,255,.07);color:var(--muted);white-space:nowrap}
+  .ck-tag.el{background:rgba(124,131,255,.18);color:#fff}
+  .ck-tag.st{background:rgba(34,211,238,.14);color:var(--cyan);font-family:var(--mono)}
+  .ck-tag.tk{color:var(--ink);font-family:var(--mono)}
+  .ck-det{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .ck-det b{color:var(--ink)}
+  .ck-btns{display:flex;justify-content:flex-end;gap:6px}
+  .ck-btns .chk-skip,.ck-btns .chk-fix{margin-inline-start:0}
+  @media(max-width:640px){ .ck-list{grid-template-columns:1fr} }
   .chk-skip{margin-inline-start:auto;background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--ink);border-radius:99px;
     padding:2px 12px;font-size:11.5px;font-weight:700;cursor:pointer}
   .chk-skip:hover{background:rgba(255,255,255,.14)}
+  .chk-fix{margin-inline-start:auto;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.5);color:var(--green);border-radius:99px;
+    padding:2px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--mono)}
+  .chk-fix+.chk-skip{margin-inline-start:6px}
+  .chk-fix.chk-unfix{background:rgba(255,255,255,.06);border-color:var(--line2);color:var(--ink);font-family:inherit}
   .chk-row.skipped .tl-flag,.chk-row.skipped .chk-txt{opacity:.45}
   .chk-foot{padding-top:8px;border-top:1px solid var(--line);font-size:11.5px}
   .chk-ok{margin:10px 2px 0;font-size:11.5px;color:var(--faint)}
@@ -376,7 +412,21 @@
   /* live presence pill — how many devices have the dashboard open right now */
   .online{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
     border:1px solid var(--line2);background:rgba(34,197,94,.10);color:var(--muted);white-space:nowrap}
+  .online{cursor:pointer}
   .online b{color:var(--green);font-weight:800}
+  /* tap the pill: who has it open */
+  .foot-who{flex-basis:100%;border:1px solid var(--line2);border-radius:12px;background:rgba(255,255,255,.04);padding:6px 10px}
+  .foot-who .fw{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
+  .foot-who .fw+.fw{border-top:1px solid var(--line)}
+  .foot-who .fw b{color:var(--ink);font-weight:700}
+  /* phone: Last update left, Next refresh right, "people viewing" centred under them */
+  @media(max-width:640px){
+    .foot{display:grid;grid-template-columns:auto auto;justify-content:space-between;row-gap:10px}
+    #footL{grid-column:1;grid-row:1}
+    #footR{grid-column:2;grid-row:1;text-align:right}
+    #footOnline{grid-column:1/-1;grid-row:2;justify-self:center}
+    .foot-who{grid-column:1/-1;grid-row:3}
+  }
   .online .dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none;
     box-shadow:0 0 0 0 rgba(34,197,94,.55);animation:onp 2s ease-out infinite}
   @keyframes onp{70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
@@ -419,7 +469,11 @@
   .trk-grid{display:flex;flex-wrap:wrap;gap:8px}
   .trk-chip{font-family:var(--mono);font-weight:800;font-size:15px;min-width:46px;text-align:center;
     padding:9px 12px;border-radius:11px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:var(--green)}
-  .trk-chip.down{background:rgba(244,63,94,.12);border-color:rgba(244,63,94,.4);color:var(--rose);cursor:help}
+  .trk-chip.down{background:rgba(244,63,94,.12);border-color:rgba(244,63,94,.4);color:var(--rose);cursor:pointer}
+  .trk-chip.down.sel{background:rgba(244,63,94,.28);border-color:var(--rose);color:#fff}
+  .trk-why{margin-top:10px;padding:9px 12px;border-radius:12px;border:1px solid rgba(244,63,94,.4);
+    background:rgba(244,63,94,.08);font-size:13.5px;line-height:1.5}
+  .trk-why b{color:var(--rose);font-family:var(--mono)}
   .trk-cards{display:grid;grid-template-columns:1fr;gap:8px}
   .trk-card{display:flex;align-items:center;gap:12px;background:var(--glass,rgba(24,30,50,.5));
     border:1px solid var(--line2);border-radius:13px;padding:10px 13px}
@@ -905,6 +959,7 @@
     <span id="footL">—</span>
     <span id="footOnline" class="online" hidden></span>
     <span id="footR"></span>
+    <div id="footWho" class="foot-who" hidden></div>
   </div>
 
   <!-- REPORT (print only) -->
@@ -959,12 +1014,15 @@ function appReqs(){ const out=[]; for(const k in PUMPNOTE){ if(k[0]!=='q'||!/^q[
 const normCl=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
 const appEs=r=>r.es?String(r.es).trim():'APP-'+r.id;          // app request without ES: its own key, matches no truck by ES
 let APP_MAYBE=new Map();   // app request id -> sheet row it might duplicate
+// the sheet row an app request is the same as: same ES, or same client + element + date and qty within ±1
+function sheetTwin(r){ const sheet=SHEET_ROWS||[], base=String(r.code).toUpperCase().replace(/\s+/g,'').replace(/\*+$/,'');
+  return sheet.find(s=>r.es&&s.es&&String(s.es).trim()===String(r.es).trim())
+    || sheet.find(s=>normCl(s.client)===normCl(r.client)&&s.base===base&&s.date===r.date&&Math.abs((s.req||0)-(+r.qty||0))<=1); }
 function rebuildPlan(){
   const sheet=SHEET_ROWS||[]; APP_MAYBE=new Map(); const extra=[], merges=[];
   for(const r of appReqs()){
     const code=String(r.code).toUpperCase().replace(/\s+/g,''), base=code.replace(/\*+$/,'');
-    const same=sheet.find(s=>r.es&&s.es&&String(s.es).trim()===String(r.es).trim())
-      || sheet.find(s=>normCl(s.client)===normCl(r.client)&&s.base===base&&s.date===r.date&&Math.abs((s.req||0)-(+r.qty||0))<=1);
+    const same=sheetTwin(r);
     if(same){ merges.push({r,s:same}); continue; }
     const maybe=!r.keep && sheet.find(s=>normCl(s.client)===normCl(r.client)&&s.base===base&&s.date===r.date);
     if(maybe) APP_MAYBE.set(r.id,maybe);
@@ -1643,7 +1701,7 @@ function render(res){
   applyView();
 }
 
-function rerender(){ render(build(LAST.matrix,LAST.header)); }
+function rerender(){ render(build(applyEsFix(LAST.matrix),LAST.header)); }
 
 /* ---------- view tabs ---------- */
 function renderViewTabs(){
@@ -2006,7 +2064,7 @@ function renderPumps(){
     const txt = s.st==='on'&&s.next ? `<span class="pm-k">Waiting</span> <span class="tc-dim">next</span> <b>${esc(site(s.next))}</b>`
               : s.st==='on'&&s.setup ?`<span class="pm-k">Setting up</span> <b>${esc(site(s.pour))}</b>`
               : s.st==='on'   ? `<span class="pm-k">On</span> <b>${esc(site(s.pour))}</b>`
-              : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
+              : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">from</span> <b>${esc(site(s.pour))}</b> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
               : s.st==='down' ? '<span class="pm-k">Breakdown</span>'
               : s.noop ? '<span class="pm-k">Available</span> <span class="tc-dim">· no operator</span>' : '<span class="pm-k">Available</span>';
     const editing=pumpEditing===String(s.i);
@@ -2068,6 +2126,7 @@ function outClass(el){
 }
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
 let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = every loaded truck
+let truckDown=null;      // broken truck tapped on the Available tab = its reason shows under the chips
 let truckSort='new';     // Loaded tab order: 'new' = latest truck on top, 'old' = longest out on top (kept per device)
 try{ if(localStorage.getItem('cmpour:trucksort')==='old') truckSort='old'; }catch(e){}
 // Lets Concrete Management's Home jump straight to a view, e.g. openView('trucks','empty').
@@ -2147,13 +2206,18 @@ function renderTrucks(){
       ? `<div class="trk-grid">${t.available.map(n=>`<span class="trk-chip">${esc(n)}</span>`).join('')}</div>`
       : '<div class="muted" style="font-size:13px;padding:10px 2px">No empty trucks at the plant right now.</div>';
     if(t.breakdown.length) body += `<div style="margin-top:18px"><div class="section-title" style="font-size:13px;margin-bottom:8px">Breakdown (${t.breakdown.length})</div>
-       <div class="trk-grid">${t.breakdown.map(b=>`<span class="trk-chip down" title="${esc(b.note)}">${esc(b.truck)}</span>`).join('')}</div></div>`;
+       <div class="trk-grid">${t.breakdown.map(b=>`<span class="trk-chip down${truckDown===String(b.truck)?' sel':''}" data-tk="${esc(b.truck)}" title="${esc(b.note)}">${esc(b.truck)}</span>`).join('')}</div>${(()=>{
+         // tap a broken truck = its reason (a hover title never shows on a phone)
+         const b=t.breakdown.find(x=>String(x.truck)===truckDown); if(!b) return '';
+         return `<div class="trk-why"><b>${esc(b.truck)}</b> — ${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}</div>`; })()}</div>`;
   }
   area.innerHTML=counts+tabs+body;
   area.querySelectorAll('.spot-tab').forEach(s=>s.addEventListener('click',()=>{ truckTab=s.dataset.tt; renderTrucks(); }));
   area.querySelectorAll('.tc-chip[data-es], .trk-card.el .tc-top').forEach(c=>c.addEventListener('click',()=>{
     const es=c.dataset.es!=null?c.dataset.es:c.closest('.trk-card').dataset.es;
     truckEs=(truckEs===es)?null:es; renderTrucks(); }));
+  area.querySelectorAll('.trk-chip.down[data-tk]').forEach(c=>c.addEventListener('click',()=>{
+    truckDown=truckDown===c.dataset.tk?null:c.dataset.tk; renderTrucks(); }));
   const all=area.querySelector('.tc-all'); if(all) all.addEventListener('click',()=>{ truckEs=null; renderTrucks(); });
   const so=area.querySelector('.tc-sort'); if(so) so.addEventListener('click',()=>{
     truckSort=truckSort==='old'?'new':'old'; try{ localStorage.setItem('cmpour:trucksort',truckSort); }catch(e){} renderTrucks(); });
@@ -2323,7 +2387,8 @@ function renderSummary(){
         </div>
         <div class="spot-bar">
           <div class="bar bar-lg"><i class="${bc}" style="width:${pct}%"></i></div>
-          <div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · ${sp.trucks} trucks · ${sp.hrs?fmt(sp.hrs,1)+' h':''}</div>
+          <div class="spot-foot"><div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · ${sp.trucks} trucks${sp.hrs?' · '+hLabel(sp.hrs)+' h':''}</div>
+          <button class="spot-done" data-e="${encodeURIComponent(doneKey(sp))}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>
         </div>`;
     el('spot').innerHTML=`
       <div class="spot ${isActive?'livepour':''}">
@@ -2342,6 +2407,8 @@ function renderSummary(){
     const sel=el('spotSel');
     if(sel) sel.addEventListener('change',()=>{ spotKey=decodeURIComponent(sel.value); rerender(); });
     el('spot').querySelectorAll('.spot-tab').forEach(t=>t.addEventListener('click',()=>{ spotTab=t.dataset.st; rerender(); }));
+    const sd=el('spot').querySelector('.spot-done');
+    if(sd) sd.addEventListener('click',()=>{ if(confirm(`Close ${sp.elem||'this pour'}? (Undo can re-open it)`)) toggleDone(decodeURIComponent(sd.dataset.e), true); });
   } else el('spot').innerHTML='';
 
   // Active pours list
@@ -2489,32 +2556,104 @@ function renderChecks(pours){
   renderCheckList(cb, items);
 }
 // Everything worth a second look on the open pours: [{id | ids, kind, cls, k(pour key), txt(html), skipped}].
+/* ---------- ES typo: trucks carry an ES that no request has ----------
+   Usually two digits swapped (45302 → 45320) or one digit wrong. Data checks names the closest request
+   (swap beats one digit; then: running now, same station, near in time) and "Fix" moves those trucks onto
+   it on every device — PUMPNOTE['e<wrong ES>|<date>'] = right ES. The sheet itself is not changed. */
+const esFixKey=(es,dk)=>'e'+es+'|'+dk;
+function applyEsFix(matrix){
+  if(!Object.keys(PUMPNOTE).some(k=>/^e\d/.test(k))) return matrix;
+  return matrix.map(r=>{ const d=parseDate(r[0]), to=PUMPNOTE[esFixKey(String(r[2]||'').trim(), d?dateKey(d):'')];
+    return to?[r[0],r[1],to,...r.slice(3)]:r; });
+}
+function esSimilar(a,b){
+  if(a.length!==b.length||a===b) return 0;
+  const d=[]; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) d.push(i);
+  if(d.length===2 && d[1]===d[0]+1 && a[d[0]]===b[d[1]] && a[d[1]]===b[d[0]]) return 2;   // neighbours swapped
+  return d.length===1?1:0;
+}
+function esGuess(g){
+  const es=String(g.elem||'').trim(), plants=new Set((g.loads||[]).map(l=>l.p).filter(Boolean)), seen=new Set(), out=[];
+  for(const p of (VD.summary||[])){ const pe=p.esId; if(!pe||seen.has(pe)) continue; seen.add(pe);
+    const s=esSimilar(es,pe); if(!s) continue;
+    let sc=s*10;
+    if(p.trucks>0 && (p.status==='active'||p.status==='none')) sc+=4;
+    if((p.loads||[]).some(l=>plants.has(l.p)) || planPlants(plantKey(p)).some(x=>plants.has(x))) sc+=3;
+    if(g.depMin!=null && p.depMin!=null && Math.abs(g.depMin-p.depMin)<6*3600000) sc+=2;
+    if(DONE[doneKey(p)]) sc-=5;
+    out.push({p,sc}); }
+  return out.sort((a,b)=>b.sc-a.sc);
+}
+async function setEsFix(key,to){
+  if(to) PUMPNOTE[key]=to; else delete PUMPNOTE[key];
+  stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',key,to||'');
+}
+
 // Used by the Data checks box AND by the notifier (window.__notifyItems) — one list, one set of rules.
 // flagLoads() must have run first.
+// Each item also carries `ui` for the on-screen card: sev (red = act now / amber = check / blue = info),
+// icon, head (the problem in a few words), tags (WHERE: element / station / truck / m³), det (what it means / what to do), at.
+const CT=(t,c)=>({t,c:c||''});
+const elTag=p=>CT(esc((p.client?p.client+' ':'')+(p.elem||'—')),'el');
+const lTags=l=>[CT(esc(l.p||'—'),'st'),CT('TM '+esc(l.k||'—'),'tk'),CT(fmt(l.q)+' m³')];
 function collectChecks(pours){
   const from=CFG.fromDate||'', to=CFG.toDate||'';
   const items=[];
   for(const x of NOES){ const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
-    const tm=parseTime(x.dep); items.push({id:`noes|${x.plant}|${x.truck}|${dk}|${x.dep}`, kind:'No ES', cls:'noes', txt:`${esc(x.plant)} · TM ${esc(x.truck)} · ${tm!=null?timeShort(ts(d,tm)):'no time'} · ${fmt(x.q)} m³ — not counted on any element`}); }
+    const tm=parseTime(x.dep), at=tm!=null?ts(d,tm):null;
+    items.push({id:`noes|${x.plant}|${x.truck}|${dk}|${x.dep}`, kind:'No ES', cls:'noes', txt:`${esc(x.plant)} · TM ${esc(x.truck)} · ${at!=null?timeShort(at):'no time'} · ${fmt(x.q)} m³ — not counted on any element`,
+      ui:{sev:'red', icon:'🏷️', head:'Truck without ES', at, tags:[CT(esc(x.plant),'st'),CT('TM '+esc(x.truck),'tk'),CT(fmt(x.q)+' m³')],
+        det:'Not counted on any request — write its ES in the trucks sheet'}}); }
+  // trucks on an ES no request has -> the closest request ES, with a Fix button
+  const planEs=new Set(PLAN_ROWS.map(r=>String(r.es||'').trim()).filter(Boolean));
+  for(const g of pours){ const es=String(g.elem||'').trim();
+    if(!ES_MODE || g.esId || !/^\d{3,}$/.test(es) || planEs.has(es)) continue;
+    const best=esGuess(g)[0], dk=g.dk||'', stn=[...new Set((g.loads||[]).map(l=>l.p).filter(Boolean))].join(', ');
+    const what=`ES ${esc(es)} · ${stn?esc(stn)+' · ':''}${g.trucks} truck${g.trucks>1?'s':''} · ${fmt(g.delivered,0)} m³ · from ${timeShort(g.depMin)}`;
+    items.push({id:`wes|${es}|${dk}`, kind:'Wrong ES?', cls:'noes', k:g.key,
+      txt: best ? `${what} — no request has it. Closest: <b>${esc(best.p.esId)}</b> ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)}${esSimilar(es,best.p.esId)===2?' (2 digits swapped)':' (1 digit different)'}`
+                : `${what} — no request has it and none is close`,
+      fix: best ? {key:esFixKey(es,dk), to:best.p.esId} : null,
+      ui:{sev:'red', icon:'🔢', head:'ES not in the plan — typo?', at:g.depMin,
+        tags:[CT('ES '+esc(es),'el'), ...(stn?[CT(esc(stn),'st')]:[]), CT(g.trucks+' truck'+(g.trucks>1?'s':''),'tk'), CT(fmt(g.delivered,0)+' m³')],
+        det: best ? `Closest request: <b>${esc(best.p.esId)}</b> · ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)} — ${esSimilar(es,best.p.esId)===2?'2 digits swapped':'1 digit different'}`
+                  : 'No request has this ES and none is close — check the trucks sheet'} }); }
+  // fixes already made (shown under "Show skipped", with Undo)
+  for(const k of Object.keys(PUMPNOTE)){ const m=k.match(/^e(\d+)\|(.*)$/); if(!m||!PUMPNOTE[k]||(from&&m[2]<from)||(to&&m[2]>to)) continue;
+    const p=(VD.summary||[]).find(x=>x.esId===PUMPNOTE[k]);
+    items.push({id:'wesf|'+k, ids:[], skipped:true, fixed:{key:k}, kind:'ES fixed', cls:'',
+      txt:`ES ${esc(m[1])} → <b>${esc(PUMPNOTE[k])}</b>${p?' '+esc((p.client?p.client+' ':'')+p.elem):''} · ${esc(m[2])}`,
+      ui:{sev:'ok', icon:'✓', head:'ES fixed in the app', tags:[CT('ES '+esc(m[1])+' → '+esc(PUMPNOTE[k]),'el'), ...(p?[elTag(p)]:[]), CT(esc(m[2]))],
+        det:'Its trucks are counted on the right request — fix the trucks sheet too'}}); }
   for(const p of pours){
     const rows=gapRows(p);
     for(const r of rows){ if(r.l.rej) items.push({id:rejId(r.l), kind:'Rejected', cls:'rejd', k:p.key,
-      txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³ — not counted${r.l.rej&&!/^rejected$/i.test(r.l.rej)?' ('+esc(r.l.rej)+')':''}`}); }
+      txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³ — not counted${r.l.rej&&!/^rejected$/i.test(r.l.rej)?' ('+esc(r.l.rej)+')':''}`,
+      ui:{sev:'red', icon:'⛔', head:'Rejected truck', at:r.l.t, tags:[elTag(p),...lTags(r.l)],
+        det:`Not counted on the request${r.l.rej&&!/^rejected$/i.test(r.l.rej)?' · '+esc(r.l.rej):''}`}}); }
     // gaps: ONE line per element (the truck log lists each of them); Skip marks every gap listed now as reviewed,
     // so a new late truck brings the line back
     const fl=rows.filter(r=>r.flag), flOpen=fl.filter(r=>!SKIP[gapId(p,r)]);
     if(fl.length){ const src=flOpen.length?flOpen:fl, worst=src.reduce((a,r)=>r.gap>a.gap?r:a,src[0]);
       const room=src.reduce((s,r)=>s+(r.room||0),0);
       items.push({ids:src.map(r=>gapId(p,r)), skipped:!flOpen.length, kind:rows.ex?'Late trucks':'Gaps', cls:'gap', k:p.key,
-        txt:`${elName(p)} · ${src.length} gap${src.length>1?'s':''} longer than expected${rows.ex?` (a truck every ${mins(rows.ex.every)})`:''} · longest ${mins(worst.gap)} before ${loadWhen(worst.l)}${room?` · room for about ${room} truck${room>1?'s':''}`:''}`}); }
+        txt:`${elName(p)} · ${src.length} gap${src.length>1?'s':''} longer than expected${rows.ex?` (a truck every ${mins(rows.ex.every)})`:''} · longest ${mins(worst.gap)} before ${loadWhen(worst.l)}${room?` · room for about ${room} truck${room>1?'s':''}`:''}`,
+        ui:{sev:'amber', icon:'🚚', head:rows.ex?`${src.length} late truck${src.length>1?'s':''}`:`${src.length} long gap${src.length>1?'s':''}`, at:worst.l.t,
+          tags:[elTag(p), CT('longest '+mins(worst.gap),'tk'), ...(rows.ex?[CT('1 truck / '+mins(rows.ex.every))]:[])],
+          det:`${rows.ex?'Slower than the target rate':'Longer than its usual interval'}${room?` · room for about ${room} more truck${room>1?'s':''}`:''} — tap to see the trucks`}}); }
     // still running and the NEXT truck is already overdue
     const ex=rows.ex, lastT=rows.length?rows[rows.length-1].l.t:null;
     if(ex && lastT!=null && (p.status==='active'||p.status==='none') && !(p.remaining<=0)){
       const wait=Date.now()-lastT;
       if(wait>Math.max(ex.every*LATE_TOL, ex.every+LATE_MIN)) items.push({id:`now|${p.key}|${lastT}`, kind:'Overdue now', cls:'gap', k:p.key,
-        txt:`${elName(p)} · no truck for ${mins(wait)} (last ${timeShort(lastT)}) — expected every ${mins(ex.every)}`});
+        txt:`${elName(p)} · no truck for ${mins(wait)} (last ${timeShort(lastT)}) — expected every ${mins(ex.every)}`,
+        ui:{sev:'red', icon:'⏱️', head:`No truck for ${mins(wait)}`, at:lastT, tags:[elTag(p), CT('last '+timeShort(lastT),'tk'), CT('1 truck / '+mins(ex.every))],
+          det:'The next truck is overdue — call the station'}});
     }
-    for(const r of rows){ for(const f of (r.l.f||[])) items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`}); }
+    const FLAG_DET={'no quantity':'The truck has no m³ in the sheet','no load time':'The truck has no departure time in the sheet','entered twice?':'Same truck twice within minutes — one may be a duplicate'};
+    for(const r of rows){ for(const f of (r.l.f||[])) items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`,
+      ui:{sev:'amber', icon:'⚠️', head:f.charAt(0).toUpperCase()+f.slice(1), at:r.l.nt?null:r.l.t, tags:[elTag(p),...lTags(r.l)],
+        det:FLAG_DET[f]||'More than one truck can carry — check the quantity in the sheet'}}); }
   }
   // requests with a planned time (Upcoming): its time has come -> "Request due" (one notification),
   // still not started 30 min later -> "Late start" (a second one)
@@ -2522,9 +2661,13 @@ function collectChecks(pours){
     for(const g of (VD.upcoming||[])){ const t=RT.get(g); if(!t||t.est||now<t.at||pumpSent(g).length) continue;   // pumps already sent / waiting behind its chain = on time
       const nm=esc((g.client?g.client+' ':'')+g.elem), id=(g.esId||g.key)+'|'+t.at;
       if(now-t.at<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
-        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time} — start this one`:`planned ${t.time} — it is time to start`}${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`});
+        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time} — start this one`:`planned ${t.time} — it is time to start`}${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`,
+        ui:{sev:'blue', icon:'🔔', head:'Time to start', at:t.at, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk'), ...(g.pumps&&pumpReq(g.pumps).length?[CT('pumps '+esc(pumpLabel(pumpReq(g.pumps))))]:[])],
+          det:t.afterDone?'The request before it has finished — start this one':'Its planned time has come'}});
       else items.push({id:`late|${id}`, kind:'Late start', cls:'gap',
-        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time}`:`planned ${t.time}`} — not started yet (${mins(now-t.at)} late)`}); } }catch(e){}
+        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time}`:`planned ${t.time}`} — not started yet (${mins(now-t.at)} late)`,
+        ui:{sev:'red', icon:'🕒', head:`Not started — ${mins(now-t.at)} late`, at:t.at, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk')],
+          det:'No truck has left for it yet'}}); } }catch(e){}
   return items;
 }
 function renderCheckList(cb, items){
@@ -2532,17 +2675,38 @@ function renderCheckList(cb, items){
   // on this device until Undo. Kept in local storage; entries older than a week are dropped.
   const isSk=it=>it.ids?!!it.skipped:!!SKIP[it.id];
   const open=items.filter(it=>!isSk(it)), skipped=items.filter(isSk);
-  const row=(it,sk)=>`<div class="chk-row${it.k?' clk':''}${sk?' skipped':''}" ${it.k?`data-k="${encodeURIComponent(it.k)}"`:''}><span class="tl-flag ${it.cls}">${esc(it.kind)}</span><span class="chk-txt">${it.txt}</span><button class="chk-skip" data-id="${encodeURIComponent((it.ids||[it.id]).join('\n'))}" data-on="${sk?0:1}">${sk?'Undo':'Skip'}</button></div>`;
+  // one card per check: icon + the problem in big letters + WHERE as chips (element / station / truck) + what it means
+  const btns=(it,sk)=>`${it.fix&&!sk?`<button class="chk-fix" data-key="${esc(it.fix.key)}" data-to="${esc(it.fix.to)}">Fix → ${esc(it.fix.to)}</button>`:''}${it.fixed
+      ?`<button class="chk-fix chk-unfix" data-key="${esc(it.fixed.key)}" data-to="">Undo fix</button>`
+      :`<button class="chk-skip" data-id="${encodeURIComponent((it.ids||[it.id]).join('\n'))}" data-on="${sk?0:1}">${sk?'Undo':'Skip'}</button>`}`;
+  const row=(it,sk)=>{ const u=it.ui||{sev:'amber',icon:'⚠️',head:esc(it.kind),tags:[],det:it.txt};
+    return `<div class="ck ck-${u.sev}${it.k?' clk':''}${sk?' skipped':''}" ${it.k?`data-k="${encodeURIComponent(it.k)}"`:''}>
+      <div class="ck-ic">${u.icon}</div>
+      <div class="ck-main">
+        <div class="ck-top"><span class="ck-head">${u.head}</span>${u.at!=null?`<span class="ck-when">${timeShort(u.at)}</span>`:''}</div>
+        ${u.tags.length?`<div class="ck-tags">${u.tags.map(t=>`<span class="ck-tag ${t.c}">${t.t}</span>`).join('')}</div>`:''}
+        <div class="ck-det">${u.det}</div>
+        <div class="ck-btns">${btns(it,sk)}</div>
+      </div></div>`; };
+  // most urgent first: act now → check → info, newest first inside each
+  const SEV={red:0,amber:1,blue:2,ok:3}, sevOf=it=>(it.ui&&it.ui.sev)||'amber';
+  const sorted=open.slice().sort((a,b)=>(SEV[sevOf(a)]-SEV[sevOf(b)])||(((b.ui&&b.ui.at)||0)-((a.ui&&a.ui.at)||0)));
+  const n=s=>open.filter(it=>sevOf(it)===s).length;
+  const pill=(s,lab)=>n(s)?`<span class="ck-pill ck-${s}">${n(s)} ${lab}</span>`:'';
   const foot=skipped.length?`<div class="chk-foot"><span class="filter-clear" id="chkShow">${showSkipped?'Hide':'Show'} skipped (${skipped.length})</span></div>`:'';
   cb.innerHTML = (open.length||skipped.length)
-    ? `<div class="chk-box${open.length?'':' clear'}"><div class="chk-head">${open.length?`&#9888; Data checks · ${open.length} to review`:'&#10003; Data checks · nothing left to review'}</div>
-        ${open.map(it=>row(it,false)).join('')}${showSkipped?skipped.map(it=>row(it,true)).join(''):''}${foot}</div>`
+    ? `<div class="chk-box${open.length?'':' clear'}"><div class="chk-head">${open.length?`Data checks <span class="ck-pills">${pill('red','act now')}${pill('amber','to check')}${pill('blue','info')}</span>`:'&#10003; Data checks · nothing left to review'}</div>
+        <div class="ck-list">${sorted.map(it=>row(it,false)).join('')}${showSkipped?skipped.map(it=>row(it,true)).join(''):''}</div>${foot}</div>`
     : `<div class="chk-ok">&#10003; Data checks: nothing to review on the open pours</div>`;
   cb.querySelectorAll('.chk-skip').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
     for(const id of decodeURIComponent(b.dataset.id).split('\n')){ if(b.dataset.on==='1') SKIP[id]=Date.now(); else delete SKIP[id]; }
     stSet(KEY_SKIP,SKIP); renderAllPours(); }));
+  cb.querySelectorAll('.chk-fix').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
+    const to=b.dataset.to, wrong=b.dataset.key.slice(1).split('|')[0];
+    if(!confirm(to?`Count the trucks of ES ${wrong} on ES ${to}?\n(Every device. The sheet itself stays as it is — fix it there too.)`:`Undo the fix of ES ${wrong}?`)) return;
+    setEsFix(b.dataset.key,to); }));
   const cs=el('chkShow'); if(cs) cs.addEventListener('click',()=>{ showSkipped=!showSkipped; renderAllPours(); });
-  cb.querySelectorAll('.chk-row.clk').forEach(r=>r.addEventListener('click',()=>{ logKey=decodeURIComponent(r.dataset.k); renderAllPours(); const t=el('truckLog'); if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'nearest'}); }));
+  cb.querySelectorAll('.ck.clk').forEach(r=>r.addEventListener('click',()=>{ logKey=decodeURIComponent(r.dataset.k); renderAllPours(); const t=el('truckLog'); if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'nearest'}); }));
 }
 
 /* ---------- all pours view ---------- */
@@ -2757,7 +2921,7 @@ function renderUpcoming(){
 /* ---------- print report / PDF ---------- */
 function buildReport(){
   if(!LAST.matrix||!LAST.matrix.length) return false;
-  const res=build(LAST.matrix,LAST.header);
+  const res=build(applyEsFix(LAST.matrix),LAST.header);
   if(res.error) return false;
   const summary=aggregateByElement(res.list);
   const hasElem=g=>{const e=String(g.elem||'').trim();return e&&e!==NOEL;};
@@ -2930,7 +3094,18 @@ function showOnline(n){
   b.hidden=false;
   b.innerHTML=`<span class="dot"></span><b>${n}</b> ${n===1?'person':'people'} viewing`;
   b.title = IS_ADMIN && WHO.length ? WHO.map(w=>w.name).join(', ') : '';
+  if(!el('footWho').hidden) renderFootWho();
 }
+// tap "N people viewing" → the list of who has it open (names come from the script only in admin mode)
+function renderFootWho(){
+  const box=el('footWho');
+  box.innerHTML = WHO.length ? WHO.map(w=>`<div class="fw"><b>${esc(w.name||'—')}</b><span>${AGO(w.seen)}</span></div>`).join('')
+    : `<div class="fw"><span>${IS_ADMIN?'No names yet…':'Names show in admin mode'}</span></div>`;
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#footOnline')) return;
+  const box=el('footWho'); box.hidden=!box.hidden;
+  if(!box.hidden){ renderFootWho(); pingPresence(); } });
 async function pingPresence(){
   if(BLOCKED) return;
   if(!syncBase()){ const b=el('footOnline'); if(b)b.hidden=true; return; }
@@ -3291,7 +3466,7 @@ async function loadLive(){
   }
   if(!anyOk){ onFail('No tab returned data · '+report.join(' · ')); return; }
   LAST={matrix:allRows,header:UNI_HEADER.slice()};
-  render(build(allRows,UNI_HEADER.slice()));
+  render(build(applyEsFix(allRows),UNI_HEADER.slice()));   // ES typos fixed in the app (Data checks → Fix)
   setLive('on','Live');
   window.__ready=Date.now();   // the notifier waits for this (first complete pull)
   applyPendingCheck();         // opened from a tapped notification before the data was in
@@ -3690,8 +3865,20 @@ async function planPhoto(){
       qty:num(v('rqQty')), rate:num(v('rqRate'))||0, sc:v('rqSc'), tem:v('rqTem'), es:v('rqEs'), pumps:pumps.join('-'), by:ME||'', at:Date.now()};
     if(!r.client||!r.code||!(r.qty>0)){ el('reqMsg').textContent='Contractor, Code and Quantity are needed.'; return; }
     if(r.time && !normPlanTime(r.time)){ el('reqMsg').textContent='Time: write it like 15 or 15:30.'; return; }
+    // already in the plan sheet -> say where it is instead of saving a copy that would be merged away at once
+    const tw=sheetTwin(r);
+    if(tw){ const tes=tw.es?String(tw.es).trim():'', p=(VD.summary||[]).find(g=>tes?g.esId===tes:g.elem===tw.code);
+      const nm=`${tw.client?tw.client+' ':''}${tw.code} · ${fmt(tw.req,0)} m³${tes?' · ES '+tes:''}`;
+      const where=!p?'':DONE[doneKey(p)]?' It is already closed (Done).'
+        :p.trucks>0?` It has started: ${fmt(p.delivered,0)} of ${fmt(p.required!=null?p.required:tw.req,0)} m³ — see All Pours.`
+        :inDateFilter(p.planDate)?' It is in Upcoming.':` It is dated ${tw.date||'—'} — outside the dates you are viewing.`;
+      el('reqMsg').innerHTML=`<b>Already in the plan sheet:</b> ${esc(nm)}.${esc(where)}${r.es&&tes===r.es?' Each request has its own ES — for a new pour use its new ES.':''}`;
+      return; }
+    // outside the dates on screen: it is saved, but say why it does not show
+    const hidden=!inDateFilter(r.date);
     const id=Date.now().toString(36)+Math.random().toString(36).slice(2,5), k='q'+id, val=JSON.stringify(r);
     PUMPNOTE[k]=val; stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
+    if(hidden) alert(`Saved. It is dated ${r.date} — change the From/To dates to see it in Upcoming.`);
     await syncPush('pump',k,val); });
 }
 // 💾 Save = always a .png file on this device; 📋 Copy = always to the clipboard (paste anywhere)
@@ -3757,7 +3944,7 @@ window.__notifyItems=function(){
   const pours=VD.summary.filter(g=>{const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0&&!DONE[doneKey(g)];});
   flagLoads(VD.summary.filter(g=>g.trucks>0));
   const plain=h=>{ const d=document.createElement('div'); d.innerHTML=h; return d.textContent; };
-  return collectChecks(pours).map(it=>({ids:it.ids||[it.id], kind:it.kind, k:it.k||'', text:plain(it.txt)}));
+  return collectChecks(pours).filter(it=>!it.fixed).map(it=>({ids:it.ids||[it.id], kind:it.kind, k:it.k||'', text:plain(it.txt)}));
 };
 
 /* ---------- arriving from a tapped notification ----------
