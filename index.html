@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000001">
+<meta name="app-build" content="20261019-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -671,6 +671,13 @@
   .spot{ background:linear-gradient(135deg,rgba(124,131,255,.24),rgba(34,211,238,.13),rgba(30,38,62,.52)) !important }
   .vtabs,.spot-tabs{ border-color:var(--glass-brd) }
   #closedList>div,.apy{ border-color:var(--line) }
+  .cl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:8px 0}
+  @media(max-width:640px){ .cl-pw{display:none} .cl-act{gap:6px} .cl-act span{margin-inline-end:2px} .cl-act .btn{padding:3px 8px} }
+  .cl-row.cl-hid{opacity:.5}
+  .cl-act{display:flex;align-items:center;gap:8px;white-space:nowrap;margin-inline-start:auto}
+  .cl-act span{margin-inline-end:6px}
+  .cl-act .btn{padding:3px 10px;font-size:12px}
+  .cl-foot{padding:8px 0 2px;font-size:12px}
   @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
     /* older engines: fall back to solid panels so nothing turns unreadable */
     .panel,.top,.config,.card,.tbl-wrap,.ucard,.kpi{ background:linear-gradient(180deg,var(--panel),var(--panel2)) !important }
@@ -2433,13 +2440,24 @@ function renderSummary(){
   if(ring) ring.addEventListener('click',async()=>{ view='pours'; activeTab='ALL'; statusFilter=null; await saveCfg(); renderViewTabs(); renderAllPours(); applyView(); const pv=el('poursView'); if(pv&&pv.scrollIntoView)pv.scrollIntoView({behavior:'smooth',block:'start'}); });
 
   // Closed Pours (read-only): each pour the user closed + what it actually poured. A small Re-open per row.
-  const dl=(VD.doneList||[]).slice().sort((a,b)=>(b.endMax||0)-(a.endMax||0));
-  if(el('closedCard')) el('closedCard').style.display = dl.length ? '' : 'none';
-  el('closedList').innerHTML = dl.map(g=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:8px 0">
+  // Hide = off this list AND off the WhatsApp plan photo, on every device (still counted everywhere else)
+  const dlAll=(VD.doneList||[]).slice().sort((a,b)=>(b.endMax||0)-(a.endMax||0));
+  const dl=dlAll.filter(g=>!closedHidden(g)), hid=dlAll.filter(closedHidden);
+  if(el('closedCard')) el('closedCard').style.display = dlAll.length ? '' : 'none';
+  const closedRow=(g,h)=>`<div class="cl-row${h?' cl-hid':''}">
       <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
-      <div style="display:flex;align-items:center;gap:14px;white-space:nowrap"><span style="font-family:var(--mono);font-size:13px"><b style="color:var(--green)">${fmt(g.delivered,0)}</b> m³ poured</span><button class="btn ghost reopen-btn" data-e="${encodeURIComponent(doneKey(g))}" style="padding:3px 10px;font-size:12px">Re-open</button></div>
-    </div>`).join('');
+      <div class="cl-act"><span style="font-family:var(--mono);font-size:13px"><b style="color:var(--green)">${fmt(g.delivered,0)}</b> m³<span class="cl-pw"> poured</span></span>
+        <button class="btn ghost hide-btn" data-h="${encodeURIComponent(hideKey(g))}" data-on="${h?'':'1'}" title="${h?'Show it again in this list and in the plan photo':'Take it off this list and off the plan photo (every device)'}">${h?'Show':'Hide'}</button>
+        <button class="btn ghost reopen-btn" data-e="${encodeURIComponent(doneKey(g))}">Re-open</button></div>
+    </div>`;
+  el('closedList').innerHTML = (dl.length?dl.map(g=>closedRow(g,false)).join(''):'<div class="muted" style="font-size:13px;padding:8px 0">All closed pours are hidden.</div>')
+    + (hid.length?`<div class="cl-foot"><span class="filter-clear" id="clHidTog">${showHiddenClosed?'Hide':'Show'} hidden (${hid.length})</span></div>${showHiddenClosed?hid.map(g=>closedRow(g,true)).join(''):''}`:'');
   el('closedList').querySelectorAll('.reopen-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), false)));
+  el('closedList').querySelectorAll('.hide-btn').forEach(b=>b.addEventListener('click',async()=>{
+    const k=decodeURIComponent(b.dataset.h), v=b.dataset.on?'1':'';
+    if(v) PUMPNOTE[k]=v; else delete PUMPNOTE[k];
+    stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,v); }));
+  const ht=el('clHidTog'); if(ht) ht.addEventListener('click',()=>{ showHiddenClosed=!showHiddenClosed; rerender(); });
 }
 
 /* ---------- data checks (All Pours view) ----------
@@ -3175,6 +3193,10 @@ async function syncClear(type){
 }
 // Central close/re-open used by every Done checkbox + the Undo button. Tracks the order pours were
 // closed (DONE_ORDER) so Undo can re-open the most recent one, and shares the change to every device.
+// a closed pour hidden from Closed Pours + the plan photo: PUMPNOTE['h<done key>']='1' (shared)
+const hideKey=g=>'h'+doneKey(g);
+const closedHidden=g=>!!PUMPNOTE[hideKey(g)];
+let showHiddenClosed=false;
 function toggleDone(k, on){
   if(on){ DONE[k]=true; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); DONE_ORDER.push(k); }
   else  { delete DONE[k]; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); }
@@ -3715,6 +3737,7 @@ function planPhotoRows(){
   const when=g=>{ const t=RTp.get(g); return t ? String(t.at).padStart(15,'0') : '~'; };
   const fin=[], run=[];
   for(const g of pours){
+    if(DONE[doneKey(g)] && closedHidden(g)) continue;   // hidden from Closed Pours = not in the photo either
     const done=!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
     (done?fin:run).push(g);
   }
