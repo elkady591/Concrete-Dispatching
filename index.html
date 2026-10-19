@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000009">
+<meta name="app-build" content="20261019-000013">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -187,7 +187,11 @@
   .plant-bar{height:10px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
   .plant-bar>i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--cyan))}
   .plant-meta{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
-  .plant-next{grid-column:2/-1;margin-top:-6px;font-size:12px;color:#c4b5fd} .plant-next b{color:var(--ink)}
+  .plant-next{grid-column:2/-1;display:flex;align-items:center;gap:8px;margin-top:-4px;font-size:12px;color:var(--muted);min-width:0}
+  .plant-next .pn-l{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#a78bfa;
+    border:1px solid rgba(167,139,250,.45);border-radius:6px;padding:1px 6px;flex:none}
+  .plant-next b{color:var(--ink);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .plant-next .pn-t{margin-inline-start:auto;font-family:var(--mono);color:var(--muted);white-space:nowrap}
   .plant-meta b{color:var(--ink)}
 
   /* Spotlight */
@@ -468,6 +472,37 @@
   .dp-paste textarea{width:100%;min-height:140px;margin-top:8px;background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--ink);border-radius:12px;padding:10px;font-family:var(--mono);font-size:12px}
   .dp-pbtn{display:flex;gap:8px;margin-top:8px}
   @media(max-width:640px){ .dp-grid{grid-template-columns:1fr} .dp-grand{margin-inline-start:0} }
+  .pr-tabs{display:inline-flex;margin-bottom:14px}
+  .dp-wrap .dp-paste{margin:0 0 14px}
+  .dp-wrap .dp-paste textarea{margin-top:0;min-height:0}
+  .dp-pbtn{align-items:center;flex-wrap:wrap}
+  .dp-pbtn .dp-day{margin-inline-start:auto}
+  .dc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
+  .dc{border:1px solid var(--line2);border-radius:14px;padding:14px;background:rgba(255,255,255,.03)}
+  .dc-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-bottom:10px}
+  .dc-h>b{font-size:18px}
+  .dc-sum{font-size:13px;color:var(--muted)} .dc-sum b{color:var(--ink);font-family:var(--mono)} .dc-sum small{color:var(--amber)}
+  .dc-copy{font:inherit;font-size:12px;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line2);
+    border-radius:99px;padding:4px 12px;cursor:pointer;margin-inline-start:auto}
+  .dc-st+.dc-copy{margin-inline-start:0}
+  .dc-st{margin-inline-start:auto;font-weight:800;font-size:14px;padding:4px 12px;border-radius:99px}
+  .dc-st.ok{color:var(--green);background:rgba(34,197,94,.14)} .dc-st.bad{color:var(--amber);background:rgba(251,191,36,.14)}
+  .dc-t{width:100%;border-collapse:collapse;font-size:13.5px}
+  .dc-t th{font-size:11px;color:var(--faint);font-weight:700;text-align:left;padding:4px 6px}
+  .dc-t td{padding:7px 6px;border-top:1px solid var(--line);vertical-align:top}
+  .dc-t td.n{font-family:var(--mono);font-weight:800;text-align:right;white-space:nowrap}
+  .dc-t .dc-k{font-family:var(--mono);font-weight:800;color:#c4b5fd;white-space:nowrap} .dc-k small{font-family:var(--sans);font-weight:500;color:var(--faint)}
+  .dc-t tr.bad td{background:rgba(251,191,36,.06)}
+  .dc-via{font-size:10.5px;font-weight:500;color:var(--faint);font-family:var(--sans)}
+  .dq{font-weight:800;font-family:var(--mono)} .dq.ok{color:var(--green)} .dq.no{color:var(--rose)} .dq.df{color:var(--amber)}
+  .dc-sm{color:var(--amber);font-weight:700} .dc-ne{color:var(--violet)}
+  .dc-x{margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.3)}
+  .dc-xh{font-size:12px;font-weight:800;color:var(--rose);margin-bottom:4px}
+  .dc-xl{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0}
+  .dc-xl span:last-child{font-family:var(--mono);font-weight:700;white-space:nowrap}
+  .dc-l{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;font-size:13.5px;padding:6px 0;border-top:1px solid var(--line)}
+  .dc-l b{font-family:var(--mono);color:#c4b5fd} .dc-l .n{font-family:var(--mono);font-weight:800;text-align:right;min-width:70px}
+  @media(max-width:640px){ .dc-grid{grid-template-columns:1fr} .dp-pbtn .dp-day{margin-inline-start:0} }
   .pd-grid>*{min-width:0}
   .pd-name{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:baseline;gap:6px}
   .pd-name small{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--faint);text-transform:none;letter-spacing:0;white-space:nowrap}
@@ -2443,15 +2478,18 @@ function renderSummary(){
 
   // Plant breakdown (from station-level groups)
   const pm=new Map();
+  // every station in its fixed order (L1, L2, V3, V4, V5), even with nothing loaded yet (0)
+  const stOrder=s=>{ const m=String(s).match(/^([A-Z]+)\s*(\d+)$/i); return m?[m[1].toUpperCase(),+m[2]]:[String(s),0]; };
+  for(const p of new Set(['L1','L2','V3','V4','V5',...PLANT_LIST()])) pm.set(p,{p,deliv:0,trucks:0,active:0});
   for(const g of full){ const p=g.plant||'—'; if(!pm.has(p))pm.set(p,{p,deliv:0,trucks:0,active:0}); const o=pm.get(p); o.deliv+=g.delivered-(g.carried||0); o.trucks+=g.trucks-(g.carriedTrucks||0); if(g.status==='active')o.active++; }
-  const parr=[...pm.values()].sort((a,b)=>b.deliv-a.deliv);
+  const parr=[...pm.values()].filter(o=>o.p!=='—'||o.deliv>0).sort((a,b)=>{ const x=stOrder(a.p), y=stOrder(b.p); return x[0]<y[0]?-1:x[0]>y[0]?1:x[1]-y[1]; });
   const maxD=Math.max(1,...parr.map(x=>x.deliv));
   el('plants').innerHTML = parr.length ? parr.map(o=>`
     <div class="plant-row">
       <span class="plant-tag">${o.p}</span>
       <div class="plant-bar"><i style="width:${(o.deliv/maxD*100).toFixed(0)}%"></i></div>
       <span class="plant-meta"><b>${fmt(o.deliv,0)}</b> m³ · ${o.trucks} trk${o.active?` · <b style="color:var(--cyan)">${o.active} active</b>`:''}</span>
-      ${(()=>{ const n=plantNext(o.p); return n?`<div class="plant-next">Next: <b>${esc((n.g.client?n.g.client+' ':'')+n.g.elem)}</b>${n.t?` · ${n.t.time}`:''}</div>`:''; })()}
+      ${(()=>{ const n=plantNext(o.p); return n?`<div class="plant-next"><span class="pn-l">Next</span><b>${esc((n.g.client?n.g.client+' ':'')+n.g.elem)}</b>${n.t?`<span class="pn-t">${esc(n.t.time)}</span>`:''}</div>`:''; })()}
     </div>`).join('') : '<div class="muted" style="font-size:13px">No station data.</div>';
 
   // Spotlight
@@ -3469,9 +3507,14 @@ function renderProduction(){
     </div>`;
   };
   const days=(PROD8.today||PROD8.yesterday)?`<div class="pd-grid">${day(PROD8.today,'Today')}${day(PROD8.yesterday,'Yesterday')}</div>`:'';
-  area.innerHTML=days+dpHtml()+`<div class="prod-grid">${one(PRODTBL[0],'Production MTD · 8 AM : 8 AM')}${one(PRODTBL[1],'Production MTD · 12 AM : 12 AM')}</div>`;
-  dpWire();
+  // two tabs: the sheet's production tables | Daily program (check the stations' WhatsApp messages)
+  const tabs=`<div class="spot-tabs pr-tabs"><span class="spot-tab ${prodTab!=='dp'?'active':''}" data-pt="prod">Production</span><span class="spot-tab ${prodTab==='dp'?'active':''}" data-pt="dp">Daily program</span></div>`;
+  area.innerHTML=tabs+(prodTab==='dp'?dpHtml()
+    :days+`<div class="prod-grid">${one(PRODTBL[0],'Production MTD · 8 AM : 8 AM')}${one(PRODTBL[1],'Production MTD · 12 AM : 12 AM')}</div>`);
+  area.querySelectorAll('[data-pt]').forEach(t=>t.addEventListener('click',()=>{ prodTab=t.dataset.pt; try{ localStorage.setItem('cmpour:prodtab',prodTab); }catch(e){} renderProduction(); }));
+  if(prodTab==='dp') dpWire();
 }
+let prodTab=(()=>{ try{ return localStorage.getItem('cmpour:prodtab')||'prod'; }catch(e){ return 'prod'; } })();
 
 /* ---------- Daily program: what each station loaded 8:00 → 8:00, like the WhatsApp "Daily program" message ----------
    Built from the raw station tabs (every truck with its ES, m³, departure time). One line per request (ES);
@@ -3480,16 +3523,35 @@ function renderProduction(){
 let RAWTABS=[];
 const KEY_ESN='cmpour:esnames';
 let ESN=(()=>{ try{ return JSON.parse(localStorage.getItem(KEY_ESN)||'{}')||{}; }catch(e){ return {}; } })();
-function rememberEsNames(){ let ch=false;   // the plan only keeps current requests: remember each ES's name for older days
-  for(const r of (PLAN_ROWS||[])){ const es=String(r.es||'').trim(); if(!es||/^APP-/.test(es)) continue;
-    const v={c:String(r.client||'').trim(), k:r.code}; const o=ESN[es]; if(!o||o.c!==v.c||o.k!==v.k){ ESN[es]=v; ch=true; } }
-  if(ch) try{ localStorage.setItem(KEY_ESN,JSON.stringify(ESN)); }catch(e){} }
+// The plan only keeps current requests, so each ES's name is remembered for older days — SHARED, in the sync
+// script: PUMPNOTE['n<ES>'] = 'client|code|saved ms'. Any device that sees a new ES in the plan saves it for all;
+// names older than 60 days are dropped. (ESN = the older per-device copy, still read and moved over.)
+const ESN_KEEP=60*86400000;
+function esName(es){ const v=PUMPNOTE['n'+es];
+  if(v){ const [c,k]=String(v).split('|'); return {c:c||'', k:k||''}; }
+  return ESN[es]||null; }
+let esNamesBusy=false;
+async function rememberEsNames(){
+  if(BOT||esNamesBusy||!syncBase()||/^(localhost|127\.)/.test(location.hostname)) return;   // local test copies never write
+  esNamesBusy=true;
+  try{ const now=Date.now(), push=[];
+    const want=new Map();
+    for(const [es,o] of Object.entries(ESN)) if(o&&o.k) want.set(es,{c:o.c||'',k:o.k});              // the per-device copy
+    for(const r of (PLAN_ROWS||[])){ const es=String(r.es||'').trim(); if(!es||/^APP-/.test(es)||!r.code) continue;
+      want.set(es,{c:String(r.client||'').trim(),k:r.code}); }
+    for(const [es,o] of want){ const cur=PUMPNOTE['n'+es], p=cur?String(cur).split('|'):null;
+      if(!p||p[0]!==o.c||p[1]!==o.k) push.push(['n'+es,`${o.c.replace(/\|/g,' ')}|${o.k}|${now}`]); }
+    for(const k of Object.keys(PUMPNOTE)){ if(!/^n\d/.test(k)) continue; const t=+String(PUMPNOTE[k]).split('|')[2]||0;
+      if(t && now-t>ESN_KEEP && !(PLAN_ROWS||[]).some(r=>'n'+String(r.es||'').trim()===k)) push.push([k,'']); }
+    for(const [k,v] of push){ if(v) PUMPNOTE[k]=v; else delete PUMPNOTE[k];
+      await syncCall({action:'set', type:'pump', key:k, value:v, by:ME}); }   // no re-render per name
+    if(push.length) stSet(KEY_PUMP,PUMPNOTE);
+  }finally{ esNamesBusy=false; } }
 const DP_START_MIX=3;
 let dpStart=null, dpMsg='', dpOpen=null;
 function dpDefaultStart(){ const n=new Date(), t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),8).getTime(); return (n.getTime()>=t?t:t-86400000)-86400000; }
 const stName=tok=>String(tok).replace(/^([A-Z]+)\s*(\d+)$/i,'$1.$2').toUpperCase();
 function dpBuild(start){
-  rememberEsNames();
   const end=start+86400000, EXCL=/waste|rejected\s*&?\s*transferred|مرفوض|هالك/i, out=[];
   for(const r of RAWTABS){ const H=(r.cols&&r.cols.some(Boolean))?r.cols:(r.matrix[0]||[]); const rows=(r.cols&&r.cols.some(Boolean))?r.matrix:r.matrix.slice(1);
     const fi=re=>H.findIndex(h=>re.test(String(h||'').trim()));
@@ -3505,14 +3567,14 @@ function dpBuild(start){
       st.total+=q;
       if(!es){ if(q<DP_START_MIX) st.start+=q; else st.noes.push({q,tk,t}); continue; }
       const L=st.lines.get(es)||{es,q:0,n:0,t}; L.q+=q; L.n++; if(t<L.t) L.t=t; st.lines.set(es,L); }
-    st.list=[...st.lines.values()].sort((a,b)=>a.t-b.t).map(L=>{ const p=ESN[L.es]||(()=>{ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===L.es); return pr?{c:pr.client,k:pr.code}:null; })();
+    st.list=[...st.lines.values()].sort((a,b)=>a.t-b.t).map(L=>{ const p=esName(L.es)||(()=>{ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===L.es); return pr?{c:pr.client,k:pr.code}:null; })();
       return Object.assign(L,{client:p?p.c:'', code:p?p.k:''}); });
     if(st.total||st.rej.length) out.push(st); }
   return out;
 }
 const dpDate=t=>{ const d=new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; };
 function dpText(sts,start){
-  return `*Daily program*\n${dpDate(start)}\n08:00-08:00\n`+sts.map(s=>`\n*${s.name}*\n`+s.list.map(L=>`${L.client||'?'} . ${L.code||'ES '+L.es} . ${fmt(L.q,0)}m³.`).join('\n')
+  return `*Daily program*\n${dpDate(start)}\n08:00-08:00\n`+sts.map(s=>`\n*${s.name}*\n`+s.list.map(L=>`${L.code?`${L.client?L.client+' . ':''}${L.code}`:'ES '+L.es} . ${fmt(L.q,0)}m³.`).join('\n')
     +(s.start?`\nStartmix . ${fmt(s.start,0)}m³.`:'')+(s.noes.length?`\nNo ES . ${fmt(s.noes.reduce((a,x)=>a+x.q,0),0)}m³.`:'')+`\n\nTotal.   ${fmt(s.total,0)}m`).join('\n');
 }
 // the station's WhatsApp message -> {station: {codes:{CODE: m³}, start: m³, total, lines:[...]}}
@@ -3528,40 +3590,74 @@ function dpParse(txt){ const out={}; let cur=null;
     out[cur].lines.push({raw:s,code,q,sm});
     if(sm) out[cur].start+=q; else if(code) out[cur].codes[code]=(out[cur].codes[code]||0)+q; }
   return out; }
+// one station's check: the message's lines grouped by element (as the station wrote them) next to what the sheet has.
+// ESs the app has no name for are matched to a message element by quantity (1–3 of them adding up to the missing m³).
+function dpCompare(s,m){
+  const msgBy=new Map();   // code -> {client, grade, q, n}
+  for(const l of m.lines){ if(l.sm||!l.code) continue; const parts=l.raw.split(/\s*\.\s+|\s+\.\s*/).map(x=>x.trim()).filter(Boolean);
+    const o=msgBy.get(l.code)||{code:l.code, client:parts[0]||'', grades:new Set(), q:0, n:0};
+    const gi=parts.findIndex(p=>p.replace(/\s+/g,'').toUpperCase()===l.code); if(gi>=0&&gi+1<parts.length-1) o.grades.add(parts[gi+1]);   // the part between code and m³
+    o.q+=l.q; o.n++; msgBy.set(l.code,o); }
+  const named=s.list.filter(L=>L.code), unk=s.list.filter(L=>!L.code).map(L=>({...L,used:false}));
+  const sheetOf=code=>named.filter(L=>L.code===code);
+  const pick=need=>{ const free=unk.filter(u=>!u.used), n=free.length;   // 1–3 unnamed ESs that add up to `need`
+    for(let a=0;a<n;a++){ if(Math.abs(free[a].q-need)<0.5) return [free[a]];
+      for(let b=a+1;b<n;b++){ if(Math.abs(free[a].q+free[b].q-need)<0.5) return [free[a],free[b]];
+        for(let c=b+1;c<n;c++) if(Math.abs(free[a].q+free[b].q+free[c].q-need)<0.5) return [free[a],free[b],free[c]]; } }
+    return null; };
+  const rows=[...msgBy.values()].map(o=>{ const sh=sheetOf(o.code); let q=sh.reduce((a,L)=>a+L.q,0), via=[];
+    if(q<o.q-0.5){ const p=pick(o.q-q); if(p){ p.forEach(u=>u.used=true); via=p; q+=p.reduce((a,u)=>a+u.q,0); } }
+    return {client:o.client, code:o.code, grade:[...o.grades].join(', '), mq:o.q, sq:q, via, es:sh.map(L=>L.es)}; });
+  const extra=named.filter(L=>!msgBy.has(L.code)).concat(unk.filter(u=>!u.used));
+  // same element twice in the sheet (not in the message) -> one line each is fine
+  return {rows, extra, start:{mq:m.start, sq:s.start}, total:{mq:m.total, sq:s.total}};
+}
 function dpHtml(){
-  if(!RAWTABS.length) return '';
+  if(!RAWTABS.length) return '<div class="muted" style="font-size:13px;padding:10px 2px">Pulling the station tabs…</div>';
   const start=dpStart!=null?dpStart:dpDefaultStart(), sts=dpBuild(start), msg=dpParse(dpMsg);
   const d=new Date(start), iso=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   const isYest=start===dpDefaultStart();
-  const sheetQ=tok=>{ const t=isYest?PROD8.yesterday:null; const r=t&&t.rows.find(x=>String(x.p).toUpperCase()===String(tok).toUpperCase()); return r?r.q:null; };
-  const card=s=>{ const m=msg[s.tok.toUpperCase()]; const sq=sheetQ(s.tok);
-    // check: per element code (the message may split one request in several lines) + Start mix + total
-    let chk='';
-    if(m){ const codes=new Set([...Object.keys(m.codes), ...s.list.map(L=>L.code).filter(Boolean)]);
-      const mine=k=>s.list.filter(L=>L.code===k).reduce((a,L)=>a+L.q,0);
-      const rowsC=[...codes].map(k=>({k, a:m.codes[k]||0, b:mine(k)})).concat([{k:'Startmix', a:m.start, b:s.start}]).filter(r=>r.a||r.b);
-      const unk=s.list.filter(L=>!L.code);
-      chk=`<div class="dp-chk"><div class="dp-chk-h">Check against the message</div>
-        <table class="dp-ct"><thead><tr><th></th><th>Element</th><th>Message</th><th>Sheet</th><th>Diff</th></tr></thead><tbody>
-        ${rowsC.map(r=>{ const df=r.b-r.a, ok=Math.abs(df)<0.5; return `<tr class="${ok?'ok':(r.a&&r.b?'df':'miss')}"><td>${ok?'✓':(r.a&&r.b?'⚠':'✗')}</td><td>${esc(r.k)}</td><td>${r.a?fmt(r.a,0):'—'}</td><td>${r.b?fmt(r.b,0):'—'}</td><td>${ok?'':(df>0?'+':'')+fmt(df,0)}</td></tr>`; }).join('')}
-        ${unk.map(L=>`<tr class="miss"><td>?</td><td>ES ${esc(L.es)}</td><td>—</td><td>${fmt(L.q,0)}</td><td>name unknown</td></tr>`).join('')}
-        <tr class="tot ${m.total!=null&&Math.abs(m.total-s.total)<0.5?'ok':'df'}"><td>${m.total!=null&&Math.abs(m.total-s.total)<0.5?'✓':'⚠'}</td><td>Total</td><td>${m.total!=null?fmt(m.total,0):'—'}</td><td>${fmt(s.total,0)}</td><td>${m.total!=null&&Math.abs(m.total-s.total)>=0.5?((s.total-m.total>0?'+':'')+fmt(s.total-m.total,0)):''}</td></tr>
-        </tbody></table></div>`; }
-    return `<div class="dp-st"><div class="dp-h"><b>${esc(s.name)}</b><span class="dp-tot">${fmt(s.total,0)} m³</span>${sq!=null&&Math.abs(sq-s.total)>=0.5?`<span class="dp-sheet" title="The sheet's own Yesterday (8 AM : 8 AM) table">sheet table ${fmt(sq,0)}</span>`:''}</div>
-      ${s.list.map(L=>`<div class="dp-l"><span class="dp-c">${esc(L.client||'?')}</span><span class="dp-k">${esc(L.code||'ES '+L.es)}</span><span class="dp-q">${fmt(L.q,0)} m³</span><span class="dp-n">${L.n} trk</span></div>`).join('')}
-      ${s.start?`<div class="dp-l dp-sm"><span class="dp-c">Start mix</span><span class="dp-k">no ES · &lt;${DP_START_MIX} m³</span><span class="dp-q">${fmt(s.start,0)} m³</span><span class="dp-n"></span></div>`:''}
-      ${s.noes.map(x=>`<div class="dp-l dp-ne"><span class="dp-c">No ES</span><span class="dp-k">TM ${esc(x.tk||'—')} · ${timeShort(x.t)}</span><span class="dp-q">${fmt(x.q,0)} m³</span><span class="dp-n"></span></div>`).join('')}
-      ${s.rej.map(x=>`<div class="dp-l dp-rj"><span class="dp-c">Rejected</span><span class="dp-k">${x.es?'ES '+esc(x.es):'no ES'} · TM ${esc(x.tk||'—')}</span><span class="dp-q">${fmt(x.q,0)} m³</span><span class="dp-n">not in total</span></div>`).join('')}
-      ${chk}</div>`; };
-  const grand=sts.reduce((a,s)=>a+s.total,0);
-  return `<div class="card dp-card"><div class="dp-top"><h3 style="margin:0">Daily program</h3>
-      <label class="dp-day">From <input type="date" id="dpDay" value="${iso}"> 8:00 AM → next day 8:00 AM</label>
-      <span class="dp-grand">${fmt(grand,0)} m³</span>
-      <button class="btn ghost" id="dpCopy">📋 Copy</button></div>
-    ${sts.length?`<div class="dp-grid">${sts.map(card).join('')}</div>`:'<div class="muted" style="font-size:13px;padding:8px 2px">No trucks in this window — the station tabs only show the days their filter lets through.</div>'}
-    <details class="dp-paste"${dpOpen||dpMsg?' open':''}><summary>Paste a station's "Daily program" message to check it</summary>
-      <textarea id="dpMsg" placeholder="*Daily program* … *V.4* … Total. 173m">${esc(dpMsg)}</textarea>
-      <div class="dp-pbtn"><button class="btn" id="dpCheck">✓ Check</button><button class="btn ghost" id="dpClear">Clear</button></div></details>
+  const sheetTbl=tok=>{ const t=isYest?PROD8.yesterday:null; const r=t&&t.rows.find(x=>String(x.p).toUpperCase()===String(tok).toUpperCase()); return r?r.q:null; };
+  const okq=(a,b)=>a!=null&&b!=null&&Math.abs(a-b)<0.5;
+  const mark=(a,b)=>okq(a,b)?'<span class="dq ok">✓</span>':(!a||!b?'<span class="dq no">✗</span>':`<span class="dq df">${b-a>0?'+':''}${fmt(b-a,0)}</span>`);
+  const byTok=new Map(sts.map(s=>[s.tok.toUpperCase(),s]));
+  const copyBtn=tok=>`<button class="dc-copy" data-tok="${esc(String(tok).toUpperCase())}" title="Copy this station only, in the message format">📋 Copy</button>`;
+  const msgSt=Object.keys(msg).filter(k=>msg[k].lines.length||msg[k].total!=null);
+  let body;
+  if(msgSt.length){
+    // ---- checking pasted message(s): one card per station in the message ----
+    body=msgSt.map(k=>{ const m=msg[k], s=byTok.get(k)||{tok:k,name:stName(k),list:[],start:0,noes:[],rej:[],total:0};
+      const c=dpCompare(s,m), tt=c.total, ok=okq(tt.mq,tt.sq), tbl=sheetTbl(k);
+      return `<div class="dc">
+        <div class="dc-h"><b>${esc(stName(k))}</b>
+          <span class="dc-sum">Message <b>${tt.mq!=null?fmt(tt.mq,0):'—'}</b> · Sheet <b>${fmt(tt.sq,0)}</b>${tbl!=null&&!okq(tbl,tt.sq)?` <small>(sheet table ${fmt(tbl,0)})</small>`:''}</span>
+          <span class="dc-st ${ok?'ok':'bad'}">${ok?'✓ Matches':`${tt.sq-(tt.mq||0)>0?'+':''}${fmt(tt.sq-(tt.mq||0),0)} m³`}</span>${byTok.has(k)?copyBtn(k):''}</div>
+        <table class="dc-t"><thead><tr><th>Contractor</th><th>Element</th><th>Message</th><th>Sheet</th><th></th></tr></thead><tbody>
+        ${c.rows.map(r=>`<tr class="${okq(r.mq,r.sq)?'ok':'bad'}"><td>${esc(r.client)}</td><td class="dc-k">${esc(r.code)}${r.grade?` <small>${esc(r.grade)}</small>`:''}</td>
+          <td class="n">${fmt(r.mq,0)}</td><td class="n">${r.sq?fmt(r.sq,0):'—'}${r.via.length?`<div class="dc-via" title="Name not known yet — matched by quantity">≈ ES ${r.via.map(u=>esc(u.es)).join(' + ')}</div>`:''}</td><td>${mark(r.mq,r.sq)}</td></tr>`).join('')}
+        ${(c.start.mq||c.start.sq)?`<tr class="${okq(c.start.mq,c.start.sq)?'ok':'bad'}"><td class="dc-sm">Start mix</td><td></td><td class="n">${c.start.mq?fmt(c.start.mq,0):'—'}</td><td class="n">${c.start.sq?fmt(c.start.sq,0):'—'}</td><td>${mark(c.start.mq,c.start.sq)}</td></tr>`:''}
+        </tbody></table>
+        ${c.extra.length||s.noes.length?`<div class="dc-x"><div class="dc-xh">In the sheet, not in the message</div>
+          ${c.extra.map(L=>`<div class="dc-xl"><span>${L.code?esc((L.client?L.client+' · ':'')+L.code):'ES '+esc(L.es)}</span><span>${fmt(L.q,0)} m³ · ${L.n} trk</span></div>`).join('')}
+          ${s.noes.map(x=>`<div class="dc-xl"><span>No ES · TM ${esc(x.tk||'—')} · ${timeShort(x.t)}</span><span>${fmt(x.q,0)} m³</span></div>`).join('')}</div>`:''}
+      </div>`; }).join('');
+  } else {
+    // ---- no message yet: the sheet's own day, written like the message ----
+    body=sts.length?sts.map(s=>{ const tbl=sheetTbl(s.tok);
+      return `<div class="dc"><div class="dc-h"><b>${esc(s.name)}</b><span class="dc-sum">Sheet <b>${fmt(s.total,0)}</b> m³${tbl!=null&&!okq(tbl,s.total)?` <small>(sheet table ${fmt(tbl,0)})</small>`:''}</span>${copyBtn(s.tok)}</div>
+        ${s.list.map(L=>`<div class="dc-l"><span>${L.code?esc(L.client||''):''}</span><b>${L.code?esc(L.code):'ES '+esc(L.es)}</b><span class="n">${fmt(L.q,0)} m³</span></div>`).join('')}
+        ${s.start?`<div class="dc-l"><span class="dc-sm">Start mix</span><b></b><span class="n">${fmt(s.start,0)} m³</span></div>`:''}
+        ${s.noes.map(x=>`<div class="dc-l"><span class="dc-ne">No ES · TM ${esc(x.tk||'—')}</span><b></b><span class="n">${fmt(x.q,0)} m³</span></div>`).join('')}</div>`; }).join('')
+      :'<div class="muted" style="font-size:13px;padding:8px 2px">No trucks in this window — the station tabs only show the days their filter lets through.</div>';
+  }
+  return `<div class="dp-wrap">
+    <div class="dp-paste">
+      <textarea id="dpMsg" rows="4" placeholder="Paste the station's Daily program message here">${esc(dpMsg)}</textarea>
+      <div class="dp-pbtn"><button class="btn" id="dpCheck">✓ Check</button>${dpMsg?'<button class="btn ghost" id="dpClear">Clear</button>':''}
+        <label class="dp-day"><input type="date" id="dpDay" value="${iso}"> 8 AM → 8 AM</label>
+        <button class="btn ghost" id="dpCopy" title="Copy every station's day in the message format">📋 Copy all</button></div>
+    </div>
+    <div class="dc-grid">${body}</div>
   </div>`;
 }
 function dpWire(){
@@ -3570,14 +3666,20 @@ function dpWire(){
   el('dpCopy').addEventListener('click',async()=>{ const s=dpStart!=null?dpStart:dpDefaultStart(), txt=dpText(dpBuild(s),s);
     let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){}
     el('dpCopy').textContent=ok?'Copied ✓':'Copy failed'; });
-  const ta=el('dpMsg'), dt=ta.closest('details');
-  ta.addEventListener('input',()=>{ dpMsg=ta.value; });   // kept across the auto-refresh redraws
-  dt.addEventListener('toggle',()=>{ dpOpen=dt.open; });
-  el('dpCheck').addEventListener('click',()=>{ dpMsg=ta.value; dpOpen=true;
+  // one station only
+  document.querySelectorAll('.dc-copy').forEach(b=>b.addEventListener('click',async()=>{
+    const s=dpStart!=null?dpStart:dpDefaultStart(), txt=dpText(dpBuild(s).filter(x=>x.tok.toUpperCase()===b.dataset.tok),s);
+    let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){}
+    b.textContent=ok?'Copied ✓':'Copy failed'; }));
+  const ta=el('dpMsg');
+  const check=()=>{ dpMsg=ta.value;
     // the message's own date moves the report to that day
     const m=dpMsg.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) dpStart=new Date(+m[3],m[2]-1,+m[1],8).getTime();
-    renderProduction(); });
-  el('dpClear').addEventListener('click',()=>{ dpMsg=''; renderProduction(); });
+    ta.blur(); renderProduction(); };
+  ta.addEventListener('input',()=>{ dpMsg=ta.value; });   // kept across the auto-refresh redraws
+  ta.addEventListener('paste',()=>setTimeout(check,0));    // pasting a message checks it at once
+  el('dpCheck').addEventListener('click',check);
+  const cl=el('dpClear'); if(cl) cl.addEventListener('click',()=>{ dpMsg=''; renderProduction(); });
 }
 /* The small "Today ( 8 AM : 8 AM )" / "Yesterday ( 8 AM : 8 AM )" tables on the Trucks Tracking tab:
    a title cell, then  Plant | Production  rows (L1…V5) and a TOTAL row. Read as the sheet shows them. */
@@ -3746,6 +3848,7 @@ async function loadLive(){
   if(!anyOk){ onFail('No tab returned data · '+report.join(' · ')); return; }
   LAST={matrix:allRows,header:UNI_HEADER.slice()};
   render(build(applyEsFix(allRows),UNI_HEADER.slice()));   // ES typos fixed in the app (Data checks → Fix)
+  rememberEsNames();          // save new ES names (shared) while the plan still lists them
   setLive('on','Live');
   window.__ready=Date.now();   // the notifier waits for this (first complete pull)
   applyPendingCheck();         // opened from a tapped notification before the data was in
