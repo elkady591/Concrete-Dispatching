@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000005">
+<meta name="app-build" content="20261019-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -437,6 +437,37 @@
   .prod-tbl th:first-child,.prod-tbl td:first-child{text-align:start;white-space:nowrap}
   /* Today / Yesterday production cards — side by side on every screen, phones included */
   .pd-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  /* Daily program (per station, 8 → 8) */
+  .dp-card{margin-bottom:14px}
+  .dp-top{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-bottom:12px}
+  .dp-day{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .dp-day input{font:inherit;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line2);border-radius:10px;padding:4px 8px;color-scheme:dark}
+  .dp-grand{margin-inline-start:auto;font-family:var(--mono);font-weight:800;font-size:16px;color:var(--cyan)}
+  .dp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+  .dp-st{border:1px solid var(--line2);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.025)}
+  .dp-h{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+  .dp-h b{font-size:15px}
+  .dp-tot{font-family:var(--mono);font-weight:800;color:var(--cyan)}
+  .dp-sheet{margin-inline-start:auto;font-size:11px;color:var(--amber)}
+  .dp-l{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto auto;gap:8px;align-items:baseline;font-size:12.5px;padding:4px 0;border-top:1px solid var(--line)}
+  .dp-c{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dp-k{font-family:var(--mono);font-weight:700;color:#c4b5fd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dp-q{font-family:var(--mono);font-weight:800;text-align:right}
+  .dp-n{font-size:11px;color:var(--faint);min-width:40px;text-align:right}
+  .dp-sm .dp-c{color:var(--amber)} .dp-sm .dp-k{color:var(--faint);font-family:inherit;font-weight:500}
+  .dp-ne .dp-c{color:var(--violet)} .dp-rj{opacity:.6} .dp-rj .dp-c{color:var(--rose)} .dp-rj .dp-q{text-decoration:line-through}
+  .dp-chk{margin-top:10px;border-top:1px dashed var(--line2);padding-top:8px}
+  .dp-chk-h{font-size:12px;font-weight:800;color:var(--muted);margin-bottom:4px}
+  .dp-ct{width:100%;font-size:12.5px;border-collapse:collapse}
+  .dp-ct th{font-size:10.5px;color:var(--faint);text-align:left;font-weight:700;padding:3px 4px}
+  .dp-ct td{padding:4px;border-top:1px solid var(--line);font-family:var(--mono)}
+  .dp-ct tr.ok td:first-child{color:var(--green)} .dp-ct tr.df td{color:var(--amber)} .dp-ct tr.miss td{color:var(--rose)}
+  .dp-ct tr.tot td{font-weight:800}
+  .dp-paste{margin-top:12px;font-size:13px}
+  .dp-paste summary{cursor:pointer;color:var(--muted);font-weight:700}
+  .dp-paste textarea{width:100%;min-height:140px;margin-top:8px;background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--ink);border-radius:12px;padding:10px;font-family:var(--mono);font-size:12px}
+  .dp-pbtn{display:flex;gap:8px;margin-top:8px}
+  @media(max-width:640px){ .dp-grid{grid-template-columns:1fr} .dp-grand{margin-inline-start:0} }
   .pd-grid>*{min-width:0}
   .pd-name{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:baseline;gap:6px}
   .pd-name small{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--faint);text-transform:none;letter-spacing:0;white-space:nowrap}
@@ -556,6 +587,13 @@
   @media (max-width:640px){ .pic-btns{display:grid!important;grid-template-columns:1fr 1fr} }   /* picture buttons 2 × 2 on phones */
   .pic-cut{text-align:center;margin-top:10px;font-size:13px;color:var(--muted)}
   .pic-cut{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px}
+  .pic-cut select,.pic-tmp input{font:inherit;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line2);
+    border-radius:10px;padding:5px 8px;color-scheme:dark}
+  .pic-cut select option{background:#1a1f2e;color:#fff}
+  .pic-tmp{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:13px;color:var(--amber)}
+  .pic-tmp input{border-color:rgba(251,191,36,.5)}
+  .pic-tmp-till{font-size:12px}
+  .pic-cut-now{text-align:center;font-size:11.5px;color:var(--faint);margin-top:6px}
   .pic-cut input{font:inherit;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line2);
     border-radius:10px;padding:5px 8px;margin:0 4px;color-scheme:dark}
   .pic-cut-off{font:inherit;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:1px solid var(--line2);
@@ -885,7 +923,7 @@
       <button class="btn" id="planOpenBtn" style="padding:12px 18px;font-size:14px" title="Open the picture full size">🔍 Open</button>
     </div>
     <div id="planPhotoMsg" class="muted" style="text-align:center;font-size:12px;margin-top:6px"></div>
-    <div class="pic-cut"><label>🕗 Auto-hide pours finished before <input type="datetime-local" id="planCutSel" title="Finished pours whose last truck was before this date + time leave the picture and Closed Pours (every device)"></label><button type="button" class="pic-cut-off" id="planCutOff" title="Turn auto-hide off">Off</button></div>
+    <div id="planCut" title="Finished pours whose last truck was before this moment leave the picture and Closed Pours (every device)"></div>
   </section>
 
   <!-- ALL POURS VIEW -->
@@ -2665,6 +2703,7 @@ function collectChecks(pours){
   const from=CFG.fromDate||'', to=CFG.toDate||'';
   const items=[];
   for(const x of NOES){ const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
+    if(x.q<DP_START_MIX) continue;   // no ES and under 3 m³ = Start mix (the priming batch), not a missing ES
     const tm=parseTime(x.dep), at=tm!=null?ts(d,tm):null;
     items.push({id:`noes|${x.plant}|${x.truck}|${dk}|${x.dep}`, kind:'No ES', cls:'noes', txt:`${esc(x.plant)} · TM ${esc(x.truck)} · ${at!=null?timeShort(at):'no time'} · ${fmt(x.q)} m³ — not counted on any element`,
       ui:{sev:'red', icon:'🏷️', head:'Truck without ES', at, tags:[CT(esc(x.plant),'st'),CT('TM '+esc(x.truck),'tk'),CT(fmt(x.q)+' m³')],
@@ -2933,6 +2972,10 @@ function renderUpcoming(){
       return `<button class="uc-snd${on?' on':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}" title="${on?'Sent — tap to undo':'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}</button>`; }).join('')}</div>`; };
   // chains (same client + element, poured one after the other) become ONE card; its place = its first request
   const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
+  // carries on with the pumps of the pour before it (same element, or an "after" link asking for the same pumps)
+  // -> nothing to send: the 🚚 chips are left out
+  const SFu=pumpShareFam(), LKu=pourLinks();
+  const carriesOn=p=>!!(CH.get(p)||{}).prev || (LKu.has(p) && SFu(p)===SFu(LKu.get(p)));
   // the one it waits for: same client + element -> just its quantity ("after the 72 m³"), else its name
   const afterName=(a,g)=>pumpFam(a)===pumpFam(g)?`the ${fmt(a.required!=null?a.required:a.planReq,0)} m³`:site(a);
   const units=[], inUnit=new Set();
@@ -2957,7 +3000,7 @@ function renderUpcoming(){
         ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
         Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b>
         ${p.mix?('<br>Grade: <b>'+esc(p.mix)+'</b>'):''}
-      </div>${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${(CH.get(p)||{}).prev?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
+      </div>${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
     </div>`; }).join('')+'</div>';
   // app requests: delete / merge with the sheet copy / keep both
   const A=el('upcomingArea');
@@ -3249,24 +3292,51 @@ async function syncClear(type){
 // …plus the automatic cut under the picture: PUMPNOTE['hcut']='08:00' = every pour that FINISHED (closed, or its
 // quantity reached) with its last truck before 8:00 today is hidden the same way. 'h<key>'='0' = shown anyway.
 const hideKey=g=>'h'+doneKey(g);
-// stored as "2026-10-19T08:00" (date + time); an older "08:00" alone = today at that time
-function planCutAt(){ const v=String(PUMPNOTE['hcut']||'');
-  let m=v.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})$/); if(m) return new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).getTime();
-  m=v.match(/^(\d{1,2}):(\d{2})$/); if(!m) return null;
-  const d=new Date(); d.setHours(+m[1],+m[2],0,0); return d.getTime(); }
+// Two settings (both shared):
+//   PUMPNOTE['hday'] = '08:00'  the fixed DAILY cut = the latest 8:00 that has passed (today 8 AM; before 8 AM = yesterday's)
+//   PUMPNOTE['hcut'] = '2026-10-18T22:00|<ms set>'  a TEMPORARY cut, until the next daily cut after it was set
+// (older values: hcut '08:00' = daily; hcut 'YYYY-MM-DDTHH:MM' without |ms = temporary)
+const CUT_DAILY=['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00',
+  '13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'];
+function cutDaily(){ const d=String(PUMPNOTE['hday']||''), c=String(PUMPNOTE['hcut']||'');
+  return /^\d{1,2}:\d{2}$/.test(d)?d:(/^\d{1,2}:\d{2}$/.test(c)?c:''); }
+const atHM=(hm,base)=>{ const [h,m]=hm.split(':').map(Number), d=new Date(base); d.setHours(h,m,0,0); return d.getTime(); };
+function lastDailyCut(hm,now){ let t=atHM(hm,now); if(t>now) t-=86400000; return t; }     // latest one that has passed
+function nextDailyCut(hm,after){ let t=atHM(hm,after); if(t<=after) t+=86400000; return t; }
+function cutTemp(){ const m=String(PUMPNOTE['hcut']||'').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})(?:\|(\d+))?$/); if(!m) return null;
+  const at=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).getTime(), set=m[6]?+m[6]:at, hm=cutDaily();
+  const till=hm?nextDailyCut(hm,set):null;
+  return (till!=null && Date.now()>=till) ? null : {at,till}; }                               // expired -> the daily one again
+function planCutAt(){ const tmp=cutTemp(); if(tmp) return tmp.at; const hm=cutDaily(); return hm?lastDailyCut(hm,Date.now()):null; }
 const cutLabel=t=>{ const d=new Date(t), n=new Date(); return (d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `)+timeShort(t); };
 const pourFinished=g=>!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
 function autoHidden(g){ const c=planCutAt(); return c!=null && pourFinished(g) && g.endMax!=null && g.endMax<c; }
 function closedHidden(g){ const v=PUMPNOTE[hideKey(g)]; if(v==='1') return pourFinished(g); if(v==='0') return false; return autoHidden(g); }
-function renderPlanCut(){ const s=el('planCutSel'), off=el('planCutOff'); if(!s) return;
-  const t=planCutAt(), d=t!=null?new Date(t):null;
-  const val=d?`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`:'';
-  if(document.activeElement!==s) s.value=val;   // don't overwrite while it is being picked
-  if(off) off.classList.toggle('on',!val);
-  const save=async v=>{ if(v) PUMPNOTE['hcut']=v; else delete PUMPNOTE['hcut']; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump','hcut',v); };
-  if(!s.dataset.on){ s.dataset.on='1';
-    s.addEventListener('change',()=>{ if(!s.value||/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s.value)) save(s.value); });
-    if(off) off.addEventListener('click',()=>{ s.value=''; save(''); }); } }
+let cutEditing=false;   // the "Change for now" picker is open
+let cutPicking=false;   // its date/time field has focus
+function renderPlanCut(){ const box=el('planCut'); if(!box) return;
+  if(cutPicking) return;   // the date/time is being picked — a refresh must not redraw it
+  const hm=cutDaily(), tmp=cutTemp(), cur=planCutAt();
+  const dt=t=>{ const d=new Date(t); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  box.innerHTML=`<div class="pic-cut"><span>🕗 Auto-hide pours finished before · every day</span>
+      <select id="cutDay">${['',...CUT_DAILY].map(v=>`<option value="${v}"${v===hm?' selected':''}>${v?timeShort(atHM(v,Date.now())):'Off'}</option>`).join('')}</select>
+      ${!tmp&&!cutEditing?`<button type="button" class="pic-cut-off" id="cutTmpBtn">✎ Change for now</button>`:''}</div>
+    ${tmp||cutEditing?`<div class="pic-tmp"><span>${tmp?'Temporary':'For now'}:</span><input type="datetime-local" id="cutTmp" value="${cur!=null?dt(cur):''}">
+      <span class="pic-tmp-till">${hm?`until ${cutLabel(tmp?tmp.till:nextDailyCut(hm,Date.now()))}`:'until changed'}</span>
+      <button type="button" class="pic-cut-off" id="cutTmpOff">✕ ${hm?'back to daily':'cancel'}</button></div>`:''}
+    ${cur!=null?`<div class="pic-cut-now">Hidden now: finished before <b>${cutLabel(cur)}</b></div>`:''}`;
+  const push=async (k,v)=>{ if(v) PUMPNOTE[k]=v; else delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,v); };
+  el('cutDay').addEventListener('change',async e=>{ const v=e.target.value;
+    if(/^\d{1,2}:\d{2}$/.test(String(PUMPNOTE['hcut']||''))) await push('hcut','');   // old single setting -> now the daily one
+    push('hday',v); });
+  const tb=el('cutTmpBtn'); if(tb) tb.addEventListener('click',()=>{ cutEditing=true; renderPlanCut(); const i=el('cutTmp'); if(i) i.focus(); });
+  const ti=el('cutTmp'); if(ti){
+    ti.addEventListener('focus',()=>{ cutPicking=true; });
+    ti.addEventListener('blur',()=>{ cutPicking=false; });
+    ti.addEventListener('change',()=>{ if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(ti.value)) return;
+      cutEditing=false; cutPicking=false; push('hcut',ti.value+'|'+Date.now()); }); }
+  const to=el('cutTmpOff'); if(to) to.addEventListener('click',()=>{ cutEditing=false; if(cutTemp()) push('hcut',''); else renderPlanCut(); });
+}
 let showHiddenClosed=false;
 function toggleDone(k, on){
   if(on){ DONE[k]=true; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); DONE_ORDER.push(k); }
@@ -3368,6 +3438,7 @@ function parseProdTable(rows, titleRe){
 }
 function renderProduction(){
   const area=el('productionArea'); if(!area)return;
+  const ae=document.activeElement; if(ae&&(ae.id==='dpMsg'||ae.id==='dpDay')) return;   // typing / picking in Daily program
   if(!PRODTBL[0]&&!PRODTBL[1]){ area.innerHTML='<div class="muted" style="font-size:13px;padding:10px 2px">Production tables not available yet — pull the sheet.</div>'; return; }
   const now=new Date();
   const MON=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][now.getMonth()];
@@ -3393,7 +3464,115 @@ function renderProduction(){
     </div>`;
   };
   const days=(PROD8.today||PROD8.yesterday)?`<div class="pd-grid">${day(PROD8.today,'Today')}${day(PROD8.yesterday,'Yesterday')}</div>`:'';
-  area.innerHTML=days+`<div class="prod-grid">${one(PRODTBL[0],'Production MTD · 8 AM : 8 AM')}${one(PRODTBL[1],'Production MTD · 12 AM : 12 AM')}</div>`;
+  area.innerHTML=days+dpHtml()+`<div class="prod-grid">${one(PRODTBL[0],'Production MTD · 8 AM : 8 AM')}${one(PRODTBL[1],'Production MTD · 12 AM : 12 AM')}</div>`;
+  dpWire();
+}
+
+/* ---------- Daily program: what each station loaded 8:00 → 8:00, like the WhatsApp "Daily program" message ----------
+   Built from the raw station tabs (every truck with its ES, m³, departure time). One line per request (ES);
+   no ES and under 3 m³ = Start mix; no ES and more = "No ES"; Waste / Rejected listed apart (not in the total).
+   Paste a station's message under it -> line-by-line check (by element code; Start mix as its own line). */
+let RAWTABS=[];
+const KEY_ESN='cmpour:esnames';
+let ESN=(()=>{ try{ return JSON.parse(localStorage.getItem(KEY_ESN)||'{}')||{}; }catch(e){ return {}; } })();
+function rememberEsNames(){ let ch=false;   // the plan only keeps current requests: remember each ES's name for older days
+  for(const r of (PLAN_ROWS||[])){ const es=String(r.es||'').trim(); if(!es||/^APP-/.test(es)) continue;
+    const v={c:String(r.client||'').trim(), k:r.code}; const o=ESN[es]; if(!o||o.c!==v.c||o.k!==v.k){ ESN[es]=v; ch=true; } }
+  if(ch) try{ localStorage.setItem(KEY_ESN,JSON.stringify(ESN)); }catch(e){} }
+const DP_START_MIX=3;
+let dpStart=null, dpMsg='', dpOpen=null;
+function dpDefaultStart(){ const n=new Date(), t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),8).getTime(); return (n.getTime()>=t?t:t-86400000)-86400000; }
+const stName=tok=>String(tok).replace(/^([A-Z]+)\s*(\d+)$/i,'$1.$2').toUpperCase();
+function dpBuild(start){
+  rememberEsNames();
+  const end=start+86400000, EXCL=/waste|rejected\s*&?\s*transferred|مرفوض|هالك/i, out=[];
+  for(const r of RAWTABS){ const H=(r.cols&&r.cols.some(Boolean))?r.cols:(r.matrix[0]||[]); const rows=(r.cols&&r.cols.some(Boolean))?r.matrix:r.matrix.slice(1);
+    const fi=re=>H.findIndex(h=>re.test(String(h||'').trim()));
+    const c={es:fi(/^es$/i), q:fi(/qm3|concrete|quantity/i), dep:fi(/departure/i), date:fi(/^date$/i), tk:fi(/truck/i), fu:fi(/follow/i), ac:fi(/^action$/i)};
+    if(c.q<0||c.dep<0) continue;
+    const st={tok:r.token, name:stName(r.token), lines:new Map(), start:0, noes:[], rej:[], total:0};
+    for(const x of rows){ const ds=String(x[c.dep]||''), m=ds.match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{1,2}):(\d{2})/); if(!m) continue;
+      const t=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).getTime(); if(t<start||t>=end) continue;
+      const q=num(x[c.q]); if(!(q>0)) continue;
+      const es=c.es>=0?String(x[c.es]||'').trim():'', tk=c.tk>=0?String(x[c.tk]||'').trim():'';
+      const note=(c.fu>=0?String(x[c.fu]||''):'')+' '+(c.ac>=0?String(x[c.ac]||''):'');
+      if(EXCL.test(note)){ st.rej.push({es,q,tk,t}); continue; }
+      st.total+=q;
+      if(!es){ if(q<DP_START_MIX) st.start+=q; else st.noes.push({q,tk,t}); continue; }
+      const L=st.lines.get(es)||{es,q:0,n:0,t}; L.q+=q; L.n++; if(t<L.t) L.t=t; st.lines.set(es,L); }
+    st.list=[...st.lines.values()].sort((a,b)=>a.t-b.t).map(L=>{ const p=ESN[L.es]||(()=>{ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===L.es); return pr?{c:pr.client,k:pr.code}:null; })();
+      return Object.assign(L,{client:p?p.c:'', code:p?p.k:''}); });
+    if(st.total||st.rej.length) out.push(st); }
+  return out;
+}
+const dpDate=t=>{ const d=new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; };
+function dpText(sts,start){
+  return `*Daily program*\n${dpDate(start)}\n08:00-08:00\n`+sts.map(s=>`\n*${s.name}*\n`+s.list.map(L=>`${L.client||'?'} . ${L.code||'ES '+L.es} . ${fmt(L.q,0)}m³.`).join('\n')
+    +(s.start?`\nStartmix . ${fmt(s.start,0)}m³.`:'')+(s.noes.length?`\nNo ES . ${fmt(s.noes.reduce((a,x)=>a+x.q,0),0)}m³.`:'')+`\n\nTotal.   ${fmt(s.total,0)}m`).join('\n');
+}
+// the station's WhatsApp message -> {station: {codes:{CODE: m³}, start: m³, total, lines:[...]}}
+function dpParse(txt){ const out={}; let cur=null;
+  for(const raw of String(txt||'').split(/\r?\n/)){ const s=raw.replace(/\*/g,'').trim(); if(!s) continue;
+    const h=s.match(/^([LV])\s*\.?\s*(\d)\s*$/i); if(h){ cur=(h[1]+h[2]).toUpperCase(); out[cur]=out[cur]||{codes:{},start:0,total:null,lines:[]}; continue; }
+    if(!cur) continue;
+    const tot=s.match(/^total\b[^\d]*([\d,.]+)/i); if(tot){ out[cur].total=num(tot[1]); continue; }
+    const parts=s.split(/\s*\.\s+|\s+\.\s*/).map(x=>x.trim()).filter(Boolean); if(parts.length<2) continue;
+    const qm=parts[parts.length-1].match(/([\d,.]+)\s*m/i); if(!qm) continue; const q=num(qm[1]);
+    const code=(parts.find(p=>/^\d{2}[A-Z]{2,4}\d*$/i.test(p.replace(/\s+/g,'')))||'').replace(/\s+/g,'').toUpperCase();
+    const sm=parts.some(p=>/start\s*mix/i.test(p));
+    out[cur].lines.push({raw:s,code,q,sm});
+    if(sm) out[cur].start+=q; else if(code) out[cur].codes[code]=(out[cur].codes[code]||0)+q; }
+  return out; }
+function dpHtml(){
+  if(!RAWTABS.length) return '';
+  const start=dpStart!=null?dpStart:dpDefaultStart(), sts=dpBuild(start), msg=dpParse(dpMsg);
+  const d=new Date(start), iso=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const isYest=start===dpDefaultStart();
+  const sheetQ=tok=>{ const t=isYest?PROD8.yesterday:null; const r=t&&t.rows.find(x=>String(x.p).toUpperCase()===String(tok).toUpperCase()); return r?r.q:null; };
+  const card=s=>{ const m=msg[s.tok.toUpperCase()]; const sq=sheetQ(s.tok);
+    // check: per element code (the message may split one request in several lines) + Start mix + total
+    let chk='';
+    if(m){ const codes=new Set([...Object.keys(m.codes), ...s.list.map(L=>L.code).filter(Boolean)]);
+      const mine=k=>s.list.filter(L=>L.code===k).reduce((a,L)=>a+L.q,0);
+      const rowsC=[...codes].map(k=>({k, a:m.codes[k]||0, b:mine(k)})).concat([{k:'Startmix', a:m.start, b:s.start}]).filter(r=>r.a||r.b);
+      const unk=s.list.filter(L=>!L.code);
+      chk=`<div class="dp-chk"><div class="dp-chk-h">Check against the message</div>
+        <table class="dp-ct"><thead><tr><th></th><th>Element</th><th>Message</th><th>Sheet</th><th>Diff</th></tr></thead><tbody>
+        ${rowsC.map(r=>{ const df=r.b-r.a, ok=Math.abs(df)<0.5; return `<tr class="${ok?'ok':(r.a&&r.b?'df':'miss')}"><td>${ok?'✓':(r.a&&r.b?'⚠':'✗')}</td><td>${esc(r.k)}</td><td>${r.a?fmt(r.a,0):'—'}</td><td>${r.b?fmt(r.b,0):'—'}</td><td>${ok?'':(df>0?'+':'')+fmt(df,0)}</td></tr>`; }).join('')}
+        ${unk.map(L=>`<tr class="miss"><td>?</td><td>ES ${esc(L.es)}</td><td>—</td><td>${fmt(L.q,0)}</td><td>name unknown</td></tr>`).join('')}
+        <tr class="tot ${m.total!=null&&Math.abs(m.total-s.total)<0.5?'ok':'df'}"><td>${m.total!=null&&Math.abs(m.total-s.total)<0.5?'✓':'⚠'}</td><td>Total</td><td>${m.total!=null?fmt(m.total,0):'—'}</td><td>${fmt(s.total,0)}</td><td>${m.total!=null&&Math.abs(m.total-s.total)>=0.5?((s.total-m.total>0?'+':'')+fmt(s.total-m.total,0)):''}</td></tr>
+        </tbody></table></div>`; }
+    return `<div class="dp-st"><div class="dp-h"><b>${esc(s.name)}</b><span class="dp-tot">${fmt(s.total,0)} m³</span>${sq!=null&&Math.abs(sq-s.total)>=0.5?`<span class="dp-sheet" title="The sheet's own Yesterday (8 AM : 8 AM) table">sheet table ${fmt(sq,0)}</span>`:''}</div>
+      ${s.list.map(L=>`<div class="dp-l"><span class="dp-c">${esc(L.client||'?')}</span><span class="dp-k">${esc(L.code||'ES '+L.es)}</span><span class="dp-q">${fmt(L.q,0)} m³</span><span class="dp-n">${L.n} trk</span></div>`).join('')}
+      ${s.start?`<div class="dp-l dp-sm"><span class="dp-c">Start mix</span><span class="dp-k">no ES · &lt;${DP_START_MIX} m³</span><span class="dp-q">${fmt(s.start,0)} m³</span><span class="dp-n"></span></div>`:''}
+      ${s.noes.map(x=>`<div class="dp-l dp-ne"><span class="dp-c">No ES</span><span class="dp-k">TM ${esc(x.tk||'—')} · ${timeShort(x.t)}</span><span class="dp-q">${fmt(x.q,0)} m³</span><span class="dp-n"></span></div>`).join('')}
+      ${s.rej.map(x=>`<div class="dp-l dp-rj"><span class="dp-c">Rejected</span><span class="dp-k">${x.es?'ES '+esc(x.es):'no ES'} · TM ${esc(x.tk||'—')}</span><span class="dp-q">${fmt(x.q,0)} m³</span><span class="dp-n">not in total</span></div>`).join('')}
+      ${chk}</div>`; };
+  const grand=sts.reduce((a,s)=>a+s.total,0);
+  return `<div class="card dp-card"><div class="dp-top"><h3 style="margin:0">Daily program</h3>
+      <label class="dp-day">From <input type="date" id="dpDay" value="${iso}"> 8:00 AM → next day 8:00 AM</label>
+      <span class="dp-grand">${fmt(grand,0)} m³</span>
+      <button class="btn ghost" id="dpCopy">📋 Copy</button></div>
+    ${sts.length?`<div class="dp-grid">${sts.map(card).join('')}</div>`:'<div class="muted" style="font-size:13px;padding:8px 2px">No trucks in this window — the station tabs only show the days their filter lets through.</div>'}
+    <details class="dp-paste"${dpOpen||dpMsg?' open':''}><summary>Paste a station's "Daily program" message to check it</summary>
+      <textarea id="dpMsg" placeholder="*Daily program* … *V.4* … Total. 173m">${esc(dpMsg)}</textarea>
+      <div class="dp-pbtn"><button class="btn" id="dpCheck">✓ Check</button><button class="btn ghost" id="dpClear">Clear</button></div></details>
+  </div>`;
+}
+function dpWire(){
+  const di=el('dpDay'); if(!di) return;
+  di.addEventListener('change',()=>{ const m=di.value.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return; dpStart=new Date(+m[1],m[2]-1,+m[3],8).getTime(); renderProduction(); });
+  el('dpCopy').addEventListener('click',async()=>{ const s=dpStart!=null?dpStart:dpDefaultStart(), txt=dpText(dpBuild(s),s);
+    let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){}
+    el('dpCopy').textContent=ok?'Copied ✓':'Copy failed'; });
+  const ta=el('dpMsg'), dt=ta.closest('details');
+  ta.addEventListener('input',()=>{ dpMsg=ta.value; });   // kept across the auto-refresh redraws
+  dt.addEventListener('toggle',()=>{ dpOpen=dt.open; });
+  el('dpCheck').addEventListener('click',()=>{ dpMsg=ta.value; dpOpen=true;
+    // the message's own date moves the report to that day
+    const m=dpMsg.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) dpStart=new Date(+m[3],m[2]-1,+m[1],8).getTime();
+    renderProduction(); });
+  el('dpClear').addEventListener('click',()=>{ dpMsg=''; renderProduction(); });
 }
 /* The small "Today ( 8 AM : 8 AM )" / "Yesterday ( 8 AM : 8 AM )" tables on the Trucks Tracking tab:
    a title cell, then  Plant | Production  rows (L1…V5) and a TOTAL row. Read as the sheet shows them. */
@@ -3541,6 +3720,7 @@ async function loadLive(){
     loadTrucks(),       // live truck tracking (loaded / empty) from the "Trucks Tracking" tab
     loadProductivity()  // per-truck month-to-date productivity from the "Productivity" tab
   ]);
+  RAWTABS=results.filter(r=>r&&r.ok);   // raw station tabs, for the Daily program report (Production)
   if(planRes && planRes.ok){
     const parsed=parsePlanTab(planRes.cols, planRes.matrix) || parsePlanPositional(planRes.cols, planRes.matrix);
     if(parsed){ PLAN=parsed.plan; PLAN_ROWS=parsed.rows; SHEET_ROWS=parsed.rows.slice(); stSet(KEY_PLAN,{plan:PLAN,rows:PLAN_ROWS});
