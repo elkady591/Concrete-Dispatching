@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000014">
+<meta name="app-build" content="20261019-000018">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -595,6 +595,11 @@
   .rq-x{font:inherit;background:transparent;border:0;color:var(--muted);font-size:18px;cursor:pointer}
   .rq-box{box-sizing:border-box}
   .rq-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .rq-paste{width:100%;box-sizing:border-box;font:inherit;font-size:13px;color:var(--ink);background:rgba(124,131,255,.08);
+    border:1px dashed rgba(124,131,255,.55);border-radius:12px;padding:9px 11px;margin-bottom:6px;resize:vertical;min-height:58px}
+  .rq-pic{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink);cursor:pointer;
+    border:1px solid var(--line2);background:rgba(255,255,255,.06);border-radius:99px;padding:5px 12px;margin-bottom:8px}
+  .rq-filled{font-size:12px;color:var(--green);min-height:0;margin-bottom:8px} .rq-filled:empty{display:none} .rq-filled b{color:var(--amber)}
   .rq-grid label{min-width:0} .rq-grid input{width:100%;box-sizing:border-box}
   .rq-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:700}
   .rq-grid label small{font-weight:500}
@@ -988,6 +993,9 @@
     <div id="reqModal" class="rq-back" style="display:none">
       <form class="rq-box" id="reqForm" autocomplete="off">
         <div class="rq-head"><b>➕ New request</b><button type="button" class="rq-x" id="reqClose">✕</button></div>
+        <textarea id="rqPaste" class="rq-paste" rows="3" placeholder="📋 Paste the WhatsApp message here — with its picture too (copy both together) — the boxes fill themselves. Or type in the boxes."></textarea>
+        <label class="rq-pic">📷 ES from the request picture<input type="file" id="rqPic" accept="image/*" hidden></label>
+        <div class="rq-filled" id="rqFilled"></div>
         <div class="rq-grid">
           <label>Date<input type="date" id="rqDate" required></label>
           <label>Time<input id="rqTime" placeholder="15 or 15:30"></label>
@@ -2269,7 +2277,10 @@ function renderTrucks(){
   if(!t||!t.ok){ area.innerHTML='<div class="muted" style="font-size:13px;padding:10px 2px">Truck tracking data not available yet — pull the sheet.</div>'; return; }
   // a loaded truck's ES -> "CLIENT ELEMENT" from the plan (e.g. "TREST 10UJA"); unknown ES -> the ES itself
   const esMap={}; (PLAN_ROWS||[]).forEach(r=>{ if(r.es) esMap[String(r.es).trim()]=(r.client?r.client+' ':'')+r.code; });
-  const site=es=>{ es=String(es||'').trim(); return es?(esMap[es]||es):'—'; };
+  // no ES: under 3 m³ = Start mix (the priming batch); a bigger one really is missing its ES
+  const noEsBig=t.loaded.some(x=>!String(x.es||'').trim() && num(x.q)>=DP_START_MIX);
+  const site=(es,q)=>{ es=String(es||'').trim(); if(es){ const n=esName(es); return esMap[es]||(n&&n.k?(n.c?n.c+' ':'')+n.k:es); }
+    return (q!=null?num(q)>=DP_START_MIX:noEsBig)?'No ES':'Start mix'; };
   const counts=`<div class="trk-counts">
      <div class="trk-kpi"><div class="n">${t.working.length}</div><div class="l">Working</div></div>
      <div class="trk-kpi"><div class="n" style="color:var(--cyan)">${t.loaded.length}</div><div class="l">Loaded</div></div>
@@ -2325,7 +2336,7 @@ function renderTrucks(){
         <div class="trk-card el" data-es="${esc(String(x.es||'').trim())}" style="--ec:${colOf(x.es)}">
           <div class="tc-truck">${esc(x.truck)}</div>
           <div class="tc-info">
-            <div class="tc-top">${esc(site(x.es))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
+            <div class="tc-top">${esc(site(x.es,x.q))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
             <div class="tc-meta">${x.q?fmt(x.q,0)+' m³':''}${x.elapsed?` · out <span class="tc-out ${outClass(x.elapsed)}">${esc(x.elapsed)}</span>`:''}${x.dep?` · ${esc(x.dep)}`:''}${x.action?` <span class="tc-flag">⚠ ${esc(x.action)}</span>`:''}</div>
           </div>
         </div>`).join('')}</div>`
@@ -4231,7 +4242,7 @@ async function planPhoto(){
 {
   const M=el('reqModal'), F=el('reqForm'); let pumps=[];
   const showP=()=>{ el('rqPumpsTxt').textContent=pumps.length?pumps.join('-'):'—'; };
-  const open=()=>{ const d=new Date(); F.reset(); pumps=[]; showP(); el('reqMsg').textContent='';
+  const open=()=>{ const d=new Date(); F.reset(); pumps=[]; showP(); el('reqMsg').textContent=''; el('rqFilled').innerHTML=''; gotEs='';
     el('rqDate').value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
     // contractors already used in the plan, for quick picking
     el('rqClients').innerHTML=[...new Set((PLAN_ROWS||[]).map(r=>String(r.client||'').trim()).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}">`).join('');
@@ -4243,6 +4254,78 @@ async function planPhoto(){
   M.addEventListener('click',e=>{ if(e.target===M) close(); });
   el('rqPumpBtns').addEventListener('click',e=>{ const b=e.target.closest('.rq-pb'); if(!b) return; pumps.push(+b.dataset.l); showP(); });
   el('rqPumpClr').addEventListener('click',()=>{ pumps=[]; showP(); });
+  // 📋 pasted request -> the boxes. Everything comes from the WhatsApp MESSAGE ("ESKM / Now please with one pump 63 … /
+  // S.C 010 / QTY 90 M3 / TEM 24+1-5 / RATE 36M/HR") — it is the up-to-date one. The request page (its picture,
+  // or its text) only gives the ES number: "Информация о заявке №45014".
+  let gotEs='';   // ES read from a picture (kept when the message is pasted after it)
+  const fillFrom=txt=>{
+    const T=String(txt||''), got=[], set=(id,v,lab)=>{ if(v==null||v==='') return; el(id).value=v; got.push(lab); };
+    const g=re=>{ const m=T.match(re); return m?m[1].trim():''; };
+    const n=s=>{ const m=String(s||'').match(/\d+(?:[.,]\d+)?/); return m?m[0].replace(',','.'):''; };
+    // ES: "№45014" (the page) / "ES 45014" (the message) / read from the picture
+    set('rqEs', g(/№\s*(\d{4,6})/)||g(/\bES\s*[:#]?\s*(\d{4,6})\b/i)||gotEs, 'ES');
+    // only the message part from here on (the page's Russian lines are left out)
+    const M=T.split(/\r?\n/).filter(l=>!/[А-Яа-яЁё]/.test(l)).join('\n');
+    const gm=re=>{ const m=M.match(re); return m?m[1].trim():''; };
+    // contractor = the message's first line
+    const first=M.split(/\r?\n/).map(s=>s.trim()).find(Boolean)||'';
+    if(first && first.length<=30 && !/\d{2}/.test(first) && !/^(now|qty|s\.?c|tem|rate|nwc|please)/i.test(first)){
+      const known=[...new Set((PLAN_ROWS||[]).map(r=>String(r.client||'').trim()).filter(Boolean))];
+      set('rqClient', known.find(k=>k.toLowerCase()===first.toLowerCase())||first, 'Contractor'); }
+    // element code: one that is not "with / after / parallel with" another element
+    const codes=[...M.matchAll(/(\b(?:with|after|behind|parallel(?:\s+with)?|بعد|مع)\s+)?\b(\d{2}[A-Z]{3}\d*)\b/gi)].filter(m=>!m[1]).map(m=>m[2].toUpperCase());
+    if(codes.length) set('rqCode', codes[0], 'Code');
+    set('rqQty', n(gm(/\bQTY\s*[:.]?\s*([\d.,]+)/i)), 'Quantity');
+    set('rqRate', n(gm(/\bRATE\s*[:.]?\s*([\d.,]+)/i)), 'Rate');
+    set('rqSc', gm(/\bS\.?\s*C\.?\s*[:.]?\s*([0-9A-Z/]+)/i), 'Selection card');
+    set('rqTem', n(gm(/\bTEM[A-Z]*\s*[:.]?\s*([\d.,]+)/i)), 'Temperature');
+    // "Now" = today, this minute; "at 15:30" / "15:00" = that time today
+    const d=new Date(), today=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    if(/\bnow\b/i.test(M)){ set('rqDate', today, 'Date'); set('rqTime', `${pad(d.getHours())}:${pad(d.getMinutes())}`, 'Time (now)'); }
+    else { const tm=gm(/\b(?:at|time)\s*[:.]?\s*(\d{1,2}(?::\d{2})?)\b/i); if(tm) set('rqTime', tm, 'Time'); }
+    // no code in the message: the ES may already be known (plan sheet / saved names)
+    const es=el('rqEs').value.trim();
+    if(es && !el('rqCode').value){ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===es), nm=pr?{c:pr.client,k:pr.code}:esName(es);
+      if(nm&&nm.k) set('rqCode', nm.k, 'Code (from ES)'); }
+    // pumps: "one pump 63" / "2 pumps 63" / "pump 63-59"
+    const W={one:1,two:2,three:3,four:4,a:1,single:1};
+    let pm=[...M.matchAll(/\b(one|two|three|four|a|single|\d)\s+pumps?\s*(?:of\s*)?(\d{2})\b/gi)].flatMap(m=>{ const k=W[m[1].toLowerCase()]||+m[1]||1; return Array(Math.min(k,6)).fill(+m[2]); });
+    if(!pm.length){ const m=M.match(/\bpumps?\s*[:.]?\s*(\d{2}(?:\s*[-+,&]\s*\d{2})*)/i); if(m) pm=m[1].split(/[-+,&\s]+/).map(Number).filter(Boolean); }
+    pm=pm.filter(L=>PUMPS.includes(L));
+    if(pm.length){ pumps=pm; showP(); got.push('Pumps'); }
+    el('rqFilled').innerHTML=got.length?`✓ Filled: ${got.map(esc).join(' · ')}${el('rqCode').value?'':' — <b>write the Code</b>'}`:'';
+  };
+  // 📷 the request page's picture -> its ES number (read on this device; the OCR library loads the first time)
+  let OCR=null;
+  const loadOcr=()=>OCR||(OCR=new Promise((res,rej)=>{ const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; s.onload=()=>res(window.Tesseract); s.onerror=()=>{ OCR=null; rej(new Error('no internet')); };
+    document.head.appendChild(s); }));
+  const esFromPicture=async file=>{ const say=h=>{ el('rqFilled').innerHTML=h; };
+    say('📷 Reading the ES from the picture…');
+    try{ const Ts=await loadOcr(); const r=await Ts.recognize(file,'eng'); const txt=(r&&r.data&&r.data.text)||'';
+      // "№45014" reads as "Ne45014" / "No45014" / "N°45014": the first 5-digit number on the page is the ES
+      const m=txt.match(/(?:№|N\s*[eo°º2]?\.?)\s*(\d{5})\b/i)||txt.match(/(?:^|\D)(\d{5})(?!\d)/);
+      if(!m){ say('<b>Could not read an ES number from the picture</b> — type it in the ES box.'); return; }
+      gotEs=m[1]; el('rqEs').value=gotEs;
+      const msg=el('rqPaste').value; if(msg) fillFrom(msg);
+      const rest=el('rqFilled').innerHTML;
+      say(`📷 ES <b style="color:var(--ink)">${esc(gotEs)}</b> from the picture`+(msg?(rest?'<br>'+rest:''):' — now paste the message'));
+    }catch(e){ say('<b>Could not read the picture</b> ('+esc(e&&e.message||e)+') — type the ES.'); } };
+  // one paste can carry BOTH (WhatsApp: picture + its caption copied together) -> the text fills the boxes,
+  // the picture gives the ES
+  el('rqPaste').addEventListener('paste',e=>{ const cd=e.clipboardData; if(!cd) return;
+    const img=[...(cd.items||[])].find(x=>/^image\//.test(x.type)) || [...(cd.files||[])].find(f=>/^image\//.test(f.type));
+    if(!img) return;   // plain text: the normal paste + 'input' handles it
+    e.preventDefault();
+    const txt=cd.getData('text/plain')||'';
+    if(txt){ const ta=el('rqPaste'); ta.value=(ta.value?ta.value+'\n':'')+txt; fillFrom(ta.value); }
+    esFromPicture(img.getAsFile?img.getAsFile():img); });
+  // the same for a picture dropped on the box (with its text, when the app gives it)
+  el('rqPaste').addEventListener('drop',e=>{ const dt=e.dataTransfer; if(!dt) return;
+    const f=[...(dt.files||[])].find(x=>/^image\//.test(x.type)); if(!f) return;
+    e.preventDefault(); const txt=dt.getData('text/plain')||''; if(txt){ el('rqPaste').value=txt; fillFrom(txt); } esFromPicture(f); });
+  el('rqPic').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; if(f) esFromPicture(f); e.target.value=''; });
+  el('rqPaste').addEventListener('input',e=>fillFrom(e.target.value));
   F.addEventListener('submit',async e=>{ e.preventDefault();
     const v=id=>el(id).value.trim(), num=s=>parseFloat(String(s).replace(',','.'));
     const r={date:v('rqDate'), time:v('rqTime'), client:v('rqClient'), code:v('rqCode').toUpperCase().replace(/\s+/g,''),
