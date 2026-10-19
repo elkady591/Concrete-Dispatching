@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000004">
+<meta name="app-build" content="20261019-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -555,9 +555,12 @@
   .pm-row.st-noop{--sc:#94a3b8}
   @media (max-width:640px){ .pic-btns{display:grid!important;grid-template-columns:1fr 1fr} }   /* picture buttons 2 × 2 on phones */
   .pic-cut{text-align:center;margin-top:10px;font-size:13px;color:var(--muted)}
-  .pic-cut select{font:inherit;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line2);
-    border-radius:10px;padding:5px 8px;margin:0 4px;cursor:pointer}
-  .pic-cut select option{background:#1a1f2e;color:#fff}
+  .pic-cut{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px}
+  .pic-cut input{font:inherit;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line2);
+    border-radius:10px;padding:5px 8px;margin:0 4px;color-scheme:dark}
+  .pic-cut-off{font:inherit;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:1px solid var(--line2);
+    border-radius:99px;padding:4px 12px;cursor:pointer}
+  .pic-cut-off.on{color:#0b1020;background:var(--muted)}
   .pm-wash-opts.pm-ops-opts{display:grid;grid-template-columns:repeat(6,1fr);gap:2px 4px}
   .pm-ops-opts .pm-wopt{min-width:34px;text-align:center}
   .pm-ctls{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:flex-start;margin-inline-start:auto}
@@ -882,7 +885,7 @@
       <button class="btn" id="planOpenBtn" style="padding:12px 18px;font-size:14px" title="Open the picture full size">🔍 Open</button>
     </div>
     <div id="planPhotoMsg" class="muted" style="text-align:center;font-size:12px;margin-top:6px"></div>
-    <div class="pic-cut"><label>🕗 Auto-hide pours finished before <select id="planCutSel" title="Finished pours whose last truck was before this time today leave the picture and Closed Pours (every device)"></select> today</label></div>
+    <div class="pic-cut"><label>🕗 Auto-hide pours finished before <input type="datetime-local" id="planCutSel" title="Finished pours whose last truck was before this date + time leave the picture and Closed Pours (every device)"></label><button type="button" class="pic-cut-off" id="planCutOff" title="Turn auto-hide off">Off</button></div>
   </section>
 
   <!-- ALL POURS VIEW -->
@@ -2488,7 +2491,7 @@ function renderSummary(){
   const dl=dlAll.filter(g=>!closedHidden(g)), hid=dlAll.filter(closedHidden);
   if(el('closedCard')) el('closedCard').style.display = dlAll.length ? '' : 'none';
   const closedRow=(g,h)=>`<div class="cl-row${h?' cl-hid':''}">
-      <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${h&&PUMPNOTE[hideKey(g)]!=='1'?`<div class="cl-auto">auto · finished before ${timeShort(planCutAt())}</div>`:''}${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${h&&PUMPNOTE[hideKey(g)]!=='1'?`<div class="cl-auto">auto · finished before ${cutLabel(planCutAt())}</div>`:''}${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div class="cl-act"><span style="font-family:var(--mono);font-size:13px"><b style="color:var(--green)">${fmt(g.delivered,0)}</b> m³<span class="cl-pw"> poured</span></span>
         <button class="btn ghost hide-btn" data-h="${encodeURIComponent(hideKey(g))}" data-on="${h?(autoHidden(g)?'0':''):'1'}" title="${h?'Show it again in this list and in the plan photo':'Take it off this list and off the plan photo (every device)'}">${h?'Show':'Hide'}</button>
         <button class="btn ghost reopen-btn" data-e="${encodeURIComponent(doneKey(g))}">Re-open</button></div>
@@ -3246,16 +3249,24 @@ async function syncClear(type){
 // …plus the automatic cut under the picture: PUMPNOTE['hcut']='08:00' = every pour that FINISHED (closed, or its
 // quantity reached) with its last truck before 8:00 today is hidden the same way. 'h<key>'='0' = shown anyway.
 const hideKey=g=>'h'+doneKey(g);
-const CUT_CHOICES=['','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','14:00','16:00','18:00','20:00'];
-function planCutAt(){ const m=String(PUMPNOTE['hcut']||'').match(/^(\d{1,2}):(\d{2})$/); if(!m) return null;
+// stored as "2026-10-19T08:00" (date + time); an older "08:00" alone = today at that time
+function planCutAt(){ const v=String(PUMPNOTE['hcut']||'');
+  let m=v.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})$/); if(m) return new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).getTime();
+  m=v.match(/^(\d{1,2}):(\d{2})$/); if(!m) return null;
   const d=new Date(); d.setHours(+m[1],+m[2],0,0); return d.getTime(); }
+const cutLabel=t=>{ const d=new Date(t), n=new Date(); return (d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `)+timeShort(t); };
 const pourFinished=g=>!!DONE[doneKey(g)] || (g.remaining!=null && g.remaining<=0);
 function autoHidden(g){ const c=planCutAt(); return c!=null && pourFinished(g) && g.endMax!=null && g.endMax<c; }
 function closedHidden(g){ const v=PUMPNOTE[hideKey(g)]; if(v==='1') return pourFinished(g); if(v==='0') return false; return autoHidden(g); }
-function renderPlanCut(){ const s=el('planCutSel'); if(!s) return; const cur=String(PUMPNOTE['hcut']||'');
-  s.innerHTML=CUT_CHOICES.map(v=>`<option value="${v}"${v===cur?' selected':''}>${v?timeShort(new Date(2000,0,1,+v.slice(0,2),+v.slice(3)).getTime()):'Off'}</option>`).join('');
-  if(!s.dataset.on){ s.dataset.on='1'; s.addEventListener('change',async()=>{ const v=s.value;
-    if(v) PUMPNOTE['hcut']=v; else delete PUMPNOTE['hcut']; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump','hcut',v); }); } }
+function renderPlanCut(){ const s=el('planCutSel'), off=el('planCutOff'); if(!s) return;
+  const t=planCutAt(), d=t!=null?new Date(t):null;
+  const val=d?`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`:'';
+  if(document.activeElement!==s) s.value=val;   // don't overwrite while it is being picked
+  if(off) off.classList.toggle('on',!val);
+  const save=async v=>{ if(v) PUMPNOTE['hcut']=v; else delete PUMPNOTE['hcut']; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump','hcut',v); };
+  if(!s.dataset.on){ s.dataset.on='1';
+    s.addEventListener('change',()=>{ if(!s.value||/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s.value)) save(s.value); });
+    if(off) off.addEventListener('click',()=>{ s.value=''; save(''); }); } }
 let showHiddenClosed=false;
 function toggleDone(k, on){
   if(on){ DONE[k]=true; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); DONE_ORDER.push(k); }
