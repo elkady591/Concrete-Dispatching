@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261019-000022">
+<meta name="app-build" content="20261020-000010">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -495,6 +495,10 @@
   .dc-t td.n{font-family:var(--mono);font-weight:800;text-align:right;white-space:nowrap}
   .dc-t .dc-k{font-family:var(--mono);font-weight:800;color:#c4b5fd;white-space:nowrap} .dc-k small{font-family:var(--sans);font-weight:500;color:var(--faint)}
   .dc-t tr.bad td{background:rgba(251,191,36,.06)}
+  .dc-all{margin-bottom:14px;border-color:rgba(124,131,255,.45);background:rgba(124,131,255,.06);max-width:640px}
+  .dc-t tr.dc-tot td{font-weight:800;border-top:2px solid var(--line2)}
+  @media(max-width:640px){ .dc-all .dc-t{font-size:12.5px} .dc-all .dc-t th,.dc-all .dc-t td{padding:6px 3px} }
+  .dc-t tr.dc-grand td{color:#c4b5fd} .dc-t tr.dc-grand td .dq.ok{color:var(--green)}
   .dc-via{font-size:10.5px;font-weight:500;color:var(--faint);font-family:var(--sans)}
   .dq{font-weight:800;font-family:var(--mono)} .dq.ok{color:var(--green)} .dq.no{color:var(--rose)} .dq.df{color:var(--amber)}
   .dc-sm{color:var(--amber);font-weight:700} .dc-ne{color:var(--violet)}
@@ -583,7 +587,9 @@
   .uc-same{margin-top:6px;font-size:12px;color:var(--muted)}
   .uc-app{font-family:inherit;font-size:11px;font-weight:800;color:#0b1020;background:#fbbf24;border-radius:6px;padding:1px 7px;vertical-align:2px}
   .uc-appdel{display:flex;align-items:center;gap:8px;margin:4px 0 2px;font-size:12px;color:var(--muted)}
-  .uc-del{font:inherit;font-size:12px;color:var(--rose);background:transparent;border:1px solid rgba(251,113,133,.45);border-radius:8px;padding:2px 8px;cursor:pointer;margin-inline-start:auto}
+  .uc-del{font:inherit;font-size:12px;color:var(--rose);background:transparent;border:1px solid rgba(251,113,133,.45);border-radius:8px;padding:2px 8px;cursor:pointer}
+  .uc-abtns{margin-inline-start:auto;display:flex;gap:6px}
+  .uc-del.uc-edit{color:#c4b5fd;border-color:rgba(167,139,250,.5)}
   .uc-maybe{margin:6px 0;padding:7px 9px;border-radius:9px;font-size:12.5px;color:#fb923c;border:1px solid rgba(251,146,60,.45);background:rgba(251,146,60,.08)}
   .uc-maybe b{color:var(--ink)} .uc-mbtns{display:flex;gap:6px;margin-top:6px}
   .btn.sm{padding:5px 10px;font-size:12px}
@@ -595,8 +601,21 @@
   .rq-x{font:inherit;background:transparent;border:0;color:var(--muted);font-size:18px;cursor:pointer}
   .rq-box{box-sizing:border-box}
   .rq-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .rq-for{font-size:13px;line-height:1.5;padding:9px 11px;border-radius:12px;margin-bottom:8px;border:1px solid rgba(244,63,94,.4);background:rgba(244,63,94,.08)}
+  .rq-attach{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px}
+  .rq-attach[hidden],.rq-for[hidden]{display:none}
+  .rq-attach select{font:inherit;font-size:13px;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line2);border-radius:10px;padding:8px;color-scheme:dark}
+  .rq-attach select option{background:#1a1f2e}
+  .rq-attaching .rq-paste,.rq-attaching .rq-grid,.rq-attaching .rq-filled{display:none}
+  .chk-req{background:rgba(124,131,255,.16);border-color:rgba(124,131,255,.55);color:#c4b5fd;font-family:inherit}
   .rq-paste{width:100%;box-sizing:border-box;font:inherit;font-size:13px;color:var(--ink);background:rgba(124,131,255,.08);
     border:1px dashed rgba(124,131,255,.55);border-radius:12px;padding:9px 11px;margin-bottom:6px;resize:vertical;min-height:58px}
+  .rq-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--line2)}
+  .rq-tabs[hidden]{display:none}
+  .rq-tabs-h{font-size:12.5px;font-weight:800;color:var(--amber);margin-inline-end:4px}
+  .rq-tab{font:inherit;font-family:var(--mono);font-size:12px;font-weight:700;color:#c4b5fd;background:rgba(124,131,255,.1);
+    border:1px solid rgba(124,131,255,.35);border-radius:10px;padding:6px 10px;cursor:pointer}
+  .rq-tab.on{color:#0b1020;background:#a78bfa;border-color:#a78bfa}
   .rq-multi{margin-top:6px;color:var(--ink);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   .rq-multi span{font-family:var(--mono);font-size:11.5px;padding:2px 8px;border-radius:7px;background:rgba(124,131,255,.16);color:#c4b5fd}
   .rq-filled{font-size:12px;color:var(--green);min-height:0;margin-bottom:8px} .rq-filled:empty{display:none} .rq-filled b{color:var(--amber)}
@@ -992,9 +1011,15 @@
     <!-- ➕ new request form (app request: saved in the app for every device, not written to the sheet) -->
     <div id="reqModal" class="rq-back" style="display:none">
       <form class="rq-box" id="reqForm" autocomplete="off">
-        <div class="rq-head"><b>➕ New request</b><button type="button" class="rq-x" id="reqClose">✕</button></div>
+        <div class="rq-head"><b id="rqTitle">➕ New request</b><button type="button" class="rq-x" id="reqClose">✕</button></div>
+        <!-- opened from Data checks (truck with no ES / unknown ES): which trucks, + "it belongs to an existing request" -->
+        <div class="rq-for" id="rqFor" hidden></div>
+        <label class="rq-attach" id="rqAttachL" hidden>It belongs to a request already in the list:
+          <select id="rqAttach"><option value="">— no, a new request (write it below) —</option></select></label>
         <textarea id="rqPaste" class="rq-paste" rows="3" placeholder="📋 Paste the WhatsApp message here — the boxes fill themselves. Or type in the boxes."></textarea>
         <div class="rq-filled" id="rqFilled"></div>
+        <!-- several requests in one message: one tab each, edited one by one -->
+        <div class="rq-tabs" id="rqTabs" hidden></div>
         <div class="rq-grid">
           <label>Date<input type="date" id="rqDate" required></label>
           <label>Time<input id="rqTime" placeholder="15 or 15:30"></label>
@@ -1520,8 +1545,8 @@ function buildPours(full, now){
     esHandled.add(r);
     const esKey=String(r.es).trim();
     let loads=[]; let meta=null;
-    const esAgg=aggByKey.get(esKey);
-    if(esAgg){ loads=loads.concat(esAgg.loads||[]); meta=meta||esAgg; usedKeys.add(esKey); }
+    const esAgg=aggByKey.get(esKey)||aggByKey.get(esKey.toUpperCase());   // truck elements come in upper case ("APP-…" ids are not)
+    if(esAgg){ loads=loads.concat(esAgg.loads||[]); meta=meta||esAgg; usedKeys.add(esKey); usedKeys.add(esKey.toUpperCase()); }
     if(baseCount[r.base]===1){ const cAgg=aggByKey.get(r.base); if(cAgg){ loads=loads.concat(cAgg.loads||[]); meta=meta||cAgg; usedKeys.add(r.base); } }
     loads.sort((a,b)=>(a.t||0)-(b.t||0));
     const delivered=loads.reduce((s,l)=>s+(l.q||0),0);
@@ -2123,18 +2148,23 @@ function requestTimes(){
 function upcomingPumpCheck(now){
   now=now||Date.now();
   const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
+  const claimedBy=new Map();   // pump -> the (earlier) request that took it
   const RT=requestTimes(), stAt={}, SF=pumpShareFam();
   const stateFor=g=>{ const t=RT.get(g); if(!t||t.at<=now) return base;      // timed request: the pumps as they will be then
     return stAt[t.at]||(stAt[t.at]=pumpPlan(t.at).state); };
   const used=new Set(), rowOf=g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) &&
       (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es)))); if(i>=0) used.add(i); return i<0?1e9:i; };
-  const list=(VD.upcoming||[]).map(g=>({g,i:rowOf(g)})).sort((a,b)=>a.i-b.i).map(x=>x.g);
+  // the free pumps go to the EARLIEST request first (its planned / expected time), then the untimed ones in plan order
+  const list=(VD.upcoming||[]).map(g=>({g,i:rowOf(g),t:(RT.get(g)||{}).at})).sort((a,b)=>{
+    if(a.t!=null&&b.t!=null) return (a.t-b.t)||(a.i-b.i); if(a.t!=null||b.t!=null) return a.t!=null?-1:1; return a.i-b.i; }).map(x=>x.g);
   const site=g=>(g.client?g.client+' ':'')+g.elem;
   for(const g of list){
     const need=pumpReq(g.pumps); if(!need.length) continue;
     const fam=SF(g), got=new Set(), res=[], state=stateFor(g);   // per requested pump: {len, kind, s}
     for(const len of need){
-      const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!claimed.has(s.i) || claimed.get(s.i)===fam));
+      // (a pump already SENT to another request — setting up there — is that request's; not up for grabs)
+      const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!claimed.has(s.i) || claimed.get(s.i)===fam)
+        && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam));
       // a pump on / washing after the same client + element = this request just carries on with it
       const own=s=>s.pour===g;                       // already sent to this request
       const sib=s=>!own(s) && !s.note && s.pour && SF(s.pour)===fam && (s.st==='on'||s.st==='wash');
@@ -2145,7 +2175,12 @@ function upcomingPumpCheck(now){
         || cand.find(s=>s.noop)                   // a free pump, but nobody to run it
         || cand.find(s=>s.note);
       const same=pick && (sib(pick) || (claimed.get(pick.i)===fam && pick.st!=='down'));   // sibling running / ahead in the plan
-      if(pick){ claimed.set(pick.i,fam); got.add(pick.i); }
+      // nothing usable left because an EARLIER request took that length -> say so (not "Breakdown")
+      // (name the one that took a FREE pump first; pumps already sent somewhere are that request's anyway)
+      const tk=(!pick||pick.note)&&state.filter(s=>s.len===len && !s.note && claimed.has(s.i) && claimed.get(s.i)!==fam && claimedBy.has(s.i))
+        .sort((a,b)=>(a.setup?1:0)-(b.setup?1:0))[0];
+      if(tk){ res.push({len, kind:'taken', s:tk, by:claimedBy.get(tk.i)}); continue; }
+      if(pick){ claimed.set(pick.i,fam); claimedBy.set(pick.i,g); got.add(pick.i); }
       res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
@@ -2157,12 +2192,13 @@ function upcomingPumpCheck(now){
     const byLen={}; res.forEach(r=>{ (byLen[r.len]=byLen[r.len]||[]).push(r); });
     const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok'||r.kind==='same'||r.kind==='sent').length, miss=rs.filter(r=>r.kind!=='ok'&&r.kind!=='same'&&r.kind!=='sent');
       if(!miss.length) return `${L} ✓`;
-      const why=miss.map(r=> r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
+      const why=miss.map(r=> r.kind==='taken' ? `taken by ${esc(site(r.by))}${(RT.get(r.by)||{}).time?' ('+RT.get(r.by).time+')':''}`
+                            : r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
                             : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}`
                             : r.kind==='down' ? 'Breakdown' : r.kind==='noop' ? 'free but no operator' : 'no pump');
       const uniq=[...new Set(why)].join(' · ');
       return rs.length>1 ? `${L}: ${okN} of ${rs.length} free · ${uniq}` : `${L} ${uniq}`; });
-    out.set(g,{cls:bad.every(r=>r.kind==='wash')?'warn':'bad', html:parts.join('<br>')});
+    out.set(g,{cls:bad.every(r=>r.kind==='wash'||r.kind==='taken')?'warn':'bad', html:parts.join('<br>')});
   }
   return out;
 }
@@ -2196,7 +2232,9 @@ function renderPumps(){
   // order of their first pump; the rest (washing, available, breakdown) keep the normal fleet order
   const grpKey=s=>s.st==='on'&&s.pour?(s.next?s.next:s.pour):null, firstOf=new Map();
   state.forEach(s=>{ const k=grpKey(s); if(k&&!firstOf.has(k)) firstOf.set(k,s.i); });
-  const ordered=state.slice().sort((a,b)=>{ const ka=grpKey(a), kb=grpKey(b);
+  // …and the broken-down ones all together at the very end
+  const ordered=state.slice().sort((a,b)=>{ const ka=grpKey(a), kb=grpKey(b), da=a.st==='down', db=b.st==='down';
+    if(da!==db) return da?1:-1; if(da&&db) return a.i-b.i;
     if(ka&&kb) return (firstOf.get(ka)-firstOf.get(kb))||(a.i-b.i); if(ka||kb) return ka?-1:1; return a.i-b.i; });
   const rows=ordered.filter(keep).map(s=>{
     const txt = s.st==='on'&&s.next ? `<span class="pm-k">Waiting</span> <span class="tc-dim">next</span> <b>${esc(site(s.next))}</b>`
@@ -2722,10 +2760,17 @@ function renderChecks(pours){
    it on every device — PUMPNOTE['e<wrong ES>|<date>'] = right ES. The sheet itself is not changed. */
 const esFixKey=(es,dk)=>'e'+es+'|'+dk;
 function applyEsFix(matrix){
+  // trucks with NO ES that the user attached to a request in the app: PUMPNOTE['x<plant>|<truck>|<departure>'] = its ES
+  const att=NOES.filter(x=>x.row&&PUMPNOTE[noEsKey(x)]).map(x=>{ const r=x.row.slice(); r[2]=PUMPNOTE[noEsKey(x)]; return r; });
+  if(att.length) matrix=matrix.concat(att);
   if(!Object.keys(PUMPNOTE).some(k=>/^e\d/.test(k))) return matrix;
   return matrix.map(r=>{ const d=parseDate(r[0]), to=PUMPNOTE[esFixKey(String(r[2]||'').trim(), d?dateKey(d):'')];
     return to?[r[0],r[1],to,...r.slice(3)]:r; });
 }
+const noEsKey=x=>'x'+x.plant+'|'+x.truck+'|'+String(x.dep||'').trim();
+// "CLIENT CODE · 25 m³" of the plan / app request with this ES (or "APP-…" key)
+function reqLabel(es){ const r=(PLAN_ROWS||[]).find(x=>String(x.es||'').trim()===String(es).trim());
+  return r?`${r.client?r.client+' ':''}${r.code} · ${fmt(r.req,0)} m³`:String(es); }
 function esSimilar(a,b){
   if(a.length!==b.length||a===b) return 0;
   const d=[]; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) d.push(i);
@@ -2761,10 +2806,16 @@ function collectChecks(pours){
   const items=[];
   for(const x of NOES){ const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
     if(x.q<DP_START_MIX) continue;   // no ES and under 3 m³ = Start mix (the priming batch), not a missing ES
-    const tm=parseTime(x.dep), at=tm!=null?ts(d,tm):null;
+    const tm=parseTime(x.dep), at=tm!=null?ts(d,tm):null, xk=noEsKey(x);
+    if(PUMPNOTE[xk]){   // already attached to a request in the app (Undo under "Show skipped")
+      items.push({id:'noesf|'+xk, ids:[], skipped:true, fixed:{key:xk}, kind:'Attached', cls:'',
+        txt:`${esc(x.plant)} · TM ${esc(x.truck)} → ${esc(String(PUMPNOTE[xk]))}`,
+        ui:{sev:'ok', icon:'✓', head:'Truck given a request', at, tags:[CT(esc(x.plant),'st'),CT('TM '+esc(x.truck),'tk'),CT(fmt(x.q)+' m³')],
+          det:`Counted on ${esc(reqLabel(PUMPNOTE[xk]))}`}}); continue; }
     items.push({id:`noes|${x.plant}|${x.truck}|${dk}|${x.dep}`, kind:'No ES', cls:'noes', txt:`${esc(x.plant)} · TM ${esc(x.truck)} · ${at!=null?timeShort(at):'no time'} · ${fmt(x.q)} m³ — not counted on any element`,
+      req:{kind:'noes', key:xk, dk, plant:x.plant, truck:x.truck, q:x.q, at},
       ui:{sev:'red', icon:'🏷️', head:'Truck without ES', at, tags:[CT(esc(x.plant),'st'),CT('TM '+esc(x.truck),'tk'),CT(fmt(x.q)+' m³')],
-        det:'Not counted on any request — write its ES in the trucks sheet'}}); }
+        det:'Not counted on any request — write its ES in the trucks sheet, or give it its request here'}}); }
   // trucks on an ES no request has -> the closest request ES, with a Fix button
   const planEs=new Set(PLAN_ROWS.map(r=>String(r.es||'').trim()).filter(Boolean));
   for(const g of pours){ const es=String(g.elem||'').trim();
@@ -2775,10 +2826,11 @@ function collectChecks(pours){
       txt: best ? `${what} — no request has it. Closest: <b>${esc(best.p.esId)}</b> ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)}${esSimilar(es,best.p.esId)===2?' (2 digits swapped)':' (1 digit different)'}`
                 : `${what} — no request has it and none is close`,
       fix: best ? {key:esFixKey(es,dk), to:best.p.esId} : null,
-      ui:{sev:'red', icon:'🔢', head:'ES not in the plan — typo?', at:g.depMin,
+      req:{kind:'es', es, dk, key:esFixKey(es,dk), plant:stn, q:g.delivered, n:g.trucks, at:g.depMin},
+      ui:{sev:'red', icon:'🔢', head:best?'ES not in the plan — typo?':'ES not in the plan', at:g.depMin,
         tags:[CT('ES '+esc(es),'el'), ...(stn?[CT(esc(stn),'st')]:[]), CT(g.trucks+' truck'+(g.trucks>1?'s':''),'tk'), CT(fmt(g.delivered,0)+' m³')],
         det: best ? `Closest request: <b>${esc(best.p.esId)}</b> · ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)} — ${esSimilar(es,best.p.esId)===2?'2 digits swapped':'1 digit different'}`
-                  : 'No request has this ES and none is close — check the trucks sheet'} }); }
+                  : 'No request has this ES and none is close — if it is a new request, give it its details here'} }); }
   // fixes already made (shown under "Show skipped", with Undo)
   for(const k of Object.keys(PUMPNOTE)){ const m=k.match(/^e(\d+)\|(.*)$/); if(!m||!PUMPNOTE[k]||(from&&m[2]<from)||(to&&m[2]>to)) continue;
     const p=(VD.summary||[]).find(x=>x.esId===PUMPNOTE[k]);
@@ -2837,7 +2889,7 @@ function renderCheckList(cb, items){
   const isSk=it=>it.ids?!!it.skipped:!!SKIP[it.id];
   const open=items.filter(it=>!isSk(it)), skipped=items.filter(isSk);
   // one card per check: icon + the problem in big letters + WHERE as chips (element / station / truck) + what it means
-  const btns=(it,sk)=>`${it.fix&&!sk?`<button class="chk-fix" data-key="${esc(it.fix.key)}" data-to="${esc(it.fix.to)}">Fix → ${esc(it.fix.to)}</button>`:''}${it.fixed
+  const btns=(it,sk)=>`${it.req&&!sk?`<button class="chk-fix chk-req" data-req="${esc(JSON.stringify(it.req))}" title="Write this request's details (contractor, code, quantity…) or attach it to a request">✎ Request</button>`:''}${it.fix&&!sk?`<button class="chk-fix" data-key="${esc(it.fix.key)}" data-to="${esc(it.fix.to)}">Fix → ${esc(it.fix.to)}</button>`:''}${it.fixed
       ?`<button class="chk-fix chk-unfix" data-key="${esc(it.fixed.key)}" data-to="">Undo fix</button>`
       :`<button class="chk-skip" data-id="${encodeURIComponent((it.ids||[it.id]).join('\n'))}" data-on="${sk?0:1}">${sk?'Undo':'Skip'}</button>`}`;
   const row=(it,sk)=>{ const u=it.ui||{sev:'amber',icon:'⚠️',head:esc(it.kind),tags:[],det:it.txt};
@@ -2862,10 +2914,15 @@ function renderCheckList(cb, items){
   cb.querySelectorAll('.chk-skip').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
     for(const id of decodeURIComponent(b.dataset.id).split('\n')){ if(b.dataset.on==='1') SKIP[id]=Date.now(); else delete SKIP[id]; }
     stSet(KEY_SKIP,SKIP); renderAllPours(); }));
-  cb.querySelectorAll('.chk-fix').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
-    const to=b.dataset.to, wrong=b.dataset.key.slice(1).split('|')[0];
-    if(!confirm(to?`Count the trucks of ES ${wrong} on ES ${to}?\n(Every device. The sheet itself stays as it is — fix it there too.)`:`Undo the fix of ES ${wrong}?`)) return;
-    setEsFix(b.dataset.key,to); }));
+  cb.querySelectorAll('.chk-fix:not(.chk-req)').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
+    const to=b.dataset.to, k=b.dataset.key, wrong=k.slice(1).split('|')[0];
+    const q=k[0]==='x'?(to?'':`Take TM ${k.slice(1).split('|')[1]} off the request it was given?`)
+      :(to?`Count the trucks of ES ${wrong} on ES ${to}?\n(Every device. The sheet itself stays as it is — fix it there too.)`:`Undo the fix of ES ${wrong}?`);
+    if(q&&!confirm(q)) return;
+    setEsFix(k,to); }));
+  // ✎ Request: write the request's details (or attach the trucks to an existing request) — see openReqForm
+  cb.querySelectorAll('.chk-req').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
+    let r=null; try{ r=JSON.parse(b.dataset.req); }catch(e){} if(r&&window.openReqForm) window.openReqForm(r); }));
   const cs=el('chkShow'); if(cs) cs.addEventListener('click',()=>{ showSkipped=!showSkipped; renderAllPours(); });
   cb.querySelectorAll('.ck.clk').forEach(r=>r.addEventListener('click',()=>{ logKey=decodeURIComponent(r.dataset.k); renderAllPours(); const t=el('truckLog'); if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'nearest'}); }));
 }
@@ -3049,7 +3106,7 @@ function renderUpcoming(){
       ${u.filter(g=>g.app).map(g=>{ const m=APP_MAYBE.get(g.app);
         return (m?`<div class="uc-maybe">⚠ Same as sheet request? <b>${esc(m.client||'')} ${esc(m.code)}</b> · ${fmt(m.req,0)} m³ (here ${fmt(g.planReq,0)} m³)
           <div class="uc-mbtns"><button class="btn sm uc-merge" data-id="${g.app}" data-es="${esc(m.es||'')}" data-code="${esc(m.code)}">Merge</button><button class="btn sm alt uc-keep" data-id="${g.app}">Keep both</button></div></div>`:'')
-          +`<div class="uc-appdel">${multi?`#${u.indexOf(g)+1} `:''}added in the app <button class="uc-del" data-id="${g.app}" title="Delete this app request">🗑 Delete</button></div>`; }).join('')}
+          +`<div class="uc-appdel">${multi?`#${u.indexOf(g)+1} `:''}added in the app <span class="uc-abtns"><button class="uc-del uc-edit" data-id="${g.app}" title="Change this app request">✎ Edit</button><button class="uc-del" data-id="${g.app}" title="Delete this app request">🗑 Delete</button></span></div>`; }).join('')}
       <div class="uc-req">${fmt(multi?tot:p.planReq,0)} <small>m³</small></div>
       ${multi?`<div class="uc-steps">${u.map((g,k)=>{ const t=RT.get(g); return `<div class="uc-step"><span class="uc-k">#${k+1}</span><b>${fmt(g.planReq,0)} m³</b><span class="uc-st">${t?(t.est?`<i>${t.time}</i>`:t.time):'—'}</span></div>`; }).join('')}</div>`:''}
       <div class="uc-meta">
@@ -3061,7 +3118,8 @@ function renderUpcoming(){
     </div>`; }).join('')+'</div>';
   // app requests: delete / merge with the sheet copy / keep both
   const A=el('upcomingArea');
-  A.querySelectorAll('.uc-del').forEach(b=>b.addEventListener('click',async()=>{ const id=b.dataset.id;
+  A.querySelectorAll('.uc-edit').forEach(b=>b.addEventListener('click',()=>{ if(window.openReqForm) window.openReqForm({edit:b.dataset.id}); }));
+  A.querySelectorAll('.uc-del:not(.uc-edit)').forEach(b=>b.addEventListener('click',async()=>{ const id=b.dataset.id;
     if(!confirm('Delete this request added in the app?')) return;
     delete PUMPNOTE['q'+id]; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump','q'+id,''); }));
   A.querySelectorAll('.uc-merge').forEach(b=>b.addEventListener('click',()=>{ const r=appReqs().find(x=>x.id===b.dataset.id);
@@ -3430,7 +3488,9 @@ function normalizeTab(cols, matrix, plantName){
     if(esMode && !String(row[esCol]==null?'':row[esCol]).trim()){ nNoEs++;
       // …but keep a note of it for the Data checks list: a real truck typed without its ES is a truck missing from its pour
       const tk=c.truck>=0?String(row[c.truck]||'').trim():'', nq=num(row[c.q]);
-      if(tk && nq>0) NOES.push({date:row[c.date]||'', plant:plantName, truck:tk, q:nq, dep:c.dep>=0?(row[c.dep]||''):''});
+      // (its row is kept too: a truck the user attaches to a request in the app comes back in through applyEsFix)
+      if(tk && nq>0) NOES.push({date:row[c.date]||'', plant:plantName, truck:tk, q:nq, dep:c.dep>=0?(row[c.dep]||''):'',
+        row:[ row[c.date]||'', plantName, '', row[c.q]||'', c.dep>=0?(row[c.dep]||''):'', c.end>=0?(row[c.end]||''):'', tk ]});
       continue; }
     const fu=c.follow>=0?String(row[c.follow]||''):''; const ac=c.action>=0?String(row[c.action]||''):'';
     if(EXCL.test(fu)||EXCL.test(ac)){ nExcl++;
@@ -3637,8 +3697,24 @@ function dpHtml(){
   const byTok=new Map(sts.map(s=>[s.tok.toUpperCase(),s]));
   const copyBtn=tok=>`<button class="dc-copy" data-tok="${esc(String(tok).toUpperCase())}" title="Copy this station only, in the message format">📋 Copy</button>`;
   const msgSt=Object.keys(msg).filter(k=>msg[k].lines.length||msg[k].total!=null);
-  let body;
+  let body, sumHtml='';
   if(msgSt.length){
+    // ---- all the pasted stations together: total against total (+ stations the sheet has but no message was pasted for) ----
+    const rowsT=msgSt.map(k=>{ const m=msg[k], s=byTok.get(k);
+      const mq=m.total!=null?m.total:m.lines.reduce((a,l)=>a+l.q,0); return {k, mq, sq:s?s.total:0, tb:sheetTbl(k)}; });
+    const missing=sts.filter(s=>!msgSt.includes(s.tok.toUpperCase()));
+    const T={mq:rowsT.reduce((a,r)=>a+r.mq,0), sq:rowsT.reduce((a,r)=>a+r.sq,0)}, tbAll=rowsT.every(r=>r.tb!=null)?rowsT.reduce((a,r)=>a+r.tb,0):null;
+    const d=(a,b)=>okq(a,b)?'<span class="dq ok">✓</span>':`<span class="dq df">${b-a>0?'+':''}${fmt(b-a,0)}</span>`;
+    sumHtml=`<div class="dc dc-all"><div class="dc-h"><b>All stations</b><span class="dc-sum">${msgSt.length} message${msgSt.length>1?'s':''}</span>
+        <span class="dc-st ${okq(T.mq,T.sq)?'ok':'bad'}">${okq(T.mq,T.sq)?'✓ Totals match':`${T.sq-T.mq>0?'+':''}${fmt(T.sq-T.mq,0)} m³`}</span></div>
+      <table class="dc-t"><thead><tr><th>Station</th><th>Message</th><th>Sheet</th>${tbAll!=null||rowsT.some(r=>r.tb!=null)?'<th>Sheet table</th>':''}<th></th></tr></thead><tbody>
+        ${rowsT.map(r=>`<tr class="${okq(r.mq,r.sq)?'ok':'bad'}"><td class="dc-k">${esc(stName(r.k))}</td><td class="n">${fmt(r.mq,0)}</td><td class="n">${fmt(r.sq,0)}</td>${tbAll!=null||rowsT.some(x=>x.tb!=null)?`<td class="n">${r.tb!=null?fmt(r.tb,0):'—'}</td>`:''}<td>${d(r.mq,r.sq)}</td></tr>`).join('')}
+        <tr class="dc-tot ${okq(T.mq,T.sq)?'ok':'bad'}"><td>Total${missing.length?' <small>(these)</small>':''}</td><td class="n">${fmt(T.mq,0)}</td><td class="n">${fmt(T.sq,0)}</td>${tbAll!=null||rowsT.some(r=>r.tb!=null)?`<td class="n">${tbAll!=null?fmt(tbAll,0):'—'}</td>`:''}<td>${d(T.mq,T.sq)}</td></tr>
+        ${missing.length?(()=>{ const all=sts.reduce((a,s)=>a+s.total,0), t8=isYest&&PROD8.yesterday?PROD8.yesterday.total:null, hasTb=tbAll!=null||rowsT.some(r=>r.tb!=null);
+          return `<tr class="dc-tot dc-grand ${okq(T.mq,all)?'ok':'bad'}"><td>All stations</td><td class="n">${fmt(T.mq,0)}</td><td class="n">${fmt(all,0)}</td>${hasTb?`<td class="n">${t8!=null?fmt(t8,0):'—'}</td>`:''}<td>${d(T.mq,all)}</td></tr>`; })():''}
+      </tbody></table>
+      ${missing.length?`<div class="dc-x"><div class="dc-xh">Loaded in the sheet, no message pasted</div>${missing.map(s=>`<div class="dc-xl"><span>${esc(s.name)}</span><span>${fmt(s.total,0)} m³</span></div>`).join('')}</div>`:''}
+    </div>`;
     // ---- checking pasted message(s): one card per station in the message ----
     body=msgSt.map(k=>{ const m=msg[k], s=byTok.get(k)||{tok:k,name:stName(k),list:[],start:0,noes:[],rej:[],total:0};
       const c=dpCompare(s,m), tt=c.total, ok=okq(tt.mq,tt.sq), tbl=sheetTbl(k);
@@ -3671,7 +3747,7 @@ function dpHtml(){
         <label class="dp-day"><input type="date" id="dpDay" value="${iso}"> 8 AM → 8 AM</label>
         <button class="btn ghost" id="dpCopy" title="Copy every station's day in the message format">📋 Copy all</button></div>
     </div>
-    <div class="dc-grid">${body}</div>
+    ${sumHtml}<div class="dc-grid">${body}</div>
   </div>`;
 }
 function dpWire(){
@@ -4243,14 +4319,44 @@ async function planPhoto(){
 {
   const M=el('reqModal'), F=el('reqForm'); let pumps=[];
   const showP=()=>{ el('rqPumpsTxt').textContent=pumps.length?pumps.join('-'):'—'; };
-  const open=()=>{ const d=new Date(); F.reset(); pumps=[]; showP(); el('reqMsg').textContent=''; el('rqFilled').innerHTML='';
+  document.body.appendChild(M);   // it also opens from All Pours (Data checks), so it can't live inside the Upcoming page
+  let editId=null;   // the app request being edited (its id), null = a new one
+  let forReq=null;   // opened from Data checks for trucks with no ES / an unknown ES: {kind:'noes'|'es', key, es, dk, plant, truck, q, n, at}
+  const open=pre=>{ const d=new Date(); F.reset(); pumps=[]; showP(); el('reqMsg').textContent=''; el('rqFilled').innerHTML='';
     el('rqDate').value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    forReq=(pre&&pre.kind)?pre:null; F.noValidate=false; F.classList.remove('rq-attaching');
+    // ✎ Edit an app request: the same form, filled with it; Save replaces it (same id -> its marks stay)
+    editId=null; let er=null; rqTabs=null; drawTabs();
+    if(pre&&pre.edit){ try{ er=JSON.parse(PUMPNOTE['q'+pre.edit]); editId=pre.edit; }catch(e){} }
+    if(er){ const S=(id,v)=>{ el(id).value=v==null?'':String(v); };
+      S('rqDate',er.date); S('rqTime',er.time); S('rqClient',er.client); S('rqCode',er.code); S('rqQty',er.qty); S('rqRate',er.rate||'');
+      S('rqSc',er.sc); S('rqTem',er.tem); S('rqEs',er.es); pumps=String(er.pumps||'').split(/[-,\s]+/).map(Number).filter(Boolean); showP(); }
+    el('rqTitle').textContent=editId?'✎ Edit request':forReq?'✎ Request for these trucks':'➕ New request';
+    el('rqFor').hidden=el('rqAttachL').hidden=!forReq;
+    if(forReq){
+      el('rqFor').innerHTML=forReq.kind==='noes'
+        ? `🏷️ <b>${esc(forReq.plant)} · TM ${esc(forReq.truck)}</b> · ${fmt(forReq.q)} m³${forReq.at?' · '+timeShort(forReq.at):''} — loaded with <b>no ES</b>`
+        : `🔢 <b>ES ${esc(forReq.es)}</b>${forReq.plant?' · '+esc(forReq.plant):''} · ${forReq.n||''} truck${forReq.n>1?'s':''} · ${fmt(forReq.q,0)} m³ — no request has this ES`;
+      if(forReq.dk) el('rqDate').value=forReq.dk;
+      if(forReq.kind==='es') el('rqEs').value=forReq.es;
+      // requests of that day it may belong to (sheet + app)
+      const opts=(PLAN_ROWS||[]).filter(r=>String(r.es||'').trim() && (!r.date||!forReq.dk||r.date===forReq.dk) && String(r.es).trim()!==forReq.es);
+      el('rqAttach').innerHTML='<option value="">— no, a new request (write it below) —</option>'+opts.map(r=>`<option value="${esc(String(r.es).trim())}">${esc(reqLabel(String(r.es).trim()))}${/^APP-/.test(r.es)?' (app)':' · ES '+esc(r.es)}</option>`).join('');
+    }
     // contractors already used in the plan, for quick picking
     el('rqClients').innerHTML=[...new Set((PLAN_ROWS||[]).map(r=>String(r.client||'').trim()).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}">`).join('');
     el('rqPumpBtns').innerHTML=[...new Set(PUMPS)].sort((a,b)=>a-b).map(L=>`<button type="button" class="rq-pb" data-l="${L}">+${L}</button>`).join('');
     M.style.display='flex'; setTimeout(()=>el('rqClient').focus(),50); };
   const close=()=>{ M.style.display='none'; };
-  const ab=el('addReqBtn'); if(ab) ab.addEventListener('click',open);
+  const ab=el('addReqBtn'); if(ab) ab.addEventListener('click',()=>open());
+  window.openReqForm=pre=>open(pre);
+  // attaching to an existing request needs none of the boxes below
+  el('rqAttach').addEventListener('change',e=>{ F.noValidate=!!e.target.value; el('reqForm').classList.toggle('rq-attaching',!!e.target.value); });
+  // the trucks -> a request (ES or "APP-…"): no-ES trucks by their own key, an unknown ES by an ES fix of that day
+  const attachTo=async target=>{ if(!forReq||!target) return;
+    const k=forReq.kind==='noes'?forReq.key:esFixKey(forReq.es,forReq.dk);
+    if(forReq.kind==='es'&&target===forReq.es) return;   // the new request carries that ES itself: nothing to attach
+    PUMPNOTE[k]=target; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,target); };
   el('reqClose').addEventListener('click',close); el('reqCancel').addEventListener('click',close);
   M.addEventListener('click',e=>{ if(e.target===M) close(); });
   el('rqPumpBtns').addEventListener('click',e=>{ const b=e.target.closest('.rq-pb'); if(!b) return; pumps.push(+b.dataset.l); showP(); });
@@ -4288,7 +4394,9 @@ async function planPhoto(){
     // "QTY(17.38+4.67)M3" = two requests -> "17.38 + 4.67" (Save makes one request per quantity)
     const qtyRaw=gm(/\bQTY\s*[:.(]?\s*([\d.,]+(?:\s*[+&]\s*[\d.,]+)*)/i), qtyL=qtyRaw.split(/\s*[+&]\s*/).map(n).filter(Boolean);
     set('rqQty', qtyL.join(' + '), qtyL.length>1?`${qtyL.length} quantities`:'Quantity');
-    set('rqRate', n(gm(/\bRATE\s*[:.(]?\s*([\d.,]+)/i)), 'Rate');
+    // "RATE 40M/HR" -> 40 · "RATE:2TRUCKS/HR" -> 2 trucks × 12 m³ = 24 m³/h
+    const rateL=gm(/\bRATE\s*[:.(]?\s*([^\n]*)/i), rateN=n(rateL);
+    set('rqRate', rateN&&/truck|trk|tm\b/i.test(rateL)?String(+rateN*MAX_LOAD):rateN, /truck|trk/i.test(rateL)?`Rate (${rateN} trucks × ${MAX_LOAD} m³)`:'Rate');
     set('rqSc', gm(/\bS\.?\s*C\.?\s*[:.(]?\s*([0-9A-Z/]+)/i), 'Selection card');
     // temperature = always the HIGHEST it allows: "24+1-5" -> 25 · "24+1" -> 25 · "19-25" -> 25 · "24" -> 24
     // ("TEM:NOT EXCEED25" / "TEM max 25" -> 25)
@@ -4299,7 +4407,9 @@ async function planPhoto(){
     // "Now" = today, this minute; "Around 10:00 PM" / "at 15:30" = that time today
     const d=new Date(), today=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
     if(/\bnow\b/i.test(M)){ set('rqDate', today, 'Date'); set('rqTime', `${pad(d.getHours())}:${pad(d.getMinutes())}`, 'Time (now)'); }
-    else { const tm=M.match(/\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b/i)||M.match(/\b(?:at|time|around)\s*[:.]?\s*(\d{1,2})(?::(\d{2}))?\b/i);
+    else { // a range "9:00-10:00 AM" = its START (9:00 AM)
+      const rg=M.match(/\b(\d{1,2})(?::(\d{2}))?\s*(?:AM|PM)?\s*[-–to]+\s*\d{1,2}(?::\d{2})?\s*(AM|PM)\b/i);
+      const tm=rg||M.match(/\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b/i)||M.match(/\b(?:at|time|around)\s*[:.]?\s*(\d{1,2})(?::(\d{2}))?\b/i);
       if(tm){ let h=+tm[1]; const mi=tm[2]||'00', ap=(tm[3]||'').toUpperCase(); if(ap==='PM'&&h<12) h+=12; if(ap==='AM'&&h===12) h=0;
         if(h<24) set('rqTime', `${pad(h)}:${mi}`, 'Time'); } }
     // no code in the message: the ES may already be known (plan sheet / saved names)
@@ -4311,23 +4421,60 @@ async function planPhoto(){
     let pm=[];
     const br=M.split(/\r?\n/).find(l=>/^\s*(\d\s*)?\(\s*\d{2}\s*\)(\s*\+\s*(\d\s*)?\(\s*\d{2}\s*\))*\s*$/.test(l));
     if(br) pm=[...br.matchAll(/(\d)?\s*\(\s*(\d{2})\s*\)/g)].flatMap(m=>Array(Math.min(+(m[1]||1),6)).fill(+m[2]));
+    // "2PUMPS(63)" / "2 pumps (63)+(56)" / "pump(56)"
+    if(!pm.length){ const pl=M.split(/\r?\n/).find(l=>/pumps?\s*\(\s*\d{2}\s*\)/i.test(l));
+      if(pl) pm=[...pl.matchAll(/(?:\b(\d|one|two|three|four|a)\s*)?(?:pumps?\s*)?\(\s*(\d{2})\s*\)/gi)]
+        .flatMap(m=>Array(Math.min(W[String(m[1]||'').toLowerCase()]||+m[1]||1,6)).fill(+m[2])); }
     if(!pm.length) pm=[...M.matchAll(/\b(one|two|three|four|a|single|\d)\s+pumps?\s*(?:of\s*)?(\d{2})\b/gi)].flatMap(m=>{ const k=W[m[1].toLowerCase()]||+m[1]||1; return Array(Math.min(k,6)).fill(+m[2]); });
     if(!pm.length){ const m=M.match(/\bpumps?\s*[:.]?\s*(\d{2}(?:\s*[-+,&]\s*\d{2})*)/i); if(m) pm=m[1].split(/[-+,&\s]+/).map(Number).filter(Boolean); }
     pm=pm.filter(L=>PUMPS.includes(L));
     if(pm.length){ pumps=pm; showP(); got.push('Pumps'); }
     const nReq=Math.max(esAll.length, qtyL.length);
-    el('rqFilled').innerHTML=(got.length?`✓ Filled: ${got.map(esc).join(' · ')}${el('rqCode').value?'':' — <b>write the Code</b>'}`:'')
-      +(nReq>1?`<div class="rq-multi">📑 <b>${nReq} requests</b> — Save makes one for each: ${Array.from({length:nReq},(_,i)=>`<span>${esAll[i]?'ES '+esc(esAll[i]):'no ES'} · ${qtyL[i]!=null?fmt(qtyL[i],2)+' m³':'<b>qty?</b>'}</span>`).join('')}</div>`:'');
+    el('rqFilled').innerHTML=got.length?`✓ Filled: ${got.map(esc).join(' · ')}${el('rqCode').value?'':' — <b>write the Code</b>'}`:'';
+    // several requests -> one tab each (same details, its own ES + quantity), each can then be changed alone
+    if(nReq>1){ const b=snapForm(); rqTabs=Array.from({length:nReq},(_,i)=>Object.assign({},b,{rqEs:esAll[i]||'', rqQty:qtyL[i]!=null?String(qtyL[i]):''}));
+      rqTab=0; loadForm(rqTabs[0]); }
+    else rqTabs=null;
+    drawTabs();
   };
+  // ---- request tabs (one message, several requests) ----
+  const RQ_F=['rqDate','rqTime','rqClient','rqCode','rqQty','rqRate','rqSc','rqTem','rqEs'];
+  let rqTabs=null, rqTab=0;
+  function snapForm(){ const o={}; RQ_F.forEach(id=>o[id]=el(id).value); o.pumps=pumps.slice(); return o; }
+  function loadForm(o){ RQ_F.forEach(id=>el(id).value=o[id]==null?'':o[id]); pumps=(o.pumps||[]).slice(); showP(); }
+  function drawTabs(){ const box=el('rqTabs');
+    if(!rqTabs){ box.hidden=true; box.innerHTML=''; return; }
+    box.hidden=false;
+    box.innerHTML=`<span class="rq-tabs-h">📑 ${rqTabs.length} requests</span>`+rqTabs.map((t,i)=>`<button type="button" class="rq-tab${i===rqTab?' on':''}" data-i="${i}">#${i+1} · ${t.rqEs?'ES '+esc(t.rqEs):'no ES'} · ${t.rqQty?esc(t.rqQty)+' m³':'qty?'}</button>`).join('');
+    box.querySelectorAll('.rq-tab').forEach(b=>b.addEventListener('click',()=>{ rqTabs[rqTab]=snapForm(); rqTab=+b.dataset.i; loadForm(rqTabs[rqTab]); drawTabs(); })); }
+  // typing in a tab updates its button (ES / quantity)
+  ['rqEs','rqQty'].forEach(id=>el(id).addEventListener('input',()=>{ if(rqTabs){ rqTabs[rqTab]=snapForm(); drawTabs(); } }));
   el('rqPaste').addEventListener('input',e=>{ const ta=e.target, c=cleanPaste(ta.value);
     if(/[A-Za-z0-9+/=]{60,}|[⁠​]/.test(ta.value)) ta.value=c;   // show the message without the picture code
     fillFrom(c); });
   F.addEventListener('submit',async e=>{ e.preventDefault();
     const v=id=>el(id).value.trim(), num=s=>parseFloat(String(s).replace(',','.'));
+    // trucks from Data checks that belong to a request already in the list: just attach them
+    if(forReq && el('rqAttach').value){ const t=el('rqAttach').value; close(); await attachTo(t); return; }
     // several requests in one go: "17.38 + 4.67" in Quantity and "45292 & 45294" in ES -> one request each, paired in order
+    // tabs: one request per tab, each with its own boxes
+    if(rqTabs && !editId){ rqTabs[rqTab]=snapForm();
+      const L=rqTabs.map(t=>({date:t.rqDate.trim(), time:t.rqTime.trim(), client:t.rqClient.trim(), code:t.rqCode.toUpperCase().replace(/\s+/g,''),
+        qty:num(t.rqQty), rate:num(t.rqRate)||0, sc:t.rqSc.trim(), tem:t.rqTem.trim(), es:t.rqEs.trim(), pumps:(t.pumps||[]).join('-'), by:ME||'', at:Date.now()}));
+      const bad=L.findIndex(r=>!r.client||!r.code||!(r.qty>0)||!r.date||(r.time&&!normPlanTime(r.time)));
+      if(bad>=0){ rqTab=bad; loadForm(rqTabs[bad]); drawTabs(); el('reqMsg').textContent=`#${bad+1}: Contractor, Code, Quantity (and a time like 15:30) are needed.`; return; }
+      for(const r of L){ const tw=sheetTwin(r); if(tw){ el('reqMsg').innerHTML=`<b>Already in the plan sheet:</b> ${esc((tw.client?tw.client+' ':'')+tw.code)} · ${fmt(tw.req,0)} m³${tw.es?' · ES '+esc(tw.es):''}.`; return; } }
+      const saved=L.map((r,i)=>['q'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,5), JSON.stringify(r)]);
+      for(const [k,val] of saved) PUMPNOTE[k]=val;
+      stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
+      if(L.some(r=>!inDateFilter(r.date))) alert('Saved. Some are dated outside the From/To dates — change them to see those in Upcoming.');
+      for(const [k,val] of saved) await syncPush('pump',k,val);
+      if(forReq){ const [k0,v0]=saved[0], r0=JSON.parse(v0); await attachTo(r0.es?String(r0.es).trim():'APP-'+k0.slice(1)); }
+      return; }
     const qs=v('rqQty').split(/\s*[+&/]\s*|\s+and\s+/i).map(num).filter(x=>x>0);
     const ess=v('rqEs').split(/[\s,&+/]+/).map(s=>s.trim()).filter(Boolean);
     const N=Math.max(qs.length,ess.length,1);
+    if(editId && N>1){ el('reqMsg').textContent='Editing one request: one quantity and one ES only.'; return; }
     if(N>1 && qs.length!==N){ el('reqMsg').textContent=`${ess.length} ES numbers but ${qs.length} quantities — write one quantity per ES (e.g. 17.38 + 4.67).`; return; }
     const base={date:v('rqDate'), time:v('rqTime'), client:v('rqClient'), code:v('rqCode').toUpperCase().replace(/\s+/g,''),
       rate:num(v('rqRate'))||0, sc:v('rqSc'), tem:v('rqTem'), pumps:pumps.join('-'), by:ME||'', at:Date.now()};
@@ -4346,11 +4493,19 @@ async function planPhoto(){
       return; } }
     // outside the dates on screen: it is saved, but say why it does not show
     const hidden=!inDateFilter(base.date);
+    // ✎ Edit: replace the same app request (same id: its planned plants / pumps sent stay with it)
+    if(editId){ const k='q'+editId; let old={}; try{ old=JSON.parse(PUMPNOTE[k]); }catch(e){}
+      const r=Object.assign({},list[0],{by:old.by||base.by, at:old.at||base.at, keep:old.keep, editedBy:ME||'', editedAt:Date.now()}), val=JSON.stringify(r);
+      PUMPNOTE[k]=val; stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
+      if(hidden) alert(`Saved. It is dated ${base.date} — change the From/To dates to see it in Upcoming.`);
+      await syncPush('pump',k,val); return; }
     const saved=list.map((r,i)=>{ const id=Date.now().toString(36)+i+Math.random().toString(36).slice(2,5); return ['q'+id, JSON.stringify(r)]; });
     for(const [k,val] of saved) PUMPNOTE[k]=val;
     stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
     if(hidden) alert(`Saved. It is dated ${base.date} — change the From/To dates to see it in Upcoming.`);
-    for(const [k,val] of saved) await syncPush('pump',k,val); });
+    for(const [k,val] of saved) await syncPush('pump',k,val);
+    // opened for trucks with no ES / an unknown ES: they now count on the new request
+    if(forReq){ const [k0,v0]=saved[0], r0=JSON.parse(v0); await attachTo(r0.es?String(r0.es).trim():'APP-'+k0.slice(1)); } });
 }
 // 💾 Save = always a .png file on this device; 📋 Copy = always to the clipboard (paste anywhere)
 async function planPhotoBlob(){ const cv=drawPlanPhoto(); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
