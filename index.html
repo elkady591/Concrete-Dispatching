@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000015">
+<meta name="app-build" content="20261020-000016">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -256,6 +256,8 @@
   .ap-sum{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;margin-top:8px;font-family:var(--mono);font-size:13px;color:var(--muted)}
   .ap-sum b{font-size:16px;color:var(--ink)} .ap-sum .ap-pill{margin:0} .ap-spc{font-size:18px!important;color:var(--cyan)!important}
   .ap-bar-s{height:6px;margin-top:8px}
+  .ap-pz{display:inline-block;width:15px;height:15px;border-radius:4px;vertical-align:-3px;margin-inline-end:5px;background:linear-gradient(90deg,transparent 4px,#3b2a05 4px,#3b2a05 6px,transparent 6px,transparent 9px,#3b2a05 9px,#3b2a05 11px,transparent 11px),linear-gradient(#fcd34d,#f59e0b);background-size:100% 9px,100% 100%;background-position:center,center;background-repeat:no-repeat}
+  .ap-stop{font-size:12px;font-weight:800;color:var(--rose);background:rgba(251,113,133,.14);border:1px solid rgba(251,113,133,.4);border-radius:99px;padding:2px 10px;white-space:nowrap}
   .ap:not(.open) .ap-last{font-size:11px}
   @media(max-width:640px){ .ap{padding:10px} .ap-g3{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
     .ap-grp{padding:8px 10px} .ap-grp .big{font-size:20px} .ap-last{margin-inline-start:0;width:100%} .ap-sp{display:none} .ap-fs{width:100%} }
@@ -2632,9 +2634,12 @@ function renderSummary(){
     const meta=[g.sc&&('Card '+esc(g.sc)), g.pumps&&('Pumps '+esc(g.pumps)), g.tem&&('TEM '+esc(String(g.tem).replace(/\s+/g,' '))), g.mix&&('Grade '+esc(g.mix))].filter(Boolean).join(' · ');
     const hourly=apHourly.has(g.key);
     const isOpen=apOpen.has(g.key);
+    // no truck for over an hour (and not finished yet) -> "⏸ Stopped h:mm" (auto-closes at 2 h)
+    const idleH=g.endMax!=null?(Date.now()-g.endMax)/3600000:0;
+    const stopTag=(idleH>=1&&!doneQ)?`<span class="ap-stop" title="No truck since ${timeShort(g.endMax)}"><i class="ap-pz"></i>Stopped ${hLabel(idleH)} h</span>`:'';
     return `<div class="ap${isOpen?' open':''}${g.carried>0?' carry-row':''}" data-k="${encodeURIComponent(g.key)}" style="--ec:${EL_EDGE[i%EL_EDGE.length]}">
       <div class="ap-hd ap-tog" title="Tap to open / close the details">${g.client?`<span class="ap-cl">${esc(g.client)}</span>`:''}<span class="ap-el">${esc(g.elem||'—')}</span><span class="ap-st">${esc(g.plant||'')}</span>
-        <span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span>${carryBadge(g,true)}<span class="ap-last">last truck ${timeShort(g.endMax)}</span><span class="ap-chev">${isOpen?'▴':'▾'}</span></div>
+        <span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span>${stopTag}${carryBadge(g,true)}<span class="ap-last">last truck ${timeShort(g.endMax)}</span><span class="ap-chev">${isOpen?'▴':'▾'}</span></div>
       ${!isOpen?`<div class="ap-sum">
         <span class="ap-s"><b style="color:var(--cyan)">${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</span>
         ${g.rejected>0?`<span class="ap-s" style="color:var(--rose)">⛔ <b>${fmt(g.rejected,0)}</b> m³</span>`:''}
