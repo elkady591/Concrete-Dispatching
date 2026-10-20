@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000019">
+<meta name="app-build" content="20261020-000020">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3444,7 +3444,7 @@ function showWait(){
     <div style="font-weight:800;font-size:20px;margin:12px 0 6px">مستني الموافقة</div>
     <div style="color:#8b97a6;font-size:14px;line-height:1.7">طلبك اتبعت لمدير البرنامج باسم <b style="color:#e8ecf6">${esc(ME||'—')}</b>.<br>أول ما يوافق هيفتح لوحده.</div>
     <button id="waitAdm" style="margin-top:22px;font:inherit;font-size:12px;color:#8b97a6;background:none;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:5px 12px;cursor:pointer">Admin</button></div>`;
-  o.querySelector('#waitAdm').onclick=async()=>{ await toggleAdmin(); if(IS_ADMIN){ await syncPush('pump',accKey(deviceId()),`ok|${ME}|${Date.now()}|admin`); await syncPush('pump',waitKey(deviceId()),''); hideWait(); } };
+  o.querySelector('#waitAdm').onclick=async()=>{ await toggleAdmin(); if(IS_ADMIN){ await syncPush('pump',accKey(deviceId()),`ok|${ME}|${Date.now()}|admin`); await syncPush('pump',waitKey(deviceId()),''); hideWait(); ACC_STATE='in'; } };
   o.style.display='grid';
 }
 function hideWait(){ const o=el('waitGate'); if(o) o.remove(); }
@@ -3453,22 +3453,26 @@ let ACC_IN=false, ACC_CHK=0;
 function accWatch(){ if(!ACC_IN||IS_ADMIN||BLOCKED||accSkip()||accOk(deviceId())||Date.now()-ACC_CHK<20000) return;
   ACC_CHK=Date.now(); whoamiCheck(); }
 // start-up: approved / admin -> as before; otherwise type the name again (even if one was saved) and wait
+// where this device stands — read by Concrete Management (the hub keeps everything hidden until 'in')
+let ACC_STATE='checking';
+function accessState(){ return BLOCKED?'blocked':ACC_STATE; }
+async function accessIn(){ ACC_STATE=ME?'in':'name'; await askName(false); ACC_STATE='in'; }
 async function accessFlow(){
-  if(accSkip()) return askName(false);
+  if(accSkip()) return accessIn();
   await syncPull();
   const d=deviceId();
-  if(IS_ADMIN){ if(!accOk(d)) await syncPush('pump',accKey(d),`ok|${ME}|${Date.now()}|admin`); return askName(false); }
-  if(accOk(d)){ ACC_IN=true; return askName(false); }
+  if(IS_ADMIN){ if(!accOk(d)) await syncPush('pump',accKey(d),`ok|${ME}|${Date.now()}|admin`); return accessIn(); }
+  if(accOk(d)){ ACC_IN=true; return accessIn(); }
   const w=String(PUMPNOTE[waitKey(d)]||'');
   if(w){ ME=w.split('|')[0]||ME; }                       // already asked (page reloaded) -> keep that name
   else { ME=''; try{ localStorage.removeItem(KEY_ME); }catch(e){}
-    await askName(true); await syncPush('pump',waitKey(d),`${ME}|${Date.now()}`); }
-  showWait();
+    ACC_STATE='name'; await askName(true); await syncPush('pump',waitKey(d),`${ME}|${Date.now()}`); }
+  showWait(); ACC_STATE='wait';
   const iv=setInterval(async()=>{
     if(!el('waitGate')){ clearInterval(iv); return; }        // let in as admin from the waiting screen
     const wi=await whoamiCheck(); if(wi&&wi.blocked){ clearInterval(iv); hideWait(); return; }
     await syncPull();
-    if(accOk(d)){ clearInterval(iv); hideWait(); ACC_IN=true; try{ localStorage.setItem(KEY_ME,ME); }catch(e){} const mn=el('meName'); if(mn)mn.textContent=ME; rerender(); }
+    if(accOk(d)){ clearInterval(iv); hideWait(); ACC_IN=true; ACC_STATE='in'; try{ localStorage.setItem(KEY_ME,ME); }catch(e){} const mn=el('meName'); if(mn)mn.textContent=ME; rerender(); }
     else if(!PUMPNOTE[waitKey(d)]) syncPush('pump',waitKey(d),`${ME}|${Date.now()}`);   // unblocked by the admin -> ask again
   },15000);
 }
