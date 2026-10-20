@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000010">
+<meta name="app-build" content="20261020-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2362,12 +2362,13 @@ function renderTrucks(){
     const ess=[...new Set(t.loaded.map(x=>String(x.es||'').trim()))].sort((a,b)=>site(a).localeCompare(site(b))||a.localeCompare(b));
     const colOf=es=>EL_COLS[ess.indexOf(String(es||'').trim())%EL_COLS.length];
     // tap a pour (chip, or the pour name on a card) = show only the trucks loaded on it; tap again = all
-    if(truckEs && !ess.includes(truckEs)) truckEs=null;            // that pour has no truck out any more
+    // ('' = the trucks with no ES — Start mix — is a filter too, so test against null, not truthiness)
+    if(truckEs!=null && !ess.includes(truckEs)) truckEs=null;      // that pour has no truck out any more
     const legend=ess.length>1?`<div class="tc-legend">${ess.map(es=>{ const n=t.loaded.filter(x=>String(x.es||'').trim()===es).length;
-      return `<span class="tc-chip${truckEs===es?' sel':''}${truckEs&&truckEs!==es?' dim':''}" data-es="${esc(es)}" style="--ec:${colOf(es)}"><i></i>${esc(site(es))} <b>${n}</b></span>`; }).join('')}${truckEs?'<span class="tc-chip tc-all">All ✕</span>':''}</div>`:'';
+      return `<span class="tc-chip${truckEs===es?' sel':''}${truckEs!=null&&truckEs!==es?' dim':''}" data-es="${esc(es)}" style="--ec:${colOf(es)}"><i></i>${esc(site(es))} <b>${n}</b></span>`; }).join('')}${truckEs!=null?'<span class="tc-chip tc-all">All ✕</span>':''}</div>`:'';
     // newest = shortest time out on top (or the reverse); trucks without a time stay at the end
     const outMin=x=>{ const m=String(x.elapsed||'').trim().match(/^(-?)(\d+):(\d{1,2})/); return m?(m[1]?0:(+m[2])*60+(+m[3])):null; };   // "-0:00" = just left
-    const shown=(truckEs?t.loaded.filter(x=>String(x.es||'').trim()===truckEs):t.loaded).slice().sort((a,b)=>{
+    const shown=(truckEs!=null?t.loaded.filter(x=>String(x.es||'').trim()===truckEs):t.loaded).slice().sort((a,b)=>{
       const A=outMin(a), B=outMin(b); if(A==null||B==null) return (A==null)-(B==null);
       return truckSort==='old'?B-A:A-B; });
     const sortBar=`<div class="tc-sortbar"><button class="tc-sort" title="Sort by time out">${truckSort==='old'?'↑ Oldest first':'↓ Newest first'}</button></div>`;
