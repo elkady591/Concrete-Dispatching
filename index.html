@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000013">
+<meta name="app-build" content="20261020-000015">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -231,11 +231,12 @@
   .ap-cl,.ap-el{font-size:19px;font-weight:800} .ap-st{font-family:var(--mono);font-size:12px;color:var(--muted)}
   .ap-last{margin-inline-start:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
   .ap-meta{font-size:12px;color:var(--muted);margin:4px 0 10px}
-  .ap-g3{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;margin-top:8px}
+  .ap-g3{display:grid;grid-template-columns:1.2fr .8fr 1fr 1fr;gap:10px;margin-top:8px}
   .ap-grp{border:1px solid var(--line2);border-radius:12px;padding:9px 12px;background:rgba(255,255,255,.03);min-width:0}
+  .ap-grp.rj{border-color:rgba(251,113,133,.45);background:rgba(251,113,133,.07)}
   .ap-grp .t{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
   .ap-grp .big{font-family:var(--mono);font-size:24px;font-weight:800;line-height:1.15} .ap-grp .big small{font-size:13px;color:var(--muted)}
-  .ap-grp .sub{font-size:12px;color:var(--muted);margin-top:3px} .ap-grp .sub b{color:var(--ink);font-family:var(--mono)}
+  .ap-grp .sub{font-size:12px;color:var(--muted);margin-top:3px} .ap-grp .sub b{color:var(--ink);font-family:var(--mono);white-space:nowrap}
   .ap-pill{display:inline-block;font-size:11px;font-weight:800;border-radius:99px;padding:1px 8px;margin-top:5px}
   .ap-pill.ok{color:var(--green);background:rgba(52,211,153,.14)} .ap-pill.bad{color:var(--rose);background:rgba(251,113,133,.14)}
   .ap-hourly{margin-top:8px}
@@ -248,7 +249,15 @@
   .ap-btn{font:inherit;font-size:12.5px;font-weight:700;border-radius:10px;padding:6px 12px;cursor:pointer;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--ink)}
   .ap-btn.on{border-color:rgba(167,139,250,.6);color:#c4b5fd}
   .ap-done{border-color:rgba(52,211,153,.5);background:rgba(52,211,153,.12);color:var(--green)}
-  @media(max-width:640px){ .ap{padding:10px} .ap-g3{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px} .ap-g3 .ap-grp:first-child{grid-column:1/-1}
+  .ap-tog,.ap-sum,.ap-bar-s{cursor:pointer;user-select:none} .ap{position:relative} .ap-hd{padding-inline-end:34px}
+  .ap-chev{position:absolute;top:10px;inset-inline-end:10px;width:26px;height:26px;display:grid;place-items:center;border-radius:8px;
+    font-size:15px;color:var(--muted);border:1px solid var(--line2);background:rgba(255,255,255,.04)}
+  .ap-all{margin-inline-start:auto;font-size:12px;padding:4px 11px;text-transform:none;letter-spacing:0}
+  .ap-sum{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;margin-top:8px;font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .ap-sum b{font-size:16px;color:var(--ink)} .ap-sum .ap-pill{margin:0} .ap-spc{font-size:18px!important;color:var(--cyan)!important}
+  .ap-bar-s{height:6px;margin-top:8px}
+  .ap:not(.open) .ap-last{font-size:11px}
+  @media(max-width:640px){ .ap{padding:10px} .ap-g3{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
     .ap-grp{padding:8px 10px} .ap-grp .big{font-size:20px} .ap-last{margin-inline-start:0;width:100%} .ap-sp{display:none} .ap-fs{width:100%} }
   .spot-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
   .spot-done{font:inherit;font-size:13px;font-weight:700;padding:7px 14px;border-radius:10px;cursor:pointer;margin-top:8px;
@@ -1020,7 +1029,7 @@
       <div class="card"><h3>By Station</h3><div id="plants"></div></div>
     </div>
     <div id="spot"></div>
-    <div class="card" style="margin-top:14px"><h3>Active Pours</h3><div id="activeList"></div></div>
+    <div class="card" style="margin-top:14px"><h3 style="display:flex;align-items:center">Active Pours<button id="apAll" class="ap-btn ap-all" hidden></button></h3><div id="activeList"></div></div>
     <div class="card" style="margin-top:14px" id="closedCard"><h3>Closed Pours</h3><div id="closedList"></div></div>
     <!-- Daily Production Plan as a picture for WhatsApp (see planPhoto) — live preview of exactly what gets sent -->
     <img id="planPhotoPrev" alt="Daily Production Plan" style="display:none;width:100%;margin-top:16px;border-radius:12px;border:1px solid var(--line2);background:#fff">
@@ -1906,7 +1915,7 @@ function renderViewTabs(){
   const mk=(id,label,cnt)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
   // ⚠ on Upcoming when a request's pumps are not ready
   let upWarn=''; try{ for(const v of upcomingPumpCheck().values()) if(v.cls!=='ok'){ upWarn='<span class="pm-alert" title="Pumps not ready for a request">⚠</span>'; break; } }catch(e){}
-  box.innerHTML=mk('summary','📋 Summary',null)+mk('pours','🏗️ All Pours',VD.started.length)+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length)
+  box.innerHTML=mk('summary','📋 Summary',VD.open.length)+mk('pours','🏗️ All Pours',VD.started.length)+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length)
     +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null)
     +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', PUMPS.length)
     +mk('production','📊 Production',null);
@@ -2346,6 +2355,9 @@ function outClass(el){
   const h=(+m[1])+(+m[2])/60;
   return h<2?'ok':(h<=3?'warn':'bad');
 }
+// Active Pours cards opened (details shown); closed = one summary line. Kept per device.
+let apOpen=new Set((()=>{ try{ return JSON.parse(localStorage.getItem('cmpour:apopen')||'[]'); }catch(e){ return []; } })());
+function saveApOpen(){ try{ localStorage.setItem('cmpour:apopen',JSON.stringify([...apOpen])); }catch(e){} }
 let apHourly=new Set();  // Active Pours cards showing their Hourly rate instead of the overview
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
 let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = every loaded truck
@@ -2619,13 +2631,24 @@ function renderSummary(){
     const doneQ=g.remaining!=null&&g.remaining<=0;
     const meta=[g.sc&&('Card '+esc(g.sc)), g.pumps&&('Pumps '+esc(g.pumps)), g.tem&&('TEM '+esc(String(g.tem).replace(/\s+/g,' '))), g.mix&&('Grade '+esc(g.mix))].filter(Boolean).join(' · ');
     const hourly=apHourly.has(g.key);
-    return `<div class="ap${g.carried>0?' carry-row':''}" style="--ec:${EL_EDGE[i%EL_EDGE.length]}">
-      <div class="ap-hd">${g.client?`<span class="ap-cl">${esc(g.client)}</span>`:''}<span class="ap-el">${esc(g.elem||'—')}</span><span class="ap-st">${esc(g.plant||'')}</span>
-        <span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span>${carryBadge(g,true)}<span class="ap-last">last truck ${timeShort(g.endMax)}</span></div>
+    const isOpen=apOpen.has(g.key);
+    return `<div class="ap${isOpen?' open':''}${g.carried>0?' carry-row':''}" data-k="${encodeURIComponent(g.key)}" style="--ec:${EL_EDGE[i%EL_EDGE.length]}">
+      <div class="ap-hd ap-tog" title="Tap to open / close the details">${g.client?`<span class="ap-cl">${esc(g.client)}</span>`:''}<span class="ap-el">${esc(g.elem||'—')}</span><span class="ap-st">${esc(g.plant||'')}</span>
+        <span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span>${carryBadge(g,true)}<span class="ap-last">last truck ${timeShort(g.endMax)}</span><span class="ap-chev">${isOpen?'▴':'▾'}</span></div>
+      ${!isOpen?`<div class="ap-sum">
+        <span class="ap-s"><b style="color:var(--cyan)">${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</span>
+        ${g.rejected>0?`<span class="ap-s" style="color:var(--rose)">⛔ <b>${fmt(g.rejected,0)}</b> m³</span>`:''}
+        <span class="ap-s">⚡ <b style="${rc?`color:${rc}`:''}">${avg!=null?fmt(avg,0):'—'}</b> m³/h</span>
+        <span class="ap-s">🏁 <b style="${fc?`color:${fc}`:''}">${g.finishAvg!=null?timeShort(g.finishAvg):(doneQ?'✓':'—')}</b>${dF!=null&&!doneQ?` <span class="ap-pill ${dF>=0?'ok':'bad'}">${Math.abs(dF)<1?'on time':(Math.abs(dF)>=60?Math.floor(Math.abs(dF)/60)+'h '+(Math.abs(dF)%60)+'m':Math.abs(dF)+' min')+(dF>0?' early':' late')}</span>`:''}</span>
+        <span class="ap-s">🚛 <b>${g.trucks}</b></span>
+        <span class="ap-sp"></span><b class="ap-spc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</b></div>
+      <div class="bar ap-bar ap-bar-s"><i class="${barClass(g.status)}" style="width:${pct}%"></i></div>`:`
       ${meta?`<div class="ap-meta">${meta}</div>`:''}
       ${hourly?`<div class="ap-hourly">${hourlyHtml(g)}</div>`:`<div class="ap-g3">
         <div class="ap-grp"><div class="t">🚚 Quantity</div><div class="big" style="color:var(--cyan)">${fmt(g.delivered,0)}<small> / ${g.required!=null?fmt(g.required,0):'—'} m³</small></div>
-          <div class="sub">⏳ Remaining <b style="color:${doneQ?'var(--green)':'var(--amber)'}">${g.remaining!=null?(doneQ?'✓ done':fmt(g.remaining,0)+' m³'):'—'}</b> · ⛔ Rejected <b style="${g.rejected>0?'color:var(--rose)':''}">${g.rejected>0?fmt(g.rejected,0)+' m³':'—'}</b></div></div>
+          <div class="sub">⏳ Remaining <b style="color:${doneQ?'var(--green)':'var(--amber)'}">${g.remaining!=null?(doneQ?'✓ done':fmt(g.remaining,0)+' m³'):'—'}</b></div></div>
+        <div class="ap-grp${g.rejected>0?' rj':''}"><div class="t">⛔ Rejected</div><div class="big" style="color:${g.rejected>0?'var(--rose)':'var(--faint)'}">${g.rejected>0?fmt(g.rejected,0):'—'}${g.rejected>0?'<small> m³</small>':''}</div>
+          <div class="sub">${(()=>{ const n=g.rejected>0?rejLoads(g).length:0; return n?`<b>${n}</b> truck${n>1?'s':''}`:'None'; })()}</div></div>
         <div class="ap-grp"><div class="t">⚡ Rate</div><div class="big" style="${rc?`color:${rc}`:''}">${avg!=null?fmt(avg,0):'—'} <small>m³/h</small></div>
           <div class="sub">🎯 Target <b>${tgt!=null?fmt(tgt,0):'—'}</b>${dR!=null?` <span style="color:${dR>=0?'var(--green)':'var(--rose)'}">${dR>=0?'▲ +':'▼ '}${dR}</span>`:''}</div></div>
         <div class="ap-grp"><div class="t">🏁 Finish</div><div class="big" style="${fc?`color:${fc}`:''}">${g.finishAvg!=null?finishTwoLine(g.finishAvg):(doneQ?'✓':'—')}</div>
@@ -2635,9 +2658,12 @@ function renderSummary(){
       <div class="bar ap-bar"><i class="${barClass(g.status)}" style="width:${pct}%"></i></div>
       <div class="ap-ft"><span class="ap-fs"><b class="ap-pc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</b><span class="ap-fc">🚛 <b>${g.trucks}</b> trucks</span>${g.hrs?`<span class="ap-fc">⏱ <b>${hLabel(g.hrs)}</b> h</span>`:''}</span>
         <span class="ap-sp"></span><button class="ap-btn ap-hr${hourly?' on':''}" data-k="${encodeURIComponent(g.key)}">${hourly?'Overview':'Hourly rate'}</button>
-        <button class="ap-btn ap-done" data-e="${encodeURIComponent(doneKey(g))}" data-n="${esc(g.elem||'')}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>
+        <button class="ap-btn ap-done" data-e="${encodeURIComponent(doneKey(g))}" data-n="${esc(g.elem||'')}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>`}
     </div>`;
   }).join('') : '<div class="muted" style="font-size:13px;padding:8px 4px">No active pours right now.</div>';
+  el('activeList').querySelectorAll('.ap-tog,.ap-sum,.ap-bar-s').forEach(h=>h.addEventListener('click',()=>{ const k=decodeURIComponent(h.closest('.ap').dataset.k); apOpen.has(k)?apOpen.delete(k):apOpen.add(k); saveApOpen(); rerender(); }));
+  { const ab=el('apAll'); if(ab){ const allOpen=list.length&&list.every(g=>apOpen.has(g.key)); ab.hidden=list.length<2; ab.textContent=allOpen?'Close all':'Open all';
+      ab.onclick=()=>{ list.forEach(g=>allOpen?apOpen.delete(g.key):apOpen.add(g.key)); saveApOpen(); rerender(); }; } }
   el('activeList').querySelectorAll('.ap-hr').forEach(b=>b.addEventListener('click',()=>{ const k=decodeURIComponent(b.dataset.k); apHourly.has(k)?apHourly.delete(k):apHourly.add(k); rerender(); }));
   el('activeList').querySelectorAll('.ap-done').forEach(b=>b.addEventListener('click',()=>{ if(confirm(`Close ${b.dataset.n||'this pour'}? (Undo can re-open it)`)) toggleDone(decodeURIComponent(b.dataset.e), true); }));
   // ring is interactive -> click jumps to the All Pours table
