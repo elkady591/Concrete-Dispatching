@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000016">
+<meta name="app-build" content="20261020-000017">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2211,9 +2211,10 @@ function upcomingPumpCheck(now){
     return stAt[t.at]||(stAt[t.at]=pumpPlan(t.at).state); };
   const used=new Set(), rowOf=g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) &&
       (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es)))); if(i>=0) used.add(i); return i<0?1e9:i; };
-  // the free pumps go to the EARLIEST request first (its planned / expected time), then the untimed ones in plan order
-  const list=(VD.upcoming||[]).map(g=>({g,i:rowOf(g),t:(RT.get(g)||{}).at})).sort((a,b)=>{
-    if(a.t!=null&&b.t!=null) return (a.t-b.t)||(a.i-b.i); if(a.t!=null||b.t!=null) return a.t!=null?-1:1; return a.i-b.i; }).map(x=>x.g);
+  // the free pumps go to the EARLIEST request first (its planned / expected time); a request with no time counts as
+  // due NOW (after any already-due timed one, before later ones); same time -> plan order
+  const list=(VD.upcoming||[]).map(g=>{ const at=(RT.get(g)||{}).at; return {g,i:rowOf(g),t:at!=null?at:now,u:at==null?1:0}; })
+    .sort((a,b)=>(a.t-b.t)||(a.u-b.u)||(a.i-b.i)).map(x=>x.g);
   const site=g=>(g.client?g.client+' ':'')+g.elem;
   for(const g of list){
     const need=pumpReq(g.pumps); if(!need.length) continue;
@@ -3129,8 +3130,9 @@ function renderUpcoming(){
   // order: requests with a time first (earliest on top), then the ones without a time in plan order
   const RT=requestTimes(), now=Date.now(), used=new Set();
   const pIdx=new Map((VD.summary||[]).map(g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) && (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es)))); if(i>=0) used.add(i); return [g,i<0?1e9:i]; }));
-  const sorted=rest.slice().sort((a,b)=>{ const ta=RT.get(a), tb=RT.get(b);
-    if(ta&&tb) return ta.at-tb.at; if(ta||tb) return ta?-1:1; return (pIdx.get(a)??1e9)-(pIdx.get(b)??1e9); });
+  // no time = due now (same order the pumps are handed out in upcomingPumpCheck)
+  const sorted=rest.slice().sort((a,b)=>{ const ta=RT.get(a), tb=RT.get(b), xa=ta?ta.at:now, xb=tb?tb.at:now;
+    return (xa-xb)||((ta?0:1)-(tb?0:1))||((pIdx.get(a)??1e9)-(pIdx.get(b)??1e9)); });
   const PC=upcomingPumpCheck();
   const dayLbl=t=>{ const d=new Date(t), n=new Date(); return d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `; };
   // one small chip per requested pump inside the pump box: tap = "sent to site" (tap again = undo)
