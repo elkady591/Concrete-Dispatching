@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000020">
+<meta name="app-build" content="20261020-000021">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -462,6 +462,7 @@
   .online{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
     border:1px solid var(--line2);background:rgba(34,197,94,.10);color:var(--muted);white-space:nowrap}
   .online{cursor:pointer}
+  .online[hidden],.foot-who[hidden]{display:none}
   .online b{color:var(--green);font-weight:800}
   /* tap the pill: who has it open */
   .foot-who{flex-basis:100%;border:1px solid var(--line2);border-radius:12px;background:rgba(255,255,255,.04);padding:6px 10px}
@@ -3395,6 +3396,8 @@ function deviceId(){
 }
 function showOnline(n){
   const b=el('footOnline'); if(!b)return;
+  // who's viewing (the count and the names) is the admin's only
+  if(!IS_ADMIN){ b.hidden=true; const fw=el('footWho'); if(fw) fw.hidden=true; return; }
   if(!(n>0)){ b.hidden=true; return; }
   b.hidden=false;
   b.innerHTML=`<span class="dot"></span><b>${n}</b> ${n===1?'person':'people'} viewing`;
@@ -3549,7 +3552,7 @@ function applyRole(){
   const b=el('adminBtn'); if(b){ b.textContent = IS_ADMIN?'🔓 Admin ON':'🔑 Admin'; b.classList.toggle('on',IS_ADMIN); }
   const tb=el('adminTabBtn'); if(tb) tb.hidden = !IS_ADMIN;      // the top-bar admin button (next to the live pill)
   const mn=el('meName'); if(mn)mn.textContent=ME||'—';
-  try{ renderAccessReq(); }catch(e){}
+  try{ renderAccessReq(); showOnline(WHO.length); }catch(e){}
 }
 async function syncClear(type){
   const r=await syncCall({action:'clear', type, by:ME});
