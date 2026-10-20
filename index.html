@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000022">
+<meta name="app-build" content="20261020-000023">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -925,10 +925,15 @@
     .thn #summaryView>.grid2{grid-row:2}
     .thn #summaryView>#activeCard{grid-column:1;grid-row:3/span 7}
     .thn #summaryView>#sumUpCard{grid-column:2;grid-row:3} .thn #summaryView>#closedCard{grid-column:2;grid-row:4}
-    .thn #summaryView>#planPhotoPrev{grid-row:10} .thn #summaryView>.pic-btns{grid-row:11}
-    .thn #summaryView>#planPhotoMsg{grid-row:12} .thn #summaryView>#planCut{grid-row:13}
+    .thn #summaryView>#phTog{grid-row:10} .thn #summaryView>#planPhotoPrev{grid-row:11} .thn #summaryView>.pic-btns{grid-row:12}
+    .thn #summaryView>#planPhotoMsg{grid-row:13} .thn #summaryView>#planCut{grid-row:14}
   }
   .thn #spot{display:none}
+  /* themes 2 / 3: the plan photo in its own card at the bottom — title bar, the whole picture, the 4 buttons (user chose this "C") */
+  html.thn #phTog{display:flex;justify-content:flex-start;margin-top:14px;padding:11px 14px;border-radius:14px 14px 0 0;border:1px solid var(--line2);border-bottom:none;background:var(--glass);color:var(--ink);box-shadow:none;font-size:13.5px;pointer-events:none;min-height:0;width:100%;box-sizing:border-box;filter:none;transform:none}
+  html.thn #planPhotoPrev{border-radius:0!important;margin-top:0!important;border-left:1px solid var(--line2)!important;border-right:1px solid var(--line2)!important}
+  html.thn .pic-btns{margin-top:0!important;padding:10px;border:1px solid var(--line2);border-top:none;border-radius:0 0 14px 14px;background:var(--glass)}
+  html.thn .pic-btns .btn{padding:8px 12px!important;font-size:13px!important}
   html.thn #footL,html.thn #footR{display:none!important}
   .thn .foot{justify-content:center}
   /* 2 — dark: solid panels (no frosted glass), calmer background */
@@ -2069,8 +2074,9 @@ function renderViewTabs(){
   // ⚠ on Upcoming when a request's pumps are not ready
   let upWarn=''; try{ for(const v of upcomingPumpCheck().values()) if(v.cls!=='ok'){ upWarn='<span class="pm-alert" title="Pumps not ready for a request">⚠</span>'; break; } }catch(e){}
   box.innerHTML=mk('summary','📋 Summary',VD.open.length,'sum','Summary')+mk('pours','🏗️ All Pours',VD.started.length,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
-    +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null,'trk','Trucks')
-    +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', PUMPS.length,'pmp','Pumps')
+    // Trucks / Pumps: the number = what is AVAILABLE now (empty trucks · free pumps that have an operator)
+    +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?TRUCKS.available.length:null,'trk','Trucks')
+    +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', (()=>{ try{ return pumpPlan(Date.now()).state.filter(s=>s.st==='free'&&!s.noop).length; }catch(e){ return null; } })(),'pmp','Pumps')
     +mk('production','📊 Production',null,'prd','Production');
   // the Admin entry is NOT a content tab — it lives up top next to the live pill (see #adminTabBtn)
   box.querySelectorAll('.vtab').forEach(t=>t.addEventListener('click',async()=>{
@@ -2856,9 +2862,9 @@ function renderSummary(){
     </div>`;
   // themes 2 / 3: the last 3 only, + Show all
   const clCut=THN&&!clAll&&dl.length>4?3:dl.length;
-  el('closedList').innerHTML = (dl.length?dl.slice(0,clCut).map(g=>closedRow(g,false)).join('')+(clCut<dl.length?`<span class="cl-more" id="clMore">Show all ${dl.length} ▾</span>`:''):'<div class="muted" style="font-size:13px;padding:8px 0">All closed pours are hidden.</div>')
+  el('closedList').innerHTML = (dl.length?dl.slice(0,clCut).map(g=>closedRow(g,false)).join('')+(clCut<dl.length?`<span class="cl-more" id="clMore">Show all ${dl.length} ▾</span>`:(THN&&clAll&&dl.length>4?`<span class="cl-more" id="clLess">Show less ▴</span>`:'')):'<div class="muted" style="font-size:13px;padding:8px 0">All closed pours are hidden.</div>')
     + (hid.length?`<div class="cl-foot"><span class="filter-clear" id="clHidTog">${showHiddenClosed?'Hide':'Show'} hidden (${hid.length})</span></div>${showHiddenClosed?hid.map(g=>closedRow(g,true)).join(''):''}`:'');
-  { const cm=el('clMore'); if(cm) cm.onclick=()=>{ clAll=true; rerender(); }; }
+  { const cm=el('clMore'); if(cm) cm.onclick=()=>{ clAll=true; rerender(); }; const cl=el('clLess'); if(cl) cl.onclick=()=>{ clAll=false; rerender(); }; }
   el('closedList').querySelectorAll('.reopen-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), false)));
   el('closedList').querySelectorAll('.close-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), true)));
   el('closedList').querySelectorAll('.hide-btn').forEach(b=>b.addEventListener('click',async()=>{
@@ -3302,9 +3308,10 @@ function renderSumUp(){
       g.sc&&('Card '+esc(g.sc)), g.tem&&('TEM '+esc(String(g.tem).replace(/\s+/g,' '))), g.planRate&&(fmt(g.planRate,0)+' m³/h')].filter(Boolean).join(' · ');
     return `<div class="su"><span class="su-t${late?' lt':''}">${t?esc(t.time):'—'}</span><span class="su-n">${g.client?esc(g.client)+' ':''}<span>${esc(g.elem||'—')}</span></span>
       <span class="su-q">${g.planReq!=null?fmt(g.planReq,0):'—'}<small> m³</small></span><span class="su-m">${meta}</span><span class="su-p">${pl.map(x=>`<i>${esc(x)}</i>`).join('')}</span></div>`; }).join('')
-    +(L.length>4&&!sumUpAll?`<span class="cl-more" id="suMore">Show all ${L.length} ▾</span>`:'');
+    +(L.length>4?(sumUpAll?`<span class="cl-more" id="suLess">Show less ▴</span>`:`<span class="cl-more" id="suMore">Show all ${L.length} ▾</span>`):'');
   box.querySelectorAll('.su').forEach(r=>r.onclick=async()=>{ view='upcoming'; await saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); });
   const m=el('suMore'); if(m) m.onclick=()=>{ sumUpAll=true; renderSumUp(); };
+  const ls=el('suLess'); if(ls) ls.onclick=()=>{ sumUpAll=false; renderSumUp(); };
 }
 function renderUpcoming(){
   const rest=VD.upcoming;   // pour objects not started yet (see render())
