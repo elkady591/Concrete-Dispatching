@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000023">
+<meta name="app-build" content="20261020-000024">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -942,11 +942,14 @@
   [data-theme="2"] body{background:#0a0e1c}
   [data-theme="2"] .card,[data-theme="2"] .ucard,[data-theme="2"] .config{-webkit-backdrop-filter:none;backdrop-filter:none}
   /* 3 — light */
-  [data-theme="3"]{--bg:#eef1f7;--panel:#ffffff;--panel2:#ffffff;--ink:#14203a;--muted:#5b6785;--faint:#8a94ab;
-    --line:rgba(20,32,58,.09);--line2:rgba(20,32,58,.16);--cyan:#0891b2;--green:#059669;--amber:#d97706;--rose:#e11d48;--violet:#7c3aed;
-    --accent:#4f46e5;--accent2:#7c3aed;--shadow:0 2px 8px rgba(20,32,58,.06);
-    --glass:#ffffff;--glass2:#ffffff;--glass-brd:rgba(20,32,58,.12);--glass-hi:none;--tabbg:rgba(255,255,255,.95);--strip:#ffffff;color-scheme:light}
-  [data-theme="3"] body{background:#eef1f7}
+  [data-theme="3"]{--bg:#e4e8f1;--panel:#ffffff;--panel2:#ffffff;--ink:#0b1426;--muted:#334063;--faint:#55607d;
+    --line:rgba(11,20,38,.14);--line2:rgba(11,20,38,.24);--cyan:#0e7490;--green:#047857;--amber:#b45309;--rose:#be123c;--violet:#6d28d9;
+    --accent:#4338ca;--accent2:#6d28d9;--shadow:0 2px 10px rgba(11,20,38,.10);
+    --glass:#ffffff;--glass2:#ffffff;--glass-brd:rgba(11,20,38,.20);--glass-hi:none;--tabbg:rgba(255,255,255,.95);--strip:#ffffff;color-scheme:light}
+  [data-theme="3"] body{background:#e4e8f1}
+  [data-theme="3"] .card,[data-theme="3"] .ucard,[data-theme="3"] .ap,[data-theme="3"] .su,[data-theme="3"] .kpis,[data-theme="3"] .vtabs{border-color:rgba(11,20,38,.22)!important}
+  [data-theme="3"] .vtab{color:#334063} [data-theme="3"] .k-lab,[data-theme="3"] .card h3,[data-theme="3"] .section-title,[data-theme="3"] .ct{color:#334063!important}
+  [data-theme="3"] .k-unit,[data-theme="3"] small{color:#55607d}
   [data-theme="3"] body::before{display:none}
   [data-theme="3"] .card,[data-theme="3"] .ucard,[data-theme="3"] .config,[data-theme="3"] .kpi,[data-theme="3"] .tbl-wrap{-webkit-backdrop-filter:none;backdrop-filter:none}
   [data-theme="3"] option{background:#fff;color:#14203a}
@@ -961,6 +964,42 @@
   [data-theme="3"] .kpi.r .k-val{color:#e11d48} [data-theme="3"] .kpi.v .k-val{color:#7c3aed} [data-theme="3"] .kpi.m .k-val{color:#d97706}
   [data-theme="3"] .ck-tag.el{color:#3730a3}
   [data-theme="3"] .plant-tag,[data-theme="3"] .spot-cell.hi .s-lab{color:#4f46e5}
+  /* 3 — light: the pastel text colours of the dark look, darkened so they read on white (generated from the rules above) */
+  [data-theme="3"] .kpi.a .k-val{color:#4338ca!important}
+  [data-theme="3"] .kpi.g .k-val{color:#047857!important}
+  [data-theme="3"] .kpi.b .k-val{color:#0e7490!important}
+  [data-theme="3"] .kpi.r .k-val{color:#be123c!important}
+  [data-theme="3"] .kpi.v .k-val{color:#6d28d9!important}
+  [data-theme="3"] .kpi.m .k-val{color:#b45309!important}
+  [data-theme="3"] .kpi.clk:hover .go{color:#4338ca!important}
+  [data-theme="3"] .plant-tag{color:#4338ca!important}
+  [data-theme="3"] .plant-next .pn-l{color:#6d28d9!important}
+  [data-theme="3"] .spot-cell.hi .s-lab{color:#4338ca!important}
+  [data-theme="3"] .ap-btn.on{color:#5b21b6!important}
+  [data-theme="3"] .st.wait{color:#b45309!important}
+  [data-theme="3"] .st.over{color:#5b21b6!important}
+  [data-theme="3"] .ucard .uc-code{color:#4338ca!important}
+  [data-theme="3"] .dp-k{color:#5b21b6!important}
+  [data-theme="3"] .dc-t .dc-k{color:#5b21b6!important}
+  [data-theme="3"] .dc-t tr.dc-grand td{color:#5b21b6!important}
+  [data-theme="3"] .dc-l b{color:#5b21b6!important}
+  [data-theme="3"] .tc-out.warn{color:#c2410c!important}
+  [data-theme="3"] .uc-pump.warn{color:#c2410c!important}
+  [data-theme="3"] .uc-time.late{color:#c2410c!important}
+  [data-theme="3"] .uc-del.uc-edit{color:#5b21b6!important}
+  [data-theme="3"] .uc-maybe{color:#c2410c!important}
+  [data-theme="3"] .chk-req{color:#5b21b6!important}
+  [data-theme="3"] .rq-tab{color:#5b21b6!important}
+  [data-theme="3"] .rq-multi span{color:#5b21b6!important}
+  [data-theme="3"] .uc-plwarn{color:#c2410c!important}
+  [data-theme="3"] .uc-late{color:#c2410c!important}
+  [data-theme="3"] .vtab .pm-alert{color:#c2410c!important}
+  [data-theme="3"] .pm-wash-btn b{color:#c2410c!important}
+  [data-theme="3"] .pm-warn{color:#c2410c!important}
+  [data-theme="3"] .su-t.lt{color:#c2410c!important}
+  [data-theme="3"] .su-p i{color:#5b21b6!important}
+  [data-theme="3"] .su-late{color:#c2410c!important}
+  [data-theme="3"] .vtab.active{color:#fff}
   /* the Themes row in ⚙ */
   .th-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .th-opt{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer}
@@ -1320,9 +1359,10 @@ function renderThemes(){
     PUMPNOTE['TH|'+n]=v.trim(); renderThemes(); await syncPush('pump','TH|'+n, v.trim()===TH_DEF[n]?'':v.trim()); });
 }
 function setTheme(n){
-  THEME=n; THN=n!=='1'; try{ localStorage.setItem(KEY_THEME,n); }catch(e){}
+  const was=THEME; THEME=n; THN=n!=='1'; try{ localStorage.setItem(KEY_THEME,n); }catch(e){}
   const h=document.documentElement; h.setAttribute('data-theme',n); h.classList.toggle('thn',THN);
   renderThemes(); try{ renderViewTabs(); rerender(); }catch(e){}
+  if(n==='3'||was==='3') location.reload();   // the pour colour lists are picked at start (a darker set for the light theme)
 }   // opened by the notifier job, not by a person (see window.__notifyItems)
 const KEY_DONE='cmpour:done';
 const KEY_PUMP='cmpour:pumpnote';
@@ -2593,7 +2633,8 @@ function renderTrucks(){
     // card layout (not a wide table) so it reads cleanly on a phone without horizontal scroll.
     // Every element gets its own colour (edge, truck number, name) so trucks of the same pour stand out;
     // colours go to the elements in code order, so they stay put while the same pours are running.
-    const EL_COLS=['#22d3ee','#fbbf24','#a78bfa','#34d399','#fb7185','#fb923c','#60a5fa','#a3e635','#f472b6','#2dd4bf'];
+    const EL_COLS=THEME==='3'?['#0e7490','#b45309','#6d28d9','#047857','#be123c','#c2410c','#1d4ed8','#4d7c0f','#be185d','#0f766e']   // light theme: darker so text reads on white
+  :['#22d3ee','#fbbf24','#a78bfa','#34d399','#fb7185','#fb923c','#60a5fa','#a3e635','#f472b6','#2dd4bf'];
     const ess=[...new Set(t.loaded.map(x=>String(x.es||'').trim()))].sort((a,b)=>site(a).localeCompare(site(b))||a.localeCompare(b));
     const colOf=es=>EL_COLS[ess.indexOf(String(es||'').trim())%EL_COLS.length];
     // tap a pour (chip, or the pour name on a card) = show only the trucks loaded on it; tap again = all
@@ -2793,7 +2834,7 @@ function renderSummary(){
 
   // The old "Active now" spotlight is gone: every open pour gets its own full card (Active Pours) instead
   el('spot').innerHTML='';
-  const EL_EDGE=['#22d3ee','#fbbf24','#a78bfa','#34d399','#fb7185','#fb923c','#60a5fa','#a3e635'];
+  const EL_EDGE=THEME==='3'?['#0e7490','#b45309','#6d28d9','#047857','#be123c','#c2410c','#1d4ed8','#4d7c0f']:['#22d3ee','#fbbf24','#a78bfa','#34d399','#fb7185','#fb923c','#60a5fa','#a3e635'];
   const list=open.slice().sort((a,b)=>(b.endMax||0)-(a.endMax||0));
   el('activeList').innerHTML = list.length ? list.map((g,i)=>{
     const pct=g.pct!=null?Math.min(100,g.pct):0, rc=avgRateColor(g), fc=finishAvgColor(g);
