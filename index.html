@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261020-000021">
+<meta name="app-build" content="20261020-000022">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -859,7 +859,115 @@
     /* older engines: fall back to solid panels so nothing turns unreadable */
     .panel,.top,.config,.card,.tbl-wrap,.ucard,.kpi{ background:linear-gradient(180deg,var(--panel),var(--panel2)) !important }
   }
+
+  /* ===== THEMES (⚙ › Themes, per device). 1 = the look above, untouched.
+     2 and 3 share the newer layout (.thn on <html>): one-line header, sticky tab bar, KPI strip, compact cards,
+     closed pours 3 + "Show all", the plan photo behind a button, no footer clock. 2 = dark, 3 = light. ===== */
+  .ph-tog,.cl-more{display:none}
+  html.thn body{overflow-x:clip}
+  .thn .top{padding:6px 2px 4px;background:none!important;border:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;flex-wrap:nowrap}
+  .thn .brand .sub{display:none} .thn .brand h1{font-size:17px;font-weight:900;letter-spacing:.2px;white-space:nowrap}
+  .thn .top-actions{flex-wrap:nowrap;gap:7px}
+  .thn #refreshBtn{display:none}
+  .thn .live-pill{cursor:pointer;padding:5px 11px;max-width:170px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .thn #cfgToggle{padding:6px 10px;min-height:34px}
+  .thn #adminTabBtn{padding:6px 9px;min-height:34px;font-size:0} .thn #adminTabBtn::before{content:'🔑';font-size:15px}
+  @media(max-width:420px){ .thn .brand h1{font-size:14.5px;letter-spacing:0} .thn .live-pill{padding:5px 8px;max-width:86px} .thn .top-actions{gap:5px}
+    .thn #cfgToggle{padding:6px 8px} .thn #adminTabBtn{padding:6px 7px} .thn .top{gap:8px} }
+  .thn .vtabs{position:sticky;top:0;z-index:30;width:100%;display:flex;gap:4px;padding:5px;margin-top:10px;border-radius:14px;
+    background:var(--tabbg);border:1px solid var(--line2);box-shadow:0 8px 20px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .thn .vtab{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 4px;font-size:12px;position:relative;text-align:center;border-radius:10px}
+  .thn .vtab .vt-l{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .thn .vt-ln{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .thn .vtab .cnt{position:absolute;top:2px;right:calc(50% - 26px);margin:0;min-width:17px;height:17px;padding:0 4px;border-radius:99px;
+    background:var(--cyan);color:#06202a;font:800 10px/17px var(--mono);opacity:1}
+  .thn .vtab.active .cnt{background:#fff;color:#4c51bf}
+  .thn .vtab .pm-alert{position:absolute;top:1px;left:calc(50% - 30px);margin:0;font-size:12px}
+  @media(min-width:900px){ .thn .vtab{flex-direction:row;justify-content:center;gap:8px;font-size:13.5px;padding:9px 8px}
+    .thn .vtab .cnt{position:static} .thn .vtab .pm-alert{position:static} }
+  @media(max-width:560px){ .thn .vtabs{flex-wrap:nowrap;gap:2px;padding:4px} .thn .vtab{flex:1 1 0;padding:6px 0;font-size:10px;font-weight:700;letter-spacing:-.15px}
+    .thn .vtab .vt-l{overflow:visible;text-overflow:clip} .thn .vt-l[data-s]{font-size:0} .thn .vt-l[data-s]::after{content:attr(data-s);font-size:10px} }
+  .thn .kpis{gap:0;margin-top:12px;border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:var(--strip)}
+  .thn .kpi{border:none!important;border-radius:0;box-shadow:none!important;background:transparent!important;-webkit-backdrop-filter:none;backdrop-filter:none;
+    padding:9px 6px;text-align:center;display:flex;flex-direction:column-reverse;border-inline-start:1px solid var(--line)!important}
+  .thn .kpi:first-child{border-inline-start:none!important} .thn .kpi::before,.thn .kpi::after{display:none} .thn .kpi:hover{transform:none}
+  .thn .kpi .k-val{font-size:19px;margin:0} .thn .kpi .k-lab{font-size:10.5px} .thn .kpi .go{display:none}
+  @media(max-width:640px){ .thn .kpis{grid-template-columns:repeat(3,1fr)} .thn .kpi:nth-child(4){border-inline-start:none!important}
+    .thn .kpi:nth-child(n+4){border-top:1px solid var(--line)!important} }
+  .thn .card{box-shadow:none}
+  .thn .ucard{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:12px;align-items:center;padding:10px 12px;box-shadow:none}
+  .thn .ucard>*{grid-column:1/-1}
+  .thn .ucard>.uc-time{grid-column:1;grid-row:1/span 2;margin:0;font-size:20px;flex-direction:column;align-items:flex-start;gap:3px}
+  .thn .ucard>.uc-code{grid-column:2;grid-row:1;font-family:var(--sans);font-size:15px;color:var(--ink)} .thn .uc-cl{color:var(--muted)}
+  .thn .ucard>.uc-req{grid-column:3;grid-row:1;margin:0;font-size:17px;text-align:end}
+  .thn .ucard>.uc-meta{grid-column:2/-1;grid-row:2;margin:0;font-size:12px;line-height:1.5}
+  .thn .uc-meta br{display:none} .thn .uc-meta .um~.um::before{content:" · ";color:var(--faint)}
+  .thn .uc-time .uc-exp,.thn .ucard>.uc-time>*:not(:first-child){font-size:11px}
+  .thn .cl-more{display:block;text-align:center;margin-top:6px;padding:7px;border-radius:10px;border:1px dashed var(--line2);color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer}
+  .st-sum,.st-chev{display:none}
+  .thn #summaryView>.grid2{display:none!important}   /* themes 2 / 3: no Overall Progress / By Station (user's choice) */
+  .thn #stCard{padding:11px 14px} .thn #stHead{display:flex;align-items:center;gap:10px;margin:0;cursor:pointer;user-select:none}
+  .thn .st-sum{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 12.5px var(--mono);color:var(--muted);text-transform:none;letter-spacing:0}
+  .thn .st-sum b{color:var(--ink);font-weight:800} .thn .st-chev{display:block;color:var(--muted);font-size:13px}
+  .thn #stCard:not(.open) #plants{display:none} .thn #stCard.open #plants{margin-top:10px} .thn #stCard.open .st-chev{transform:rotate(180deg)}
+  #sumUpCard .su-cnt{font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px}
+  .su{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 12px;align-items:center;border:1px solid var(--line2);border-radius:13px;padding:10px 12px;margin-top:8px;background:rgba(255,255,255,.03);cursor:pointer}
+  .su-t{font:800 20px var(--mono);color:var(--cyan);grid-row:span 2} .su-t.lt{color:#fb923c}
+  .su-n{font-weight:800;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .su-n span{color:var(--muted);font-weight:600}
+  .su-q{font:800 17px var(--mono);text-align:end} .su-q small{font-size:11px;color:var(--faint)}
+  .su-m{font-size:12px;color:var(--muted);min-width:0} .su-p{justify-self:end;display:flex;gap:3px}
+  .su-p i{font:700 11px var(--mono);font-style:normal;border-radius:8px;padding:2px 8px;background:rgba(167,139,250,.2);color:#c4b5fd}
+  .su-late{font-size:11px;font-weight:800;color:#fb923c;background:rgba(251,146,60,.14);border-radius:99px;padding:1px 8px}
+  [data-theme="3"] .su{background:#f7f8fc} [data-theme="3"] .su-p i{background:#ede9fe;color:#5b21b6}
+  @media(min-width:900px){
+    .thn #summaryView{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);column-gap:14px;align-items:start}
+    .thn #summaryView>*{grid-column:1/-1}
+    .thn #summaryView>.grid2{grid-row:2}
+    .thn #summaryView>#activeCard{grid-column:1;grid-row:3/span 7}
+    .thn #summaryView>#sumUpCard{grid-column:2;grid-row:3} .thn #summaryView>#closedCard{grid-column:2;grid-row:4}
+    .thn #summaryView>#planPhotoPrev{grid-row:10} .thn #summaryView>.pic-btns{grid-row:11}
+    .thn #summaryView>#planPhotoMsg{grid-row:12} .thn #summaryView>#planCut{grid-row:13}
+  }
+  .thn #spot{display:none}
+  html.thn #footL,html.thn #footR{display:none!important}
+  .thn .foot{justify-content:center}
+  /* 2 — dark: solid panels (no frosted glass), calmer background */
+  [data-theme="2"]{--tabbg:rgba(16,21,40,.94);--strip:rgba(255,255,255,.03);--glass:rgba(20,26,46,.82);--glass2:rgba(20,26,46,.82)}
+  [data-theme="2"] body::before{background:radial-gradient(60% 40% at 15% 0%,rgba(29,36,80,.9),transparent 70%)}
+  [data-theme="2"] body{background:#0a0e1c}
+  [data-theme="2"] .card,[data-theme="2"] .ucard,[data-theme="2"] .config{-webkit-backdrop-filter:none;backdrop-filter:none}
+  /* 3 — light */
+  [data-theme="3"]{--bg:#eef1f7;--panel:#ffffff;--panel2:#ffffff;--ink:#14203a;--muted:#5b6785;--faint:#8a94ab;
+    --line:rgba(20,32,58,.09);--line2:rgba(20,32,58,.16);--cyan:#0891b2;--green:#059669;--amber:#d97706;--rose:#e11d48;--violet:#7c3aed;
+    --accent:#4f46e5;--accent2:#7c3aed;--shadow:0 2px 8px rgba(20,32,58,.06);
+    --glass:#ffffff;--glass2:#ffffff;--glass-brd:rgba(20,32,58,.12);--glass-hi:none;--tabbg:rgba(255,255,255,.95);--strip:#ffffff;color-scheme:light}
+  [data-theme="3"] body{background:#eef1f7}
+  [data-theme="3"] body::before{display:none}
+  [data-theme="3"] .card,[data-theme="3"] .ucard,[data-theme="3"] .config,[data-theme="3"] .kpi,[data-theme="3"] .tbl-wrap{-webkit-backdrop-filter:none;backdrop-filter:none}
+  [data-theme="3"] option{background:#fff;color:#14203a}
+  [data-theme="3"] input,[data-theme="3"] select{background:#f7f8fc}
+  [data-theme="3"] .ap{background:#f7f8fc} [data-theme="3"] .ap-grp{background:#fff}
+  [data-theme="3"] .ucard .uc-code{color:var(--ink)}
+  [data-theme="3"] .btn.ghost{background:#fff}
+  [data-theme="3"] thead th{background:#f3f5fa}
+  [data-theme="3"] .vtab.active .cnt{color:#4f46e5}
+  [data-theme="3"] .chip.active{color:#312e81}
+  [data-theme="3"] .kpi.a .k-val{color:#4f46e5} [data-theme="3"] .kpi.g .k-val{color:#059669} [data-theme="3"] .kpi.b .k-val{color:#0891b2}
+  [data-theme="3"] .kpi.r .k-val{color:#e11d48} [data-theme="3"] .kpi.v .k-val{color:#7c3aed} [data-theme="3"] .kpi.m .k-val{color:#d97706}
+  [data-theme="3"] .ck-tag.el{color:#3730a3}
+  [data-theme="3"] .plant-tag,[data-theme="3"] .spot-cell.hi .s-lab{color:#4f46e5}
+  /* the Themes row in ⚙ */
+  .th-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .th-opt{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer}
+  .th-opt.on{border-color:var(--accent);color:var(--ink);background:rgba(124,131,255,.18)}
+  .th-opt i{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid var(--line2)}
+  .th-ren{font:inherit;font-size:11px;border:none;background:none;color:var(--faint);cursor:pointer;padding:0 0 0 2px}
 </style>
+<script>
+  // theme first (before anything paints): this device's own choice, 1 = default
+  (function(){ var t='1'; try{ t=localStorage.getItem('cmpour:theme')||'1'; }catch(e){}
+    if(!/^[123]$/.test(t)) t='1'; var h=document.documentElement; h.setAttribute('data-theme',t); if(t!=='1') h.classList.add('thn'); })();
+</script>
 </head>
 <body>
 <!-- tab icons: a concrete mixer (Trucks) and a boom pump (Pumps), drawn once and used by the view tabs -->
@@ -886,8 +994,14 @@
   <circle cx="19.6" cy="32.6" r="4.4" fill="url(#ic-tire)"/><circle cx="19.6" cy="32.6" r="2" fill="#d1d5db"/><circle cx="19.6" cy="32.6" r=".8" fill="#6b7280"/>
   <circle cx="52" cy="32.6" r="4.4" fill="url(#ic-tire)"/><circle cx="52" cy="32.6" r="2" fill="#d1d5db"/><circle cx="52" cy="32.6" r=".8" fill="#6b7280"/>
  </symbol>
- <symbol id="ic-mixer" viewBox="0 0 64 40">
-  <use href="#ic-base"/>
+  <!-- line icons for the tab bar of themes 2 / 3 -->
+  <symbol id="ln-sum" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="ln-all" viewBox="0 0 24 24"><path d="M4 20V10l4-3v13M10 20V6l5-3v17M17 20v-8l3-2v10"/></symbol>
+  <symbol id="ln-up" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></symbol>
+  <symbol id="ln-trk" viewBox="0 0 24 24"><path d="M2 16V8h11v8M13 11h4l3 3v2h-7"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></symbol>
+  <symbol id="ln-pmp" viewBox="0 0 24 24"><path d="M3 17h12l2-4h4M5 17v-4h8M13 13 18 5M18 5h3"/><circle cx="6" cy="19" r="1.5"/><circle cx="12" cy="19" r="1.5"/></symbol>
+  <symbol id="ln-prd" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3"/></symbol>
+ <symbol id="ic-mixer" viewBox="0 0 64 40">  <use href="#ic-base"/>
   <rect x="43.2" y="16" width="2.6" height="11.6" rx="1.2" fill="#2563eb"/>
   <path d="M11 18.6h4l1.4 8.8h-6z" fill="url(#ic-steel)"/><path d="M37.4 18.6h4.2v8.8h-4.2z" fill="url(#ic-steel)"/>
   <path d="M9 8.2l2.6-1.6C20 3.6 32.6 3.2 39.6 6.8c4.4 2.3 5.2 9.4 1.2 12.8-4.6 3.8-16.6 4-25 .6l-5-2.8C8.8 15.8 8 11.8 9 8.2z" fill="url(#ic-drum)" stroke="#64748b" stroke-width=".5"/>
@@ -1019,6 +1133,8 @@
       <span id="notifState" style="font-size:12.5px">🔔 Notifications</span>
       <span style="display:flex;gap:8px"><button class="btn ghost" id="notifTest" style="padding:3px 10px;font-size:11.5px" hidden>Test</button><button class="btn ghost" id="notifBtn">Enable notifications</button></span>
     </div>
+    <!-- 🎨 Themes: this device's look (each device its own); the admin can rename them for everyone -->
+    <div class="cfg-note" id="themeRow" style="justify-content:space-between"></div>
     <!-- Which build this device is running + fetch the newest one now (it also updates by itself) -->
     <div class="cfg-note" style="justify-content:space-between">
       <span id="buildState" style="font-size:12.5px;font-family:var(--mono)">Build —</span>
@@ -1039,13 +1155,16 @@
   <section id="summaryView">
     <div class="kpis" id="kpis"></div>
     <div class="grid2">
-      <div class="card"><h3>Overall Progress</h3><div id="overview"></div></div>
-      <div class="card"><h3>By Station</h3><div id="plants"></div></div>
+      <div class="card" id="ovCard"><h3>Overall Progress</h3><div id="overview"></div></div>
+      <div class="card" id="stCard"><h3 id="stHead">By Station<span class="st-sum" id="plantsSum"></span><span class="st-chev">▾</span></h3><div id="plants"></div></div>
     </div>
     <div id="spot"></div>
-    <div class="card" style="margin-top:14px"><h3 style="display:flex;align-items:center">Active Pours<button id="apAll" class="ap-btn ap-all" hidden></button></h3><div id="activeList"></div></div>
+    <div class="card" style="margin-top:14px" id="activeCard"><h3 style="display:flex;align-items:center">Active Pours<button id="apAll" class="ap-btn ap-all" hidden></button></h3><div id="activeList"></div></div>
+    <!-- themes 2 / 3 only: the next requests, short -->
+    <div class="card" style="margin-top:14px;display:none" id="sumUpCard"><h3 style="display:flex;align-items:center">Upcoming<span id="sumUpN" class="su-cnt"></span><button class="ap-btn ap-all" id="sumUpAdd" type="button">➕ Add</button></h3><div id="sumUpList"></div></div>
     <div class="card" style="margin-top:14px" id="closedCard"><h3>Closed Pours</h3><div id="closedList"></div></div>
     <!-- Daily Production Plan as a picture for WhatsApp (see planPhoto) — live preview of exactly what gets sent -->
+    <button class="btn ph-tog" id="phTog" type="button">📷 WhatsApp Photo — Daily Production Plan</button>
     <img id="planPhotoPrev" alt="Daily Production Plan" style="display:none;width:100%;margin-top:16px;border-radius:12px;border:1px solid var(--line2);background:#fff">
     <div class="pic-btns" style="display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:12px">
       <button class="btn" id="planSaveBtn" style="padding:12px 18px;font-size:14px" title="Save the picture to this device">💾 Save</button>
@@ -1180,7 +1299,26 @@ async function stSet(k,v){
 
 const KEY_REQ='cmpour:req';
 const KEY_RATE='cmpour:rate';
-const BOT=/[?&]bot=1(&|$)/.test(location.search);   // opened by the notifier job, not by a person (see window.__notifyItems)
+const BOT=/[?&]bot=1(&|$)/.test(location.search);
+/* ---------- themes: each device picks its own (kept on the device); the names are shared, only the admin renames ----------
+   1 = the original look · 2 / 3 = the newer layout (dark / light), see the THEMES block in the CSS. Names: PUMPNOTE['TH|<n>']. */
+const KEY_THEME='cmpour:theme';
+let THEME=document.documentElement.getAttribute('data-theme')||'1', THN=THEME!=='1';
+const TH_DEF={1:'Classic',2:'Modern',3:'Light'}, TH_DOT={1:'linear-gradient(135deg,#7c83ff,#22d3ee)',2:'#141a2e',3:'#ffffff'};
+const thName=n=>String((typeof PUMPNOTE!=='undefined'&&PUMPNOTE['TH|'+n])||'').trim()||TH_DEF[n];
+function renderThemes(){
+  const box=el('themeRow'); if(!box) return;
+  box.innerHTML=`<span style="font-size:12.5px">🎨 Themes</span><span class="th-row">${['1','2','3'].map(n=>`<span class="th-opt${THEME===n?' on':''}" data-t="${n}"><i style="background:${TH_DOT[n]}"></i>${n} · ${esc(thName(n))}${IS_ADMIN?`<button class="th-ren" data-t="${n}" title="Rename (every device)">✎</button>`:''}</span>`).join('')}</span>`;
+  box.querySelectorAll('.th-opt').forEach(o=>o.onclick=e=>{ if(e.target.closest('.th-ren')) return; setTheme(o.dataset.t); });
+  box.querySelectorAll('.th-ren').forEach(b=>b.onclick=async()=>{ if(!IS_ADMIN) return; const n=b.dataset.t;
+    const v=prompt(`Name of theme ${n} (shown on every device):`, thName(n)); if(v==null) return;
+    PUMPNOTE['TH|'+n]=v.trim(); renderThemes(); await syncPush('pump','TH|'+n, v.trim()===TH_DEF[n]?'':v.trim()); });
+}
+function setTheme(n){
+  THEME=n; THN=n!=='1'; try{ localStorage.setItem(KEY_THEME,n); }catch(e){}
+  const h=document.documentElement; h.setAttribute('data-theme',n); h.classList.toggle('thn',THN);
+  renderThemes(); try{ renderViewTabs(); rerender(); }catch(e){}
+}   // opened by the notifier job, not by a person (see window.__notifyItems)
 const KEY_DONE='cmpour:done';
 const KEY_PUMP='cmpour:pumpnote';
 const KEY_DONE_ORDER='cmpour:doneorder';   // order pours were closed on THIS device, for Undo
@@ -1926,13 +2064,14 @@ function rerender(){ render(build(applyEsFix(LAST.matrix),LAST.header)); }
 /* ---------- view tabs ---------- */
 function renderViewTabs(){
   const box=el('viewTabs'); if(!box)return;
-  const mk=(id,label,cnt)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
+  // themes 2 / 3: line icon over the name, count as a badge (THN); theme 1 keeps its emoji / drawn icons
+  const mk=(id,label,cnt,ln,name)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${THN?`<svg class="vt-ln"><use href="#ln-${ln}"/></svg><span class="vt-l"${name==='Production'?' data-s="Prod."':''}>${name}</span>${label.includes('pm-alert')?label.slice(label.indexOf('<span class="pm-alert')):''}`:label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
   // ⚠ on Upcoming when a request's pumps are not ready
   let upWarn=''; try{ for(const v of upcomingPumpCheck().values()) if(v.cls!=='ok'){ upWarn='<span class="pm-alert" title="Pumps not ready for a request">⚠</span>'; break; } }catch(e){}
-  box.innerHTML=mk('summary','📋 Summary',VD.open.length)+mk('pours','🏗️ All Pours',VD.started.length)+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length)
-    +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null)
-    +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', PUMPS.length)
-    +mk('production','📊 Production',null);
+  box.innerHTML=mk('summary','📋 Summary',VD.open.length,'sum','Summary')+mk('pours','🏗️ All Pours',VD.started.length,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
+    +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?(TRUCKS.loaded.length+TRUCKS.available.length):null,'trk','Trucks')
+    +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', PUMPS.length,'pmp','Pumps')
+    +mk('production','📊 Production',null,'prd','Production');
   // the Admin entry is NOT a content tab — it lives up top next to the live pill (see #adminTabBtn)
   box.querySelectorAll('.vtab').forEach(t=>t.addEventListener('click',async()=>{
     view=t.dataset.v; await saveCfg(); renderViewTabs(); applyView();
@@ -2373,6 +2512,7 @@ function outClass(el){
 // Active Pours cards opened (details shown); closed = one summary line. Kept per device.
 let apOpen=new Set((()=>{ try{ return JSON.parse(localStorage.getItem('cmpour:apopen')||'[]'); }catch(e){ return []; } })());
 function saveApOpen(){ try{ localStorage.setItem('cmpour:apopen',JSON.stringify([...apOpen])); }catch(e){} }
+let clAll=false;          // themes 2 / 3: Closed Pours shows the last 3 until 'Show all'
 let apHourly=new Set();  // Active Pours cards showing their Hourly rate instead of the overview
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
 let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = every loaded truck
@@ -2592,7 +2732,16 @@ function renderSummary(){
 
   // KPIs — Active / Completed / Upcoming are clickable to jump to a filtered list
   const cnum=(n,dec)=>`<span class="cnum" data-num="${n}" data-dec="${dec}">${fmt(n,dec)}</span>`;
-  el('kpis').innerHTML=`
+  // themes 2 / 3: Active · Upcoming · Rejected 8–8 · Today 8–8 · Required · Remaining (the 8 AM : 8 AM day, like the sheet)
+  const s8=(()=>{ const n=new Date(), t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),8).getTime(); return n.getTime()>=t?t:t-86400000; })();
+  const rej8=THN?(()=>{ try{ return dpBuild(s8).reduce((a,st)=>a+st.rej.reduce((b,x)=>b+x.q,0),0); }catch(e){ return null; } })():null;
+  el('kpis').innerHTML= THN ? `
+    <div class="kpi a clk" data-go="active"><div class="k-lab">Active <span class="go">&#8599;</span></div><div class="k-val">${cnum(open.length,0)}</div></div>
+    <div class="kpi v clk" data-go="upcoming"><div class="k-lab">Upcoming <span class="go">&#8599;</span></div><div class="k-val">${cnum(upcoming.length,0)}</div></div>
+    <div class="kpi r"><div class="k-lab" title="Rejected / wasted trucks, 8 AM : 8 AM">Rejected</div><div class="k-val" style="${rej8>0?'':'opacity:.55'}">${rej8!=null?cnum(rej8,0):'—'}<span class="k-unit">m³</span></div></div>
+    <div class="kpi b"><div class="k-lab" title="Today ( 8 AM : 8 AM ) — the trucks sheet's own total">Today</div><div class="k-val">${PROD8.today&&PROD8.today.total!=null?cnum(PROD8.today.total,0):'—'}<span class="k-unit">m³</span></div></div>
+    <div class="kpi m"><div class="k-lab">Required</div><div class="k-val">${totReq?cnum(totReq,0):'—'}<span class="k-unit">m³</span></div></div>
+    <div class="kpi r"><div class="k-lab">Remaining</div><div class="k-val">${totReq?cnum(totRem,0):'—'}<span class="k-unit">m³</span></div></div>` : `
     <div class="kpi a clk" data-go="active"><div class="k-lab">Active Pours <span class="go">&#8599;</span></div><div class="k-val">${cnum(open.length,0)}</div></div>
     <div class="kpi g clk" data-go="completed"><div class="k-lab">Completed <span class="go">&#8599;</span></div><div class="k-val">${cnum(completed.length,0)}</div></div>
     <div class="kpi v clk" data-go="upcoming"><div class="k-lab">Upcoming <span class="go">&#8599;</span></div><div class="k-val">${cnum(upcoming.length,0)}</div></div>
@@ -2633,6 +2782,8 @@ function renderSummary(){
       <span class="plant-meta"><b>${fmt(o.deliv,0)}</b> m³ · ${o.trucks} trk${o.active?` · <b style="color:var(--cyan)">${o.active} active</b>`:''}</span>
       ${(()=>{ const n=plantNext(o.p); return n?`<div class="plant-next"><span class="pn-l">Next</span><b>${esc((n.g.client?n.g.client+' ':'')+n.g.elem)}</b>${(()=>{ const q=n.g.planReq!=null?n.g.planReq:n.g.required; return q?`<span class="pn-q">(${fmt(q,0)} m³)</span>`:''; })()}${n.t?`<span class="pn-t">${esc(n.t.time)}</span>`:''}</div>`:''; })()}
     </div>`).join('') : '<div class="muted" style="font-size:13px">No station data.</div>';
+  // themes 2 / 3: By Station folded into one line (\"L1 51 · L2 361 …\") — tap to open the full list with NEXT
+  { const ps=el('plantsSum'); if(ps) ps.innerHTML=parr.map(o=>`<b>${esc(o.p)}</b> ${fmt(o.deliv,0)}`).join(' · '); }
 
   // The old "Active now" spotlight is gone: every open pour gets its own full card (Active Pours) instead
   el('spot').innerHTML='';
@@ -2688,6 +2839,7 @@ function renderSummary(){
   const ring=el('overview').querySelector('.ov-ring');
   if(ring) ring.addEventListener('click',async()=>{ view='pours'; activeTab='ALL'; statusFilter=null; await saveCfg(); renderViewTabs(); renderAllPours(); applyView(); const pv=el('poursView'); if(pv&&pv.scrollIntoView)pv.scrollIntoView({behavior:'smooth',block:'start'}); });
 
+  try{ renderSumUp(); }catch(e){}
   // Closed Pours (read-only): each pour the user closed + what it actually poured. A small Re-open per row.
   // Hide = off this list AND off the WhatsApp plan photo, on every device (still counted everywhere else)
   // + the auto-closed ones (no truck for 2 h, quantity not reached): they are finished for the photo too, so list them here
@@ -2702,8 +2854,11 @@ function renderSummary(){
         ${isAuto(g)?`<button class="btn ghost close-btn" data-e="${encodeURIComponent(doneKey(g))}" title="Close it for good (Done)">✓ Done</button>`
           :`<button class="btn ghost reopen-btn" data-e="${encodeURIComponent(doneKey(g))}">Re-open</button>`}</div>
     </div>`;
-  el('closedList').innerHTML = (dl.length?dl.map(g=>closedRow(g,false)).join(''):'<div class="muted" style="font-size:13px;padding:8px 0">All closed pours are hidden.</div>')
+  // themes 2 / 3: the last 3 only, + Show all
+  const clCut=THN&&!clAll&&dl.length>4?3:dl.length;
+  el('closedList').innerHTML = (dl.length?dl.slice(0,clCut).map(g=>closedRow(g,false)).join('')+(clCut<dl.length?`<span class="cl-more" id="clMore">Show all ${dl.length} ▾</span>`:''):'<div class="muted" style="font-size:13px;padding:8px 0">All closed pours are hidden.</div>')
     + (hid.length?`<div class="cl-foot"><span class="filter-clear" id="clHidTog">${showHiddenClosed?'Hide':'Show'} hidden (${hid.length})</span></div>${showHiddenClosed?hid.map(g=>closedRow(g,true)).join(''):''}`:'');
+  { const cm=el('clMore'); if(cm) cm.onclick=()=>{ clAll=true; rerender(); }; }
   el('closedList').querySelectorAll('.reopen-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), false)));
   el('closedList').querySelectorAll('.close-btn').forEach(b=>b.addEventListener('click',()=>toggleDone(decodeURIComponent(b.dataset.e), true)));
   el('closedList').querySelectorAll('.hide-btn').forEach(b=>b.addEventListener('click',async()=>{
@@ -3132,6 +3287,25 @@ function renderAllPours(){
 }
 
 /* ---------- upcoming view ---------- */
+// themes 2 / 3: a short Upcoming list on Summary (time · client element · m³ · card / TEM / rate · plant); tap → Upcoming page
+let sumUpAll=false;
+function renderSumUp(){
+  const box=el('sumUpList'), card=el('sumUpCard'); if(!box||!card) return;
+  if(!THN){ card.style.display='none'; return; }
+  const RT=requestTimes(), now=Date.now();
+  const L=(VD.upcoming||[]).map(g=>({g,t:RT.get(g)})).sort((a,b)=>((a.t?a.t.at:now)-(b.t?b.t.at:now))||((a.t?0:1)-(b.t?0:1)));
+  card.style.display=L.length?'':'none'; el('sumUpN').textContent=L.length||'';
+  const show=sumUpAll?L:L.slice(0,4);
+  box.innerHTML=show.map(({g,t})=>{
+    const late=t&&!t.est&&now>t.at&&!pumpSent(g).length?Math.round((now-t.at)/60000):0, pl=planPlants(plantKey(g));
+    const meta=[late?`<span class="su-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:'',
+      g.sc&&('Card '+esc(g.sc)), g.tem&&('TEM '+esc(String(g.tem).replace(/\s+/g,' '))), g.planRate&&(fmt(g.planRate,0)+' m³/h')].filter(Boolean).join(' · ');
+    return `<div class="su"><span class="su-t${late?' lt':''}">${t?esc(t.time):'—'}</span><span class="su-n">${g.client?esc(g.client)+' ':''}<span>${esc(g.elem||'—')}</span></span>
+      <span class="su-q">${g.planReq!=null?fmt(g.planReq,0):'—'}<small> m³</small></span><span class="su-m">${meta}</span><span class="su-p">${pl.map(x=>`<i>${esc(x)}</i>`).join('')}</span></div>`; }).join('')
+    +(L.length>4&&!sumUpAll?`<span class="cl-more" id="suMore">Show all ${L.length} ▾</span>`:'');
+  box.querySelectorAll('.su').forEach(r=>r.onclick=async()=>{ view='upcoming'; await saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); });
+  const m=el('suMore'); if(m) m.onclick=()=>{ sumUpAll=true; renderSumUp(); };
+}
 function renderUpcoming(){
   const rest=VD.upcoming;   // pour objects not started yet (see render())
   // "ADD Request" button -> open the Plan sheet (where new pour requests are entered)
@@ -3185,10 +3359,10 @@ function renderUpcoming(){
       <div class="uc-req">${fmt(multi?tot:p.planReq,0)} <small>m³</small></div>
       ${multi?`<div class="uc-steps">${u.map((g,k)=>{ const t=RT.get(g); return `<div class="uc-step"><span class="uc-k">#${k+1}</span><b>${fmt(g.planReq,0)} m³</b><span class="uc-st">${t?(t.est?`<i>${t.time}</i>`:t.time):'—'}</span></div>`; }).join('')}</div>`:''}
       <div class="uc-meta">
-        ${p.sc?('Selection card: <b>'+esc(p.sc)+'</b><br>'):''}
-        ${p.tem?('Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b><br>'):''}
-        Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b>
-        ${p.mix?('<br>Grade: <b>'+esc(p.mix)+'</b>'):''}
+        ${p.sc?('<span class="um">Selection card: <b>'+esc(p.sc)+'</b></span><br>'):''}
+        ${p.tem?('<span class="um">Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b></span><br>'):''}
+        <span class="um">Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b></span>
+        ${p.mix?('<br><span class="um">Grade: <b>'+esc(p.mix)+'</b></span>'):''}
       </div>${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
     </div>`; }).join('')+'</div>';
   // app requests: delete / merge with the sheet copy / keep both
@@ -3332,7 +3506,7 @@ function applyState(st){
   DONE=st.done||{}; REQ=st.req||{}; RATE=st.rate||{};
   stSet(KEY_DONE,DONE); stSet(KEY_REQ,REQ); stSet(KEY_RATE,RATE);   // keep a local cache for offline
   if(st.pump){ PUMPNOTE=st.pump; stSet(KEY_PUMP,PUMPNOTE); }        // older sync script: no pump notes -> keep local
-  try{ renderAccessReq(); accWatch(); }catch(e){}
+  try{ renderAccessReq(); accWatch(); renderThemes(); }catch(e){}
   return true;
 }
 // Pull shared state. Only overwrites the local maps when the call SUCCEEDS (offline -> keep local).
@@ -3552,7 +3726,7 @@ function applyRole(){
   const b=el('adminBtn'); if(b){ b.textContent = IS_ADMIN?'🔓 Admin ON':'🔑 Admin'; b.classList.toggle('on',IS_ADMIN); }
   const tb=el('adminTabBtn'); if(tb) tb.hidden = !IS_ADMIN;      // the top-bar admin button (next to the live pill)
   const mn=el('meName'); if(mn)mn.textContent=ME||'—';
-  try{ renderAccessReq(); showOnline(WHO.length); }catch(e){}
+  try{ renderAccessReq(); showOnline(WHO.length); renderThemes(); }catch(e){}
 }
 async function syncClear(type){
   const r=await syncCall({action:'clear', type, by:ME});
@@ -4277,6 +4451,12 @@ function requireAuth(){
     setRange(c.dataset.r); await saveCfg(); rerender(); }));
 
   { const ab=el('adminBtn'); if(ab) ab.addEventListener('click',toggleAdmin); }
+  // themes 2 / 3: the Live pill is the refresh button; the plan photo opens from its own button
+  { const lp=document.querySelector('.live-pill'); if(lp) lp.addEventListener('click',()=>{ if(THN) el('refreshBtn').click(); }); }
+  { const sh=el('stHead'); if(sh) sh.addEventListener('click',()=>{ if(THN) el('stCard').classList.toggle('open'); }); }
+  { const sa=el('sumUpAdd'); if(sa) sa.addEventListener('click',()=>{ if(window.openReqForm) window.openReqForm(); }); }
+  { const pt=el('phTog'); if(pt) pt.addEventListener('click',()=>{ el('summaryView').classList.toggle('ph-open'); }); }
+  renderThemes();
   { const cn=el('changeName'); if(cn) cn.addEventListener('click',()=>askName(true)); }
   { const ar=el('admRefresh'); if(ar) ar.addEventListener('click',loadAdminLog); }
   { const au=el('admUsersRefresh'); if(au) au.addEventListener('click',loadAdminUsers); }
