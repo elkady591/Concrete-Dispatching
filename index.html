@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261021-000014">
+<meta name="app-build" content="20261021-000015">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4110,6 +4110,9 @@ function dpDefaultStart(){ const n=new Date(), t=new Date(n.getFullYear(),n.getM
 const stName=tok=>String(tok).replace(/^([A-Z]+)\s*(\d+)$/i,'$1.$2').toUpperCase();
 function dpBuild(start){
   const end=start+86400000, EXCL=/waste|rejected\s*&?\s*transferred|مرفوض|هالك/i, out=[];
+  // a no-ES truck the app already gave a request (by hand, or by a 📌 station rule) is listed under that request
+  const RMd=ruleMap(), given=new Map();
+  NOES.forEach(y=>{ const to=PUMPNOTE[noEsKey(y)]||(RMd.get(noEsKey(y))||{}).to, at=noEsAt(y); if(to&&at!=null) given.set(y.plant+'|'+y.truck+'|'+at,String(to)); });
   for(const r of RAWTABS){ const H=(r.cols&&r.cols.some(Boolean))?r.cols:(r.matrix[0]||[]); const rows=(r.cols&&r.cols.some(Boolean))?r.matrix:r.matrix.slice(1);
     const fi=re=>H.findIndex(h=>re.test(String(h||'').trim()));
     const c={es:fi(/^es$/i), q:fi(/qm3|concrete|quantity/i), dep:fi(/departure/i), date:fi(/^date$/i), tk:fi(/truck/i), fu:fi(/follow/i), ac:fi(/^action$/i)};
@@ -4118,13 +4121,14 @@ function dpBuild(start){
     for(const x of rows){ const ds=String(x[c.dep]||''), m=ds.match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{1,2}):(\d{2})/); if(!m) continue;
       const t=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).getTime(); if(t<start||t>=end) continue;
       const q=num(x[c.q]); if(!(q>0)) continue;
-      const es=c.es>=0?String(x[c.es]||'').trim():'', tk=c.tk>=0?String(x[c.tk]||'').trim():'';
+      const tk=c.tk>=0?String(x[c.tk]||'').trim():''; let es=c.es>=0?String(x[c.es]||'').trim():'';
+      if(!es) es=given.get(r.token+'|'+tk+'|'+t)||'';
       const note=(c.fu>=0?String(x[c.fu]||''):'')+' '+(c.ac>=0?String(x[c.ac]||''):'');
       if(EXCL.test(note)){ st.rej.push({es,q,tk,t}); continue; }
       st.total+=q;
       if(!es){ if(q<DP_START_MIX) st.start+=q; else st.noes.push({q,tk,t}); continue; }
       const L=st.lines.get(es)||{es,q:0,n:0,t,trucks:[]}; L.q+=q; L.n++; if(t<L.t) L.t=t; L.trucks.push({tk,q,t}); st.lines.set(es,L); }
-    st.list=[...st.lines.values()].sort((a,b)=>a.t-b.t).map(L=>{ const p=esName(L.es)||(()=>{ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===L.es); return pr?{c:pr.client,k:pr.code}:null; })();
+    st.list=[...st.lines.values()].sort((a,b)=>a.t-b.t).map(L=>{ const p=esName(L.es)||(()=>{ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===L.es)||ruleReq(L.es); return pr?{c:pr.client,k:pr.code}:null; })();
       return Object.assign(L,{client:p?p.c:'', code:p?p.k:''}); });
     if(st.total||st.rej.length) out.push(st); }
   return out;
