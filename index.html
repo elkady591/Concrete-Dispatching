@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261021-000016">
+<meta name="app-build" content="20261021-000019">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1050,7 +1050,7 @@
 <script>
   // theme first (before anything paints): this device's own choice, 1 = default
   (function(){ var t='1'; try{ t=localStorage.getItem('cmpour:theme')||'1'; }catch(e){}
-    if(!/^[123]$/.test(t)) t='1'; var h=document.documentElement; h.setAttribute('data-theme',t); if(t!=='1') h.classList.add('thn'); })();
+    if(!/^[1234]$/.test(t)) t='1'; var h=document.documentElement; h.setAttribute('data-theme',t); if(t==='2'||t==='3') h.classList.add('thn'); })();
 </script>
 </head>
 <body>
@@ -1385,19 +1385,19 @@ const BOT=/[?&]bot=1(&|$)/.test(location.search);
 /* ---------- themes: each device picks its own (kept on the device); the names are shared, only the admin renames ----------
    1 = the original look · 2 / 3 = the newer layout (dark / light), see the THEMES block in the CSS. Names: PUMPNOTE['TH|<n>']. */
 const KEY_THEME='cmpour:theme';
-let THEME=document.documentElement.getAttribute('data-theme')||'1', THN=THEME!=='1';
-const TH_DEF={1:'Classic',2:'Modern',3:'Light'}, TH_DOT={1:'linear-gradient(135deg,#7c83ff,#22d3ee)',2:'#141a2e',3:'#ffffff'};
+let THEME=document.documentElement.getAttribute('data-theme')||'1', THN=THEME==='2'||THEME==='3';
+const TH_DEF={1:'Classic',2:'Modern',3:'Light',4:'Original'}, TH_DOT={1:'linear-gradient(135deg,#7c83ff,#22d3ee)',2:'#141a2e',3:'#ffffff',4:'linear-gradient(135deg,#a78bfa,#22d3ee)'};
 const thName=n=>String((typeof PUMPNOTE!=='undefined'&&PUMPNOTE['TH|'+n])||'').trim()||TH_DEF[n];
 function renderThemes(){
   const box=el('themeRow'); if(!box) return;
-  box.innerHTML=`<span style="font-size:12.5px">🎨 Themes</span><span class="th-row">${['1','2','3'].map(n=>`<span class="th-opt${THEME===n?' on':''}" data-t="${n}"><i style="background:${TH_DOT[n]}"></i>${n} · ${esc(thName(n))}${IS_ADMIN?`<button class="th-ren" data-t="${n}" title="Rename (every device)">✎</button>`:''}</span>`).join('')}</span>`;
+  box.innerHTML=`<span style="font-size:12.5px">🎨 Themes</span><span class="th-row">${['4','1','2','3'].map((n,i)=>`<span class="th-opt${THEME===n?' on':''}" data-t="${n}"><i style="background:${TH_DOT[n]}"></i>${i+1} · ${esc(thName(n))}${IS_ADMIN?`<button class="th-ren" data-t="${n}" title="Rename (every device)">✎</button>`:''}</span>`).join('')}</span>`;
   box.querySelectorAll('.th-opt').forEach(o=>o.onclick=e=>{ if(e.target.closest('.th-ren')) return; setTheme(o.dataset.t); });
   box.querySelectorAll('.th-ren').forEach(b=>b.onclick=async()=>{ if(!IS_ADMIN) return; const n=b.dataset.t;
     const v=prompt(`Name of theme ${n} (shown on every device):`, thName(n)); if(v==null) return;
     PUMPNOTE['TH|'+n]=v.trim(); renderThemes(); await syncPush('pump','TH|'+n, v.trim()===TH_DEF[n]?'':v.trim()); });
 }
 function setTheme(n){
-  const was=THEME; THEME=n; THN=n!=='1'; try{ localStorage.setItem(KEY_THEME,n); }catch(e){}
+  const was=THEME; THEME=n; THN=n==='2'||n==='3'; try{ localStorage.setItem(KEY_THEME,n); }catch(e){}
   const h=document.documentElement; h.setAttribute('data-theme',n); h.classList.toggle('thn',THN);
   renderThemes(); try{ renderViewTabs(); rerender(); }catch(e){}
   if(n==='3'||was==='3') location.reload();   // the pour colour lists are picked at start (a darker set for the light theme)
@@ -2881,6 +2881,9 @@ function renderSummary(){
   // themes 2 / 3: By Station folded into one line (\"L1 51 · L2 361 …\") — tap to open the full list with NEXT
   { const ps=el('plantsSum'); if(ps) ps.innerHTML=parr.map(o=>`<b>${esc(o.p)}</b> ${fmt(o.deliv,0)}`).join(' · '); }
 
+  // theme 4 "Original": the look from before the Active Pours cards — the "Active now" spotlight + one plain row per pour
+  if(THEME==='4'){ renderOrigActive(open); }
+  else {
   // The old "Active now" spotlight is gone: every open pour gets its own full card (Active Pours) instead
   el('spot').innerHTML='';
   const EL_EDGE=THEME==='3'?['#0e7490','#b45309','#6d28d9','#047857','#be123c','#c2410c','#1d4ed8','#4d7c0f']:['#22d3ee','#fbbf24','#a78bfa','#34d399','#fb7185','#fb923c','#60a5fa','#a3e635'];
@@ -2944,6 +2947,7 @@ function renderSummary(){
       ab.onclick=()=>{ list.forEach(g=>allOpen?apOpen.delete(g.key):apOpen.add(g.key)); saveApOpen(); rerender(); }; } }
   el('activeList').querySelectorAll('.ap-hr').forEach(b=>b.addEventListener('click',()=>{ const k=decodeURIComponent(b.dataset.k); apHourly.has(k)?apHourly.delete(k):apHourly.add(k); rerender(); }));
   el('activeList').querySelectorAll('.ap-done').forEach(b=>b.addEventListener('click',()=>{ if(confirm(`Close ${b.dataset.n||'this pour'}? (Undo can re-open it)`)) toggleDone(decodeURIComponent(b.dataset.e), true); }));
+  }
   // ring is interactive -> click jumps to the All Pours table
   const ring=el('overview').querySelector('.ov-ring');
   if(ring) ring.addEventListener('click',async()=>{ view='pours'; activeTab='ALL'; statusFilter=null; await saveCfg(); renderViewTabs(); renderAllPours(); applyView(); const pv=el('poursView'); if(pv&&pv.scrollIntoView)pv.scrollIntoView({behavior:'smooth',block:'start'}); });
@@ -3506,6 +3510,72 @@ function openRejList(from){
       <div class="rj-tot">${L.length} truck${L.length>1?'s':''} · <b>${fmt(tot,0)} m³</b></div>`
     :'<div class="muted" style="padding:14px 4px">No rejected trucks since 8 AM.</div>'}</div>`;
   o.style.display='flex';
+}
+// theme 4 "Original": Active Pours as it was before the cards (build 20261020-000011) — spotlight on top, plain rows below
+function renderOrigActive(open){
+  let sp=(spotKey&&open.find(g=>g.key===spotKey))
+    || open.find(g=>g.status==='active'&&g.required!=null)
+    || open.find(g=>g.status==='active')
+    || open.find(g=>g.required!=null)
+    || open[0];
+  if(sp)spotKey=sp.key;
+  if(sp){
+    const isActive=sp.status==='active';
+    const bc=barClass(sp.status); const pct=sp.pct!=null?Math.min(100,sp.pct):0;
+    const opts=open.map(g=>`<option value="${encodeURIComponent(g.key)}" ${g.key===sp.key?'selected':''}>${g.elem||'—'}${g.plant?(' ('+g.plant+')'):''} · ${g.dk}</option>`).join('');
+    const meta=[sp.mix&&('Grade '+sp.mix), sp.client, sp.sc&&('Card '+sp.sc), sp.pumps, sp.tem&&('TEM '+sp.tem)].filter(Boolean).join(' · ');
+    const body = spotTab==='hourly' ? hourlyHtml(sp) : `
+        <div class="spot-grid">
+          <div class="spot-cell hi"><div class="s-lab">Delivered</div><div class="s-val">${fmt(sp.delivered)} <small>m³</small></div></div>
+          <div class="spot-cell hi"><div class="s-lab">Remaining</div><div class="s-val" style="${sp.remaining!=null&&sp.remaining<=0?'color:var(--green)':''}">${sp.remaining!=null?(sp.remaining>0?fmt(sp.remaining)+' <small>m³</small>':'✓ <small>done</small>'):'—'}</div></div>
+          <div class="spot-cell"><div class="s-lab">Rejected</div><div class="s-val" style="color:${sp.rejected>0?'var(--amber)':'var(--faint)'}">${sp.rejected>0?fmt(sp.rejected)+' <small>m³</small>':'—'}</div></div>
+          <div class="spot-cell"><div class="s-lab">Required</div><div class="s-val">${sp.required!=null?fmt(sp.required):'—'} <small>m³</small></div></div>
+          <div class="spot-cell"><div class="s-lab">Average rate</div><div class="s-val" style="${avgRateColor(sp)?`color:${avgRateColor(sp)}`:''}">${sp.cumRate!=null?fmt(sp.cumRate,0):'—'} <small>m³/h</small></div></div>
+          <div class="spot-cell"><div class="s-lab">Target rate</div><div class="s-val">${sp.planRate!=null?fmt(sp.planRate):(sp.rateManual!=null?fmt(sp.rateManual):'—')} <small>m³/h</small></div></div>
+          <div class="spot-cell"><div class="s-lab">Est. finish · average</div><div class="s-val" style="${finishAvgColor(sp)?`color:${finishAvgColor(sp)}`:''}">${sp.finishAvg?finishTwoLine(sp.finishAvg):(sp.remaining!=null&&sp.remaining<=0?'✓':'—')}</div></div>
+          <div class="spot-cell"><div class="s-lab" title="First truck + required ÷ target rate — fixed for the whole pour">Planned finish · target</div><div class="s-val">${sp.finishTgt?finishTwoLine(sp.finishTgt):'—'}</div></div>
+        </div>
+        <div class="spot-bar">
+          <div class="bar bar-lg"><i class="${bc}" style="width:${pct}%"></i></div>
+          <div class="spot-foot"><div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · ${sp.trucks} trucks${sp.hrs?' · '+hLabel(sp.hrs)+' h':''}</div>
+          <button class="spot-done" data-e="${encodeURIComponent(doneKey(sp))}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>
+        </div>`;
+    el('spot').innerHTML=`
+      <div class="spot ${isActive?'livepour':''}">
+        <div class="spot-head">
+          <span class="tag">${isActive?'● Active now':'Pour'}</span>
+          <select id="spotSel" class="spot-sel">${opts}</select>
+          <span class="when">${dateCell(sp)} · last activity ${timeShort(sp.endMax)}${carryBadge(sp)}</span>
+          <div class="spot-tabs" style="margin-inline-start:auto">
+            <span class="spot-tab ${spotTab==='overview'?'active':''}" data-st="overview">Overview</span>
+            <span class="spot-tab ${spotTab==='hourly'?'active':''}" data-st="hourly">Hourly rate</span>
+          </div>
+        </div>
+        ${meta?`<div class="spot-meta">${meta}</div>`:''}
+        ${body}
+      </div>`;
+    const sel=el('spotSel');
+    if(sel) sel.addEventListener('change',()=>{ spotKey=decodeURIComponent(sel.value); rerender(); });
+    el('spot').querySelectorAll('.spot-tab').forEach(t=>t.addEventListener('click',()=>{ spotTab=t.dataset.st; rerender(); }));
+    const sd=el('spot').querySelector('.spot-done');
+    if(sd) sd.addEventListener('click',()=>{ if(confirm(`Close ${sp.elem||'this pour'}? (Undo can re-open it)`)) toggleDone(decodeURIComponent(sd.dataset.e), true); });
+  } else el('spot').innerHTML='';
+
+  const list=open.slice().sort((a,b)=>(b.endMax||0)-(a.endMax||0));
+  el('activeList').innerHTML = list.length ? list.map(g=>{
+    const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
+    return `<div class="apy${g.carried>0?' carry-row':''}">
+      <div class="apy-el">${g.elem||'—'}<span class="p">${g.plant||''}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
+      <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
+      <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc,0)+' m³/h':'—'}</div>
+      <div class="apy-eta">${finishHtml(g)}</div>
+      <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end"><span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span><input type="checkbox" class="done-chk" data-e="${encodeURIComponent(doneKey(g))}" ${DONE[doneKey(g)]?'checked':''} title="Close this pour — same as the Done box in All Pours"></div>
+    </div>`; }).join('') : '<div class="muted" style="font-size:13px;padding:8px 4px">No active pours right now.</div>';
+  el('activeList').querySelectorAll('.done-chk').forEach(chk=>{
+    chk.addEventListener('change',()=>toggleDone(decodeURIComponent(chk.dataset.e), chk.checked));
+  });
+  { const ab=el('apAll'); if(ab) ab.hidden=true; }
 }
 // themes 2 / 3: a short Upcoming list on Summary (time · client element · m³ · card / TEM / rate · plant); tap → Upcoming page
 let sumUpAll=false;
