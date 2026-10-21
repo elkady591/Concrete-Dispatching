@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261021-000002">
+<meta name="app-build" content="20261021-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -924,6 +924,19 @@
     .thn #summaryView>#planPhotoMsg{grid-row:13} .thn #summaryView>#planCut{grid-row:14}
   }
   .thn #spot{display:none}
+  /* Rejected KPI → list of the rejected trucks (8 AM : 8 AM) */
+  .rj-box{max-width:520px} .rj-list{max-height:60vh;overflow:auto;margin-top:8px}
+  .rj-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid var(--line)}
+  .rj-t{font:700 13px var(--mono);color:var(--muted)} .rj-m{display:flex;flex-direction:column;min-width:0} .rj-m small{color:var(--faint);font-size:11.5px}
+  .rj-q{font:800 16px var(--mono);color:var(--rose)} .rj-q small{font-size:11px;color:var(--faint)}
+  .rj-tot{padding:10px 2px 2px;text-align:end;font-size:13px;color:var(--muted)} .rj-tot b{color:var(--rose);font-family:var(--mono)}
+  /* themes 2 / 3: a closed Active Pours card = one short row, like the Upcoming list */
+  .thn .ap.apr{padding:10px 12px}
+  .apr-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 12px;align-items:center;cursor:pointer;user-select:none}
+  .apr-pc{font:800 20px var(--mono);color:var(--cyan);grid-row:span 2;min-width:52px}
+  .apr .su-m b{font-family:var(--mono);color:var(--ink)} .apr .su-m .ap-pill{margin:0;padding:0 6px;font-size:10.5px}
+  .apr .ap-stop{font-size:10.5px;padding:1px 7px} .apr .ap-bar-s{margin-top:8px}
+  .thn .kpi.clk-r{cursor:pointer}
   /* themes 2 / 3: the plan photo in its own card at the bottom — title bar, the whole picture, the 4 buttons (user chose this "C") */
   html.thn #phTog{display:flex;justify-content:flex-start;margin-top:14px;padding:11px 14px;border-radius:14px 14px 0 0;border:1px solid var(--line2);border-bottom:none;background:var(--glass);color:var(--ink);box-shadow:none;font-size:13.5px;pointer-events:none;min-height:0;width:100%;box-sizing:border-box;filter:none;transform:none}
   html.thn #planPhotoPrev{border-radius:0!important;margin-top:0!important;border-left:1px solid var(--line2)!important;border-right:1px solid var(--line2)!important}
@@ -996,7 +1009,28 @@
   [data-theme="3"] .su-p i{color:#5b21b6!important}
   [data-theme="3"] .su-late{color:#c2410c!important}
   [data-theme="3"] .vtab.active{color:#fff}
-  /* the Themes row in ⚙ */
+  /* Daily program check: the differences in words */
+  .dd-verdict{margin:8px 0 2px;font-weight:800;font-size:14px;padding:8px 12px;border-radius:10px}
+  .dd-verdict.ok{color:var(--green);background:rgba(52,211,153,.12)} .dd-verdict.bad{color:var(--amber);background:rgba(251,191,36,.12)}
+  .dd-list{margin-top:8px} .dd{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line)}
+  .dd-l{flex:1;min-width:0} .dd-l small{display:block;color:var(--muted);font-size:12px;margin-top:2px} .dd-l small b{font-family:var(--mono);color:var(--ink)}
+  .dd-c{color:var(--muted);font-weight:600}
+  .dd-tag{flex:none;font-size:11.5px;font-weight:800;border-radius:99px;padding:3px 10px;white-space:nowrap}
+  .dd-tag.ok{color:var(--green);background:rgba(52,211,153,.14)} .dd-tag.nos{color:var(--rose);background:rgba(251,113,133,.15)}
+  .dd-tag.nom{color:var(--amber);background:rgba(251,191,36,.15)} .dd-tag.df{color:#c4b5fd;background:rgba(167,139,250,.18)} .dd-tag.none{color:var(--muted);background:rgba(255,255,255,.06)}
+  [data-theme="3"] .dd-tag.df{color:#5b21b6;background:#ede9fe} [data-theme="3"] .dd-tag.none{background:#eef1f7}
+  .dd-tag.pair{color:#fff;background:#d97706} .dd-pair{background:rgba(251,191,36,.08);border-radius:10px;padding-inline:8px}
+  .dd-hint{margin-top:5px;font-size:12px;color:var(--ink);background:rgba(124,131,255,.12);border-radius:8px;padding:5px 8px} .dd-hint b{font-family:var(--mono)}
+  [data-theme="3"] .dd-hint{background:#eef2ff}
+  .dd-same{margin-top:8px} .dd-same summary{cursor:pointer;color:var(--green);font-weight:700;font-size:13px;padding:6px 2px}
+  .dd-s{display:flex;justify-content:space-between;gap:10px;padding:6px 2px;border-bottom:1px solid var(--line);font-size:13px}
+  /* Themes row */  /* a truck the sheet has as Breakdown / On hold that is loaded anyway: the whole row red / amber, like the trucks sheet */
+  .trk-card.tk-down,.tw-row.tk-down{background:rgba(244,63,94,.22)!important;border-color:rgba(244,63,94,.75)!important}
+  .trk-card.tk-hold,.tw-row.tk-hold{background:rgba(245,158,11,.18)!important;border-color:rgba(245,158,11,.7)!important}
+  .tk-why{margin-top:4px;font-size:12px;font-weight:800;color:var(--rose)} .tk-hold .tk-why{color:var(--amber)}
+  .tw-row.hd{border-inline-start-color:var(--amber)!important} .tw-ldx{color:var(--rose)}
+  .tw-sub{margin:12px 2px 4px;font-size:12px;font-weight:800;color:var(--amber)}
+  .trk-kpi .l small{font-size:10px;color:var(--amber);font-weight:800}  /* the Themes row in ⚙ */
   .th-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .th-opt{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer}
   .th-opt.on{border-color:var(--accent);color:var(--ink);background:rgba(124,131,255,.18)}
@@ -2580,7 +2614,7 @@ function renderTrucks(){
      ${kpi('working',t.working.length,'Working','#e2e8f0')}
      ${kpi('loaded',t.loaded.length,'Loaded','var(--cyan)')}
      ${kpi('empty',t.available.length,'Empty','var(--green)')}
-     ${kpi('down',t.breakdown.length,'Breakdown','var(--rose)')}
+     ${kpi('down',t.breakdown.length,(t.hold&&t.hold.length)?`Breakdown <small>+${t.hold.length} hold</small>`:'Breakdown','var(--rose)')}
    </div>`;
   const tabs=`<div class="spot-tabs" style="margin:14px 0 10px">
      <span class="spot-tab ${truckTab==='loaded'?'active':''}" data-tt="loaded">Loaded (${t.loaded.length})</span>
@@ -2594,12 +2628,14 @@ function renderTrucks(){
     const rows=t.working.map(String).map(tk=>({tk, l:byTk.get(tk), e:emp.has(tk)}))
       .sort((a,b)=>(!!b.l-!!a.l)||(a.tk.localeCompare(b.tk,undefined,{numeric:true})));
     body=rows.length?`<div class="tw-list">${rows.map(r=>r.l
-      ?`<div class="tw-row ld"><span class="tw-tk">${esc(r.tk)}</span><span class="tw-st">Loaded</span><span class="tw-w">${esc(site(r.l.es,r.l.q))}${r.l.plant?` <small>· ${esc(r.l.plant)}</small>`:''}</span><span class="tw-t">${r.l.q?fmt(r.l.q,0)+' m³ · ':''}${r.l.elapsed?`out <span class="tc-out ${outClass(r.l.elapsed)}">${esc(r.l.elapsed)}</span>`:''}</span></div>`
+      ?`<div class="tw-row ld${r.l.flag?' tk-'+r.l.flag:''}"><span class="tw-tk">${esc(r.tk)}</span><span class="tw-st">Loaded</span><span class="tw-w">${esc(site(r.l.es,r.l.q))}${r.l.plant?` <small>· ${esc(r.l.plant)}</small>`:''}</span><span class="tw-t">${r.l.q?fmt(r.l.q,0)+' m³ · ':''}${r.l.elapsed?`out <span class="tc-out ${outClass(r.l.elapsed)}">${esc(r.l.elapsed)}</span>`:''}</span></div>`
       :`<div class="tw-row em"><span class="tw-tk">${esc(r.tk)}</span><span class="tw-st"></span><span class="tw-w">${r.e?'EMPTY':'—'}</span><span class="tw-t"></span></div>`).join('')}</div>`
       :'<div class="muted" style="font-size:13px;padding:10px 2px">No working trucks listed.</div>';
   } else if(truckTab==='down'){
     // the broken-down trucks with their reason written straight away
-    body=t.breakdown.length?`<div class="tw-list">${t.breakdown.map(b=>`<div class="tw-row dn"><span class="tw-tk">${esc(b.truck)}</span><span class="tw-st">Breakdown</span><span class="tw-w">${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}</span><span class="tw-t"></span></div>`).join('')}</div>`
+    const ldNow=new Set(t.loaded.map(x=>String(x.truck)));
+    const dRow=(b,cls,lab)=>`<div class="tw-row ${cls}"><span class="tw-tk">${esc(b.truck)}</span><span class="tw-st">${lab}</span><span class="tw-w">${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}${ldNow.has(String(b.truck))?' <b class="tw-ldx">· LOADED now</b>':''}</span><span class="tw-t"></span></div>`;
+    body=(t.breakdown.length||(t.hold||[]).length)?`<div class="tw-list">${t.breakdown.map(b=>dRow(b,'dn','Breakdown')).join('')}${(t.hold||[]).length?`<div class="tw-sub">On hold — sound trucks parked for now (not counted as Breakdown)</div>${t.hold.map(b=>dRow(b,'hd','On hold')).join('')}`:''}</div>`
       :'<div class="muted" style="font-size:13px;padding:10px 2px">No broken-down trucks.</div>';
   } else if(truckTab==='prod'){
     // month-to-date productivity per truck mixer, from the trucks sheet's own "Productivity" tab
@@ -2643,11 +2679,12 @@ function renderTrucks(){
       return truckSort==='old'?B-A:A-B; });
     const sortBar=`<div class="tc-sortbar"><button class="tc-sort" title="Sort by time out">${truckSort==='old'?'↑ Oldest first':'↓ Newest first'}</button></div>`;
     body = t.loaded.length ? legend+sortBar+`<div class="trk-cards">${shown.map(x=>`
-        <div class="trk-card el" data-es="${esc(String(x.es||'').trim())}" style="--ec:${colOf(x.es)}">
+        <div class="trk-card el${x.flag?' tk-'+x.flag:''}" data-es="${esc(String(x.es||'').trim())}" style="--ec:${colOf(x.es)}">
           <div class="tc-truck">${esc(x.truck)}</div>
           <div class="tc-info">
             <div class="tc-top">${esc(site(x.es,x.q))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
             <div class="tc-meta">${x.q?fmt(x.q,0)+' m³':''}${x.elapsed?` · out <span class="tc-out ${outClass(x.elapsed)}">${esc(x.elapsed)}</span>`:''}${x.dep?` · ${esc(x.dep)}`:''}${x.action?` <span class="tc-flag">⚠ ${esc(x.action)}</span>`:''}</div>
+            ${x.flag?`<div class="tk-why">${x.flag==='down'?'⚠ Marked BREAKDOWN in the sheet':'⏸ Marked ON HOLD in the sheet'}${x.flagNote?' · '+esc(x.flagNote):''}</div>`:''}
           </div>
         </div>`).join('')}</div>`
       : '<div class="muted" style="font-size:13px;padding:10px 2px">No loaded trucks out right now.</div>';
@@ -2779,7 +2816,7 @@ function renderSummary(){
   el('kpis').innerHTML= THN ? `
     <div class="kpi a clk" data-go="active"><div class="k-lab">Active <span class="go">&#8599;</span></div><div class="k-val">${cnum(open.length,0)}</div></div>
     <div class="kpi v clk" data-go="upcoming"><div class="k-lab">Upcoming <span class="go">&#8599;</span></div><div class="k-val">${cnum(upcoming.length,0)}</div></div>
-    <div class="kpi r"><div class="k-lab" title="Rejected / wasted trucks, 8 AM : 8 AM">Rejected</div><div class="k-val" style="${rej8>0?'':'opacity:.55'}">${rej8!=null?cnum(rej8,0):'—'}<span class="k-unit">m³</span></div></div>
+    <div class="kpi r clk-r" id="kpiRej" title="Tap: the rejected trucks"><div class="k-lab">Rejected</div><div class="k-val" style="${rej8>0?'':'opacity:.55'}">${rej8!=null?cnum(rej8,0):'—'}<span class="k-unit">m³</span></div></div>
     <div class="kpi b"><div class="k-lab" title="Today ( 8 AM : 8 AM ) — the trucks sheet's own total">Today</div><div class="k-val">${PROD8.today&&PROD8.today.total!=null?cnum(PROD8.today.total,0):'—'}<span class="k-unit">m³</span></div></div>
     <div class="kpi m"><div class="k-lab">Required</div><div class="k-val">${totReq?cnum(totReq,0):'—'}<span class="k-unit">m³</span></div></div>
     <div class="kpi r"><div class="k-lab">Remaining</div><div class="k-val">${totReq?cnum(totRem,0):'—'}<span class="k-unit">m³</span></div></div>` : `
@@ -2790,6 +2827,7 @@ function renderSummary(){
     <div class="kpi m"><div class="k-lab">Required</div><div class="k-val">${totReq?cnum(totReq,0):'—'}<span class="k-unit">m³</span></div></div>
     <div class="kpi r"><div class="k-lab">Remaining</div><div class="k-val">${totReq?cnum(totRem,0):'—'}<span class="k-unit">m³</span></div></div>`;
   countUpKpis();
+  { const kr=el('kpiRej'); if(kr) kr.addEventListener('click',()=>openRejList()); }
   el('kpis').querySelectorAll('.kpi.clk').forEach(k=>k.addEventListener('click',async()=>{
     const go=k.dataset.go;
     if(go==='upcoming'){ view='upcoming'; statusFilter=null; }
@@ -2842,6 +2880,19 @@ function renderSummary(){
     // no truck for over an hour (and not finished yet) -> "⏸ Stopped h:mm" (auto-closes at 2 h)
     const idleH=g.endMax!=null?(Date.now()-g.endMax)/3600000:0;
     const stopTag=(idleH>=1&&!doneQ)?`<span class="ap-stop" title="No truck since ${timeShort(g.endMax)}"><i class="ap-pz"></i>Stopped ${hLabel(idleH)} h</span>`:'';
+    // themes 2 / 3, closed: one short row like the Upcoming list (% · client element · m³ · rate / finish · plant); tap = full card
+    if(THN&&!isOpen){
+      const late=dF!=null&&!doneQ?`<span class="ap-pill ${dF>=0?'ok':'bad'}">${Math.abs(dF)<1?'on time':(Math.abs(dF)>=60?Math.floor(Math.abs(dF)/60)+'h '+(Math.abs(dF)%60)+'m':Math.abs(dF)+' min')+(dF>0?' early':' late')}</span>`:'';
+      const parts=[stopTag, `⚡ <b style="${rc?`color:${rc}`:''}">${avg!=null?fmt(avg,0):'—'}</b> m³/h`,
+        `🏁 <b style="${fc?`color:${fc}`:''}">${g.finishAvg!=null?timeShort(g.finishAvg):(doneQ?'✓':'—')}</b> ${late}`,
+        g.rejected>0?`<span style="color:var(--rose)">⛔ <b>${fmt(g.rejected,0)}</b></span>`:''].filter(Boolean).join(' · ');
+      return `<div class="ap apr${g.carried>0?' carry-row':''}" data-k="${encodeURIComponent(g.key)}" style="--ec:${EL_EDGE[i%EL_EDGE.length]}">
+        <div class="apr-row ap-tog" title="Tap to open the details"><span class="apr-pc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</span>
+          <span class="su-n">${g.client?esc(g.client)+' ':''}<span>${esc(g.elem||'—')}</span></span>
+          <span class="su-q">${fmt(g.delivered,0)}<small> / ${g.required!=null?fmt(g.required,0):'—'} m³</small></span>
+          <span class="su-m">${parts}</span><span class="su-p">${String(g.plant||'').split(/[,\s]+/).filter(Boolean).map(x=>`<i>${esc(x)}</i>`).join('')}</span></div>
+        <div class="bar ap-bar ap-bar-s"><i class="${barClass(g.status)}" style="width:${pct}%"></i></div></div>`;
+    }
     return `<div class="ap${isOpen?' open':''}${g.carried>0?' carry-row':''}" data-k="${encodeURIComponent(g.key)}" style="--ec:${EL_EDGE[i%EL_EDGE.length]}">
       <div class="ap-hd ap-tog" title="Tap to open / close the details">${g.client?`<span class="ap-cl">${esc(g.client)}</span>`:''}<span class="ap-el">${esc(g.elem||'—')}</span><span class="ap-st">${esc(g.plant||'')}</span>
         <span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span>${stopTag}${carryBadge(g,true)}<span class="ap-last">last truck ${timeShort(g.endMax)}</span><span class="ap-chev">${isOpen?'▴':'▾'}</span></div>
@@ -3101,6 +3152,12 @@ function collectChecks(pours){
         tags:[CT('ES '+esc(es),'el'), ...(stn?[CT(esc(stn),'st')]:[]), CT(g.trucks+' truck'+(g.trucks>1?'s':''),'tk'), CT(fmt(g.delivered,0)+' m³')],
         det: best ? `Closest request: <b>${esc(best.p.esId)}</b> · ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)} — ${esSimilar(es,best.p.esId)===2?'2 digits swapped':'1 digit different'}`
                   : 'No request has this ES and none is close — if it is a new request, give it its details here'} }); }
+  // a truck the user put ON HOLD (parked on purpose) that has been loaded anyway
+  for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold')){ const st=esc(x.plant||''), site=x.es?(()=>{ const n=esName(x.es); return n&&n.k?(n.c?n.c+' ':'')+n.k:'ES '+x.es; })():'';
+    items.push({id:`hold|${x.truck}|${x.dep}`, kind:'Hold truck loaded', cls:'rejd',
+      txt:`TM ${esc(x.truck)} is ON HOLD but was loaded${st?' at '+st:''}${x.dep?' · '+esc(x.dep):''}${x.q?' · '+fmt(x.q,0)+' m³':''}${site?' · '+esc(site):''}`,
+      ui:{sev:'red', icon:'⏸', head:'ON HOLD truck loaded', tags:[CT('TM '+esc(x.truck),'tk'), ...(st?[CT(st,'st')]:[]), ...(x.q?[CT(fmt(x.q,0)+' m³')]:[]), ...(site?[CT(esc(site),'el')]:[])],
+        det:`You put it on hold${x.flagNote?' ('+esc(x.flagNote)+')':''} — it left the plant${x.dep?' at '+esc(x.dep):''}`}}); }
   // fixes already made (shown under "Show skipped", with Undo)
   for(const k of Object.keys(PUMPNOTE)){ const m=k.match(/^e(\d+)\|(.*)$/); if(!m||!PUMPNOTE[k]||(from&&m[2]<from)||(to&&m[2]>to)) continue;
     const p=(VD.summary||[]).find(x=>x.esId===PUMPNOTE[k]);
@@ -3328,6 +3385,36 @@ function renderAllPours(){
 }
 
 /* ---------- upcoming view ---------- */
+// Rejected (themes 2 / 3 KPI): tap → the rejected / wasted trucks of the 8 AM : 8 AM day, one row each
+function rejTrucks(start){
+  const end=start+86400000, EXCL=/waste|rejected\s*&?\s*transferred|مرفوض|هالك/i, out=[];
+  for(const r of RAWTABS){ const H=(r.cols&&r.cols.some(Boolean))?r.cols:(r.matrix[0]||[]); const rows=(r.cols&&r.cols.some(Boolean))?r.matrix:r.matrix.slice(1);
+    const fi=re=>H.findIndex(h=>re.test(String(h||'').trim()));
+    const c={es:fi(/^es$/i), q:fi(/qm3|concrete|quantity/i), dep:fi(/departure/i), tk:fi(/truck/i), fu:fi(/follow/i), ac:fi(/^action$/i)};
+    if(c.q<0||c.dep<0) continue;
+    for(const x of rows){ const m=String(x[c.dep]||'').match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{1,2}):(\d{2})/); if(!m) continue;
+      const t=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).getTime(); if(t<start||t>=end) continue;
+      const q=num(x[c.q]); if(!(q>0)) continue;
+      const fu=c.fu>=0?String(x[c.fu]||'').trim():'', ac=c.ac>=0?String(x[c.ac]||'').trim():'';
+      if(!EXCL.test(fu+' '+ac)) continue;
+      const es=c.es>=0?String(x[c.es]||'').trim():'';
+      const nm=es?(esName(es)||(()=>{ const pr=(PLAN_ROWS||[]).find(p=>String(p.es||'').trim()===es); return pr?{c:pr.client,k:pr.code}:null; })()):null;
+      out.push({t, st:stName(r.token), tk:c.tk>=0?String(x[c.tk]||'').trim():'', q, es, name:nm?[nm.c,nm.k].filter(Boolean).join(' '):'', note:[fu,ac].filter(s=>EXCL.test(s)).join(' · ')||fu||ac}); } }
+  return out.sort((a,b)=>b.t-a.t);
+}
+function openRejList(from){
+  const n=new Date(), d8=new Date(n.getFullYear(),n.getMonth(),n.getDate(),8).getTime(), s8=typeof from==='number'?from:(n.getTime()>=d8?d8:d8-86400000);
+  const L=rejTrucks(s8), tot=L.reduce((a,x)=>a+x.q,0);
+  let o=el('rejModal'); if(!o){ o=document.createElement('div'); o.id='rejModal'; o.className='rq-back'; document.body.appendChild(o);
+    o.addEventListener('click',e=>{ if(e.target===o||e.target.closest('.rj-x')) o.style.display='none'; }); }
+  o.innerHTML=`<div class="rq-box rj-box"><div class="rq-head"><b>⛔ Rejected trucks · since ${new Date(s8).toDateString()!==new Date().toDateString()?'yesterday ':''}${timeShort(s8)}</b><button type="button" class="rq-x rj-x">✕</button></div>
+    ${L.length?`<div class="rj-list">${L.map(x=>`<div class="rj-row"><span class="rj-t">${timeShort(x.t)}</span>
+      <span class="rj-m"><b>${esc(x.name||(x.es?'ES '+x.es:'No ES'))}</b><small>${esc(x.st)}${x.tk?' · TM '+esc(x.tk):''}${x.note?' · '+esc(x.note):''}</small></span>
+      <span class="rj-q">${fmt(x.q,0)}<small> m³</small></span></div>`).join('')}</div>
+      <div class="rj-tot">${L.length} truck${L.length>1?'s':''} · <b>${fmt(tot,0)} m³</b></div>`
+    :'<div class="muted" style="padding:14px 4px">No rejected trucks since 8 AM.</div>'}</div>`;
+  o.style.display='flex';
+}
 // themes 2 / 3: a short Upcoming list on Summary (time · client element · m³ · card / TEM / rate · plant); tap → Upcoming page
 let sumUpAll=false;
 function renderSumUp(){
@@ -3944,7 +4031,7 @@ function dpBuild(start){
       if(EXCL.test(note)){ st.rej.push({es,q,tk,t}); continue; }
       st.total+=q;
       if(!es){ if(q<DP_START_MIX) st.start+=q; else st.noes.push({q,tk,t}); continue; }
-      const L=st.lines.get(es)||{es,q:0,n:0,t}; L.q+=q; L.n++; if(t<L.t) L.t=t; st.lines.set(es,L); }
+      const L=st.lines.get(es)||{es,q:0,n:0,t,trucks:[]}; L.q+=q; L.n++; if(t<L.t) L.t=t; L.trucks.push({tk,q,t}); st.lines.set(es,L); }
     st.list=[...st.lines.values()].sort((a,b)=>a.t-b.t).map(L=>{ const p=esName(L.es)||(()=>{ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===L.es); return pr?{c:pr.client,k:pr.code}:null; })();
       return Object.assign(L,{client:p?p.c:'', code:p?p.k:''}); });
     if(st.total||st.rej.length) out.push(st); }
@@ -3958,13 +4045,14 @@ function dpText(sts,start){
 // the station's WhatsApp message -> {station: {codes:{CODE: m³}, start: m³, total, lines:[...]}}
 function dpParse(txt){ const out={}; let cur=null;
   for(const raw of String(txt||'').split(/\r?\n/)){ const s=raw.replace(/\*/g,'').trim(); if(!s) continue;
-    const h=s.match(/^([LV])\s*\.?\s*(\d)\s*$/i); if(h){ cur=(h[1]+h[2]).toUpperCase(); out[cur]=out[cur]||{codes:{},start:0,total:null,lines:[]}; continue; }
+    // station line: "V.4", "L2", or the plant's make "Vurmak.#3" / "Liebherr 2" (V = Vurmak, L = Liebherr)
+    const h=s.match(/^(L|V|liebherr|vurmak)\s*[.#:\-]*\s*#?\s*(\d)\s*\.?$/i); if(h){ cur=(h[1][0]+h[2]).toUpperCase(); out[cur]=out[cur]||{codes:{},start:0,total:null,lines:[]}; continue; }
     if(!cur) continue;
     const tot=s.match(/^total\b[^\d]*([\d,.]+)/i); if(tot){ out[cur].total=num(tot[1]); continue; }
     const parts=s.split(/\s*\.\s+|\s+\.\s*/).map(x=>x.trim()).filter(Boolean); if(parts.length<2) continue;
     const qm=parts[parts.length-1].match(/([\d,.]+)\s*m/i); if(!qm) continue; const q=num(qm[1]);
     const code=(parts.find(p=>/^\d{2}[A-Z]{2,4}\d*$/i.test(p.replace(/\s+/g,'')))||'').replace(/\s+/g,'').toUpperCase();
-    const sm=parts.some(p=>/start\s*mix/i.test(p));
+    const sm=parts.some(p=>/start[\s.]*mix/i.test(p));   // "Startmix", "start mix", "start.mix"
     out[cur].lines.push({raw:s,code,q,sm});
     if(sm) out[cur].start+=q; else if(code) out[cur].codes[code]=(out[cur].codes[code]||0)+q; }
   return out; }
@@ -3985,7 +4073,7 @@ function dpCompare(s,m){
     return null; };
   const rows=[...msgBy.values()].map(o=>{ const sh=sheetOf(o.code); let q=sh.reduce((a,L)=>a+L.q,0), via=[];
     if(q<o.q-0.5){ const p=pick(o.q-q); if(p){ p.forEach(u=>u.used=true); via=p; q+=p.reduce((a,u)=>a+u.q,0); } }
-    return {client:o.client, code:o.code, grade:[...o.grades].join(', '), mq:o.q, sq:q, via, es:sh.map(L=>L.es)}; });
+    return {client:o.client, code:o.code, grade:[...o.grades].join(', '), mq:o.q, sq:q, via, es:sh.map(L=>L.es), trucks:sh.concat(via).flatMap(L=>L.trucks||[])}; });
   const extra=named.filter(L=>!msgBy.has(L.code)).concat(unk.filter(u=>!u.used));
   // same element twice in the sheet (not in the message) -> one line each is fine
   return {rows, extra, start:{mq:m.start, sq:s.start}, total:{mq:m.total, sq:s.total}};
@@ -4009,32 +4097,55 @@ function dpHtml(){
     const missing=sts.filter(s=>!msgSt.includes(s.tok.toUpperCase()));
     const T={mq:rowsT.reduce((a,r)=>a+r.mq,0), sq:rowsT.reduce((a,r)=>a+r.sq,0)}, tbAll=rowsT.every(r=>r.tb!=null)?rowsT.reduce((a,r)=>a+r.tb,0):null;
     const d=(a,b)=>okq(a,b)?'<span class="dq ok">✓</span>':`<span class="dq df">${b-a>0?'+':''}${fmt(b-a,0)}</span>`;
-    sumHtml=`<div class="dc dc-all"><div class="dc-h"><b>All stations</b><span class="dc-sum">${msgSt.length} message${msgSt.length>1?'s':''}</span>
-        <span class="dc-st ${okq(T.mq,T.sq)?'ok':'bad'}">${okq(T.mq,T.sq)?'✓ Totals match':`${T.sq-T.mq>0?'+':''}${fmt(T.sq-T.mq,0)} m³`}</span></div>
-      <table class="dc-t"><thead><tr><th>Station</th><th>Message</th><th>Sheet</th>${tbAll!=null||rowsT.some(r=>r.tb!=null)?'<th>Sheet table</th>':''}<th></th></tr></thead><tbody>
-        ${rowsT.map(r=>`<tr class="${okq(r.mq,r.sq)?'ok':'bad'}"><td class="dc-k">${esc(stName(r.k))}</td><td class="n">${fmt(r.mq,0)}</td><td class="n">${fmt(r.sq,0)}</td>${tbAll!=null||rowsT.some(x=>x.tb!=null)?`<td class="n">${r.tb!=null?fmt(r.tb,0):'—'}</td>`:''}<td>${d(r.mq,r.sq)}</td></tr>`).join('')}
-        <tr class="dc-tot ${okq(T.mq,T.sq)?'ok':'bad'}"><td>Total${missing.length?' <small>(these)</small>':''}</td><td class="n">${fmt(T.mq,0)}</td><td class="n">${fmt(T.sq,0)}</td>${tbAll!=null||rowsT.some(r=>r.tb!=null)?`<td class="n">${tbAll!=null?fmt(tbAll,0):'—'}</td>`:''}<td>${d(T.mq,T.sq)}</td></tr>
-        ${missing.length?(()=>{ const all=sts.reduce((a,s)=>a+s.total,0), t8=isYest&&PROD8.yesterday?PROD8.yesterday.total:null, hasTb=tbAll!=null||rowsT.some(r=>r.tb!=null);
-          return `<tr class="dc-tot dc-grand ${okq(T.mq,all)?'ok':'bad'}"><td>All stations</td><td class="n">${fmt(T.mq,0)}</td><td class="n">${fmt(all,0)}</td>${hasTb?`<td class="n">${t8!=null?fmt(t8,0):'—'}</td>`:''}<td>${d(T.mq,all)}</td></tr>`; })():''}
-      </tbody></table>
-      ${missing.length?`<div class="dc-x"><div class="dc-xh">Loaded in the sheet, no message pasted</div>${missing.map(s=>`<div class="dc-xl"><span>${esc(s.name)}</span><span>${fmt(s.total,0)} m³</span></div>`).join('')}</div>`:''}
-    </div>`;
-    // ---- checking pasted message(s): one card per station in the message ----
+    // the difference in words, so it is clear WHERE it is and WHICH side has more
+    const diffTag=(mq,sq)=>okq(mq,sq)?'<span class="dd-tag ok">✓ Same</span>'
+      :(!mq?'<span class="dd-tag nom">Not in the message</span>':(!sq?'<span class="dd-tag nos">Not in the sheet</span>'
+      :`<span class="dd-tag df">${sq>mq?`Sheet has ${fmt(sq-mq,0)} more`:`Message has ${fmt(mq-sq,0)} more`}</span>`));
+    const allSheet=sts.reduce((a,s)=>a+s.total,0);
+    sumHtml=`<div class="dc dc-all"><div class="dc-h"><b>All stations</b>
+        <span class="dc-st ${okq(T.mq,T.sq)&&!missing.length?'ok':'bad'}">${okq(T.mq,T.sq)&&!missing.length?'✓ All match':(okq(T.mq,T.sq)?`${missing.length} station${missing.length>1?'s':''} without a message`:(T.sq>T.mq?`Sheet has ${fmt(T.sq-T.mq,0)} more`:`Message has ${fmt(T.mq-T.sq,0)} more`))}</span></div>
+      <table class="dc-t"><thead><tr><th>Station</th><th>Message</th><th>Sheet</th><th></th></tr></thead><tbody>
+        ${rowsT.map(r=>`<tr><td class="dc-k">${esc(stName(r.k))}</td><td class="n">${fmt(r.mq,0)}</td><td class="n">${fmt(r.sq,0)}</td><td>${diffTag(r.mq,r.sq)}</td></tr>`).join('')}
+        ${missing.map(s=>`<tr><td class="dc-k">${esc(s.name)}</td><td class="n">—</td><td class="n">${fmt(s.total,0)}</td><td><span class="dd-tag none">No message pasted</span></td></tr>`).join('')}
+        <tr class="dc-tot"><td>Total</td><td class="n">${fmt(T.mq,0)}</td><td class="n">${fmt(missing.length?allSheet:T.sq,0)}</td><td>${missing.length?'':diffTag(T.mq,T.sq)}</td></tr>
+      </tbody></table></div>`;
+    // ---- one card per pasted station: only the differences, each said in words; the matching lines folded ----
     body=msgSt.map(k=>{ const m=msg[k], s=byTok.get(k)||{tok:k,name:stName(k),list:[],start:0,noes:[],rej:[],total:0};
-      const c=dpCompare(s,m), tt=c.total, ok=okq(tt.mq,tt.sq), tbl=sheetTbl(k);
+      const c=dpCompare(s,m), tt=c.total, ok=okq(tt.mq,tt.sq), D=[], same=[];
+      const nm=(cl,code)=>`${cl?`<span class="dd-c">${esc(cl)}</span> `:''}<b>${esc(code)}</b>`;
+      const trk=x=>`TM ${esc(x.tk||'—')} · ${fmt(x.q,0)} m³ · ${timeShort(x.t)}`;
+      // 1–2 trucks whose m³ add up to `need` (the truck that makes the difference)
+      const pickT=(arr,need)=>{ for(let a=0;a<arr.length;a++){ if(Math.abs(arr[a].q-need)<0.5) return [arr[a]];
+        for(let b=a+1;b<arr.length;b++) if(Math.abs(arr[a].q+arr[b].q-need)<0.5) return [arr[a],arr[b]]; } return null; };
+      // codes that differ by one letter / digit (or two swapped) = probably a typo
+      const near=(a,b)=>{ a=String(a||''); b=String(b||''); if(!a||!b||a.length!==b.length) return false; let d=0; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) d++; return d<=2; };
+      const msgOnly=[], sheetOnly=[];
+      c.rows.forEach(r=>{ const lab=nm(r.client,r.code)+(r.grade?` <small>${esc(r.grade)}</small>`:'')+(r.via.length?` <small title="Name not known yet — matched by quantity">≈ ES ${r.via.map(u=>esc(u.es)).join(' + ')}</small>`:'');
+        if(okq(r.mq,r.sq)) same.push({lab,q:r.mq});
+        else if(!r.sq) msgOnly.push({lab, code:r.code, q:r.mq});
+        else { const df=r.sq-r.mq, why=df>0?pickT(r.trucks,df):null;
+          D.push({lab, size:Math.abs(df), txt:`Message <b>${fmt(r.mq,0)}</b> · Sheet <b>${fmt(r.sq,0)}</b>`, tag:diffTag(r.mq,r.sq),
+            hint:why?`Probably <b>${why.map(trk).join(' + ')}</b> — in the sheet, not counted in the message`
+              :(df<0?`${fmt(-df,0)} m³ of the message are not in the sheet — a truck missing or typed under another code / with no ES`:'')}); } });
+      if(c.start.mq||c.start.sq){ const lab='<b class="dc-sm">Start mix</b>';
+        if(okq(c.start.mq,c.start.sq)) same.push({lab,q:c.start.mq});
+        else D.push({lab, size:Math.abs((c.start.sq||0)-(c.start.mq||0)), txt:`Message <b>${c.start.mq?fmt(c.start.mq,0):'—'}</b> · Sheet <b>${c.start.sq?fmt(c.start.sq,0):'—'}</b>`, tag:diffTag(c.start.mq,c.start.sq)}); }
+      c.extra.forEach(L=>sheetOnly.push({lab:L.code?nm(L.client,L.code):`<b>ES ${esc(L.es)}</b>`, code:L.code, q:L.q, txt:`Sheet <b>${fmt(L.q,0)}</b> m³ · ${L.n} truck${L.n>1?'s':''}`, trucks:L.trucks||[]}));
+      s.noes.forEach(x=>sheetOnly.push({lab:`<b>No ES</b>`, code:'', q:x.q, txt:`Sheet <b>${fmt(x.q,0)}</b> m³ · ${trk(x)}`, trucks:[x]}));
+      // a line only in the message + a line only in the sheet with the same m³ = the same pour under a wrong code
+      msgOnly.forEach(mo=>{ const cand=sheetOnly.filter(so=>!so.used&&Math.abs(so.q-mo.q)<0.5).sort((a,b)=>(near(b.code,mo.code)?1:0)-(near(a.code,mo.code)?1:0))[0];
+        if(cand){ cand.used=true;
+          D.push({lab:`⚠ <b>Wrong code?</b>`, size:mo.q, pair:true, txt:`Message ${mo.lab} ↔ Sheet ${cand.lab} · <b>${fmt(mo.q,0)}</b> m³`, tag:`<span class="dd-tag pair">${near(cand.code,mo.code)?'Same pour, code typo':'Same m³'}</span>`}); }
+        else D.push({lab:mo.lab, size:mo.q, txt:`Message <b>${fmt(mo.q,0)}</b> · Sheet <b>—</b>`, tag:diffTag(mo.q,0)}); });
+      sheetOnly.filter(so=>!so.used).forEach(so=>D.push({lab:so.lab, size:so.q, txt:so.txt, tag:diffTag(0,so.q)}));
+      D.sort((a,b)=>(b.pair?1:0)-(a.pair?1:0)||b.size-a.size);   // likely typos first, then the biggest differences
+      const verdict=ok&&!D.length?'✓ All match':(ok?`Totals match · ${D.length} to check`:(tt.sq>(tt.mq||0)?`Sheet has ${fmt(tt.sq-(tt.mq||0),0)} more`:`Message has ${fmt((tt.mq||0)-tt.sq,0)} more`));
       return `<div class="dc">
         <div class="dc-h"><b>${esc(stName(k))}</b>
-          <span class="dc-sum">Message <b>${tt.mq!=null?fmt(tt.mq,0):'—'}</b> · Sheet <b>${fmt(tt.sq,0)}</b>${tbl!=null&&!okq(tbl,tt.sq)?` <small>(sheet table ${fmt(tbl,0)})</small>`:''}</span>
-          <span class="dc-st ${ok?'ok':'bad'}">${ok?'✓ Matches':`${tt.sq-(tt.mq||0)>0?'+':''}${fmt(tt.sq-(tt.mq||0),0)} m³`}</span>${byTok.has(k)?copyBtn(k):''}</div>
-        <table class="dc-t"><thead><tr><th>Contractor</th><th>Element</th><th>Message</th><th>Sheet</th><th></th></tr></thead><tbody>
-        ${c.rows.map(r=>`<tr class="${okq(r.mq,r.sq)?'ok':'bad'}"><td>${esc(r.client)}</td><td class="dc-k">${esc(r.code)}${r.grade?` <small>${esc(r.grade)}</small>`:''}</td>
-          <td class="n">${fmt(r.mq,0)}</td><td class="n">${r.sq?fmt(r.sq,0):'—'}${r.via.length?`<div class="dc-via" title="Name not known yet — matched by quantity">≈ ES ${r.via.map(u=>esc(u.es)).join(' + ')}</div>`:''}</td><td>${mark(r.mq,r.sq)}</td></tr>`).join('')}
-        ${(c.start.mq||c.start.sq)?`<tr class="${okq(c.start.mq,c.start.sq)?'ok':'bad'}"><td class="dc-sm">Start mix</td><td></td><td class="n">${c.start.mq?fmt(c.start.mq,0):'—'}</td><td class="n">${c.start.sq?fmt(c.start.sq,0):'—'}</td><td>${mark(c.start.mq,c.start.sq)}</td></tr>`:''}
-        </tbody></table>
-        ${c.extra.length||s.noes.length?`<div class="dc-x"><div class="dc-xh">In the sheet, not in the message</div>
-          ${c.extra.map(L=>`<div class="dc-xl"><span>${L.code?esc((L.client?L.client+' · ':'')+L.code):'ES '+esc(L.es)}</span><span>${fmt(L.q,0)} m³ · ${L.n} trk</span></div>`).join('')}
-          ${s.noes.map(x=>`<div class="dc-xl"><span>No ES · TM ${esc(x.tk||'—')} · ${timeShort(x.t)}</span><span>${fmt(x.q,0)} m³</span></div>`).join('')}</div>`:''}
-      </div>`; }).join('');
+          <span class="dc-sum">Message <b>${tt.mq!=null?fmt(tt.mq,0):'—'}</b> · Sheet <b>${fmt(tt.sq,0)}</b></span>${byTok.has(k)?copyBtn(k):''}</div>
+        <div class="dd-verdict ${ok&&!D.length?'ok':'bad'}">${verdict}</div>
+        ${D.length?`<div class="dd-list">${D.map(d=>`<div class="dd${d.pair?' dd-pair':''}"><div class="dd-l"><div>${d.lab}</div><small>${d.txt}</small>${d.hint?`<div class="dd-hint">💡 ${d.hint}</div>`:''}</div>${d.tag}</div>`).join('')}</div>`:''}
+        ${same.length?`<details class="dd-same"><summary>✓ ${same.length} line${same.length>1?'s':''} the same in both</summary>${same.map(x=>`<div class="dd-s"><span>${x.lab}</span><span class="n">${fmt(x.q,0)} m³</span></div>`).join('')}</details>`:''}      </div>`; }).join('');
   } else {
     // ---- no message yet: the sheet's own day, written like the message ----
     body=sts.length?sts.map(s=>{ const tbl=sheetTbl(s.tok);
@@ -4174,9 +4285,20 @@ async function loadTrucks(){
       }
     } }
     // 3) EMPTY = working trucks not currently loaded/out
+    // FALSE + "HOLD" in the reason = a sound truck parked for now: On hold, not a Breakdown
+    const isHold=b=>/\bhold\b/i.test(b.note||'');
+    const hold=broken.filter(isHold), breakdown=broken.filter(b=>!isHold(b));
+    // a truck the sheet has as broken / on hold that is LOADED anyway: flag it (red / amber) — it is out with concrete
+    const why=new Map(broken.map(b=>[String(b.truck),b]));
+    loaded.forEach(x=>{ const b=why.get(String(x.truck)); if(b){ x.flag=isHold(b)?'hold':'down'; x.flagNote=b.note||''; } });
     const out=new Set(loaded.map(x=>x.truck));
     const available=working.filter(t=>!out.has(t));
-    TRUCKS={loaded, available, breakdown:broken, working, ok:true};
+    // …and while it is out it counts as Working, not as Breakdown / On hold (the numbers move with it)
+    const isOut=b=>out.has(String(b.truck));
+    // (a Breakdown truck that is out counts as Working; an On-hold truck STAYS On hold — the user parked it on purpose,
+    //  so loading it is only flagged and reported in Data checks / a notification)
+    const working2=working.concat(breakdown.filter(isOut).map(b=>String(b.truck)).filter(t=>!working.includes(t)));
+    TRUCKS={loaded, available, breakdown:breakdown.filter(b=>!isOut(b)), hold, working:working2, ok:true};
   }catch(e){}
 }
 
