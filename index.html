@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261021-000001">
+<meta name="app-build" content="20261021-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -256,11 +256,6 @@
   .ap-sum{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;margin-top:8px;font-family:var(--mono);font-size:13px;color:var(--muted)}
   .ap-sum b{font-size:16px;color:var(--ink)} .ap-sum .ap-pill{margin:0} .ap-spc{font-size:18px!important;color:var(--cyan)!important}
   .ap-bar-s{height:6px;margin-top:8px}
-  #accReq{margin-top:14px;border:1px solid rgba(251,191,36,.5);background:rgba(251,191,36,.08);border-radius:14px;padding:10px 14px}
-  .acc-t{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);margin-bottom:4px}
-  .acc-r{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;padding:7px 0;border-top:1px solid var(--line)} .acc-r:first-of-type{border-top:none}
-  .acc-n{font-size:14px} .acc-a{font-family:var(--mono);font-size:12px;color:var(--muted)} .acc-sp{flex:1}
-  .acc-no{border-color:rgba(251,113,133,.5);color:var(--rose)}
   .ap-pz{display:inline-block;width:15px;height:15px;border-radius:4px;vertical-align:-3px;margin-inline-end:5px;background:linear-gradient(90deg,transparent 4px,#3b2a05 4px,#3b2a05 6px,transparent 6px,transparent 9px,#3b2a05 9px,#3b2a05 11px,transparent 11px),linear-gradient(#fcd34d,#f59e0b);background-size:100% 9px,100% 100%;background-position:center,center;background-repeat:no-repeat}
   .ap-stop{font-size:12px;font-weight:800;color:var(--rose);background:rgba(251,113,133,.14);border:1px solid rgba(251,113,133,.4);border-radius:99px;padding:2px 10px;white-space:nowrap}
   .ap:not(.open) .ap-last{font-size:11px}
@@ -1190,8 +1185,6 @@
   <!-- DIAGNOSTICS -->
   <div id="diag"></div>
 
-  <!-- ACCESS REQUESTS (admin only): new devices waiting to be let in -->
-  <div id="accReq" hidden></div>
 
   <!-- VIEW TABS -->
   <div id="viewTabs" class="vtabs"></div>
@@ -3555,7 +3548,7 @@ function applyState(st){
   DONE=st.done||{}; REQ=st.req||{}; RATE=st.rate||{};
   stSet(KEY_DONE,DONE); stSet(KEY_REQ,REQ); stSet(KEY_RATE,RATE);   // keep a local cache for offline
   if(st.pump){ PUMPNOTE=st.pump; stSet(KEY_PUMP,PUMPNOTE); }        // older sync script: no pump notes -> keep local
-  try{ renderAccessReq(); accWatch(); renderThemes(); }catch(e){}
+  try{ renderThemes(); }catch(e){}
   return true;
 }
 // Pull shared state. Only overwrites the local maps when the call SUCCEEDS (offline -> keep local).
@@ -3650,80 +3643,10 @@ async function pingPresence(){
     showOnline(r.online);
     if(IS_ADMIN && view==='admin') renderAdminWho();
   }
-  try{ renderAccessReq(); }catch(e){}
 }
 
-/* ---------- access approval: every device (except the admin's) waits until the admin lets it in ----------
-   Shared in the pump notes: 'W|<device>' = "name|ms asked" (waiting), 'A|<device>' = "ok|name|ms" (let in).
-   When this started (build 000019) NO device was let in — everyone typed their name again and was approved
-   one by one; the admin's own device lets itself in. Refuse / Block = the device is blocked (same block as the
-   Admin page) and loses its approval. A deterrent like the block — not hard security. */
-const accKey=d=>'A|'+d, waitKey=d=>'W|'+d;
-const accOk=d=>/^ok\|/.test(String(PUMPNOTE[accKey(d)]||''));
-const accSkip=()=>BOT || /^(localhost|127\.)/.test(location.hostname) || !syncBase();
-function showWait(){
-  let o=el('waitGate');
-  if(!o){ o=document.createElement('div'); o.id='waitGate';
-    o.style.cssText='position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(8,11,22,.96);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);text-align:center;padding:24px';
-    document.body.appendChild(o); }
-  o.innerHTML=`<div dir="rtl" style="max-width:360px"><div style="font-size:48px">⏳</div>
-    <div style="font-weight:800;font-size:20px;margin:12px 0 6px">مستني الموافقة</div>
-    <div style="color:#8b97a6;font-size:14px;line-height:1.7">طلبك اتبعت لمدير البرنامج باسم <b style="color:#e8ecf6">${esc(ME||'—')}</b>.<br>أول ما يوافق هيفتح لوحده.</div>
-    <button id="waitAdm" style="margin-top:22px;font:inherit;font-size:12px;color:#8b97a6;background:none;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:5px 12px;cursor:pointer">Admin</button></div>`;
-  o.querySelector('#waitAdm').onclick=async()=>{ await toggleAdmin(); if(IS_ADMIN){ await syncPush('pump',accKey(deviceId()),`ok|${ME}|${Date.now()}|admin`); await syncPush('pump',waitKey(deviceId()),''); hideWait(); ACC_STATE='in'; } };
-  o.style.display='grid';
-}
-function hideWait(){ const o=el('waitGate'); if(o) o.remove(); }
-// an approved device that loses its approval (admin pressed Block) -> check right away instead of in 5 min
-let ACC_IN=false, ACC_CHK=0;
-function accWatch(){ if(!ACC_IN||IS_ADMIN||BLOCKED||accSkip()||accOk(deviceId())||Date.now()-ACC_CHK<20000) return;
-  ACC_CHK=Date.now(); whoamiCheck(); }
-// start-up: approved / admin -> as before; otherwise type the name again (even if one was saved) and wait
-// where this device stands — read by Concrete Management (the hub keeps everything hidden until 'in')
-let ACC_STATE='checking';
-function accessState(){ return BLOCKED?'blocked':ACC_STATE; }
-async function accessIn(){ ACC_STATE=ME?'in':'name'; await askName(false); ACC_STATE='in'; }
-async function accessFlow(){
-  if(accSkip()) return accessIn();
-  await syncPull();
-  const d=deviceId();
-  if(IS_ADMIN){ if(!accOk(d)) await syncPush('pump',accKey(d),`ok|${ME}|${Date.now()}|admin`); return accessIn(); }
-  if(accOk(d)){ ACC_IN=true; return accessIn(); }
-  const w=String(PUMPNOTE[waitKey(d)]||'');
-  if(w){ ME=w.split('|')[0]||ME; }                       // already asked (page reloaded) -> keep that name
-  else { ME=''; try{ localStorage.removeItem(KEY_ME); }catch(e){}
-    ACC_STATE='name'; await askName(true); await syncPush('pump',waitKey(d),`${ME}|${Date.now()}`); }
-  showWait(); ACC_STATE='wait';
-  const iv=setInterval(async()=>{
-    if(!el('waitGate')){ clearInterval(iv); return; }        // let in as admin from the waiting screen
-    const wi=await whoamiCheck(); if(wi&&wi.blocked){ clearInterval(iv); hideWait(); return; }
-    await syncPull();
-    if(accOk(d)){ clearInterval(iv); hideWait(); ACC_IN=true; ACC_STATE='in'; try{ localStorage.setItem(KEY_ME,ME); }catch(e){} const mn=el('meName'); if(mn)mn.textContent=ME; rerender(); }
-    else if(!PUMPNOTE[waitKey(d)]) syncPush('pump',waitKey(d),`${ME}|${Date.now()}`);   // unblocked by the admin -> ask again
-  },15000);
-}
-// admin: block a device (Refuse, or the Block button next to a viewer) — also takes its approval away
-async function accBlock(d,name){
-  await syncCall({action:'block', dev:d, name, by:ME});
-  if(PUMPNOTE[waitKey(d)]) await syncPush('pump',waitKey(d),'');
-  if(PUMPNOTE[accKey(d)]) await syncPush('pump',accKey(d),'');
-}
-// admin: the waiting devices, on top of every page
-function renderAccessReq(){
-  const box=el('accReq'); if(!box) return;
-  const L=IS_ADMIN?Object.keys(PUMPNOTE).filter(k=>k.startsWith('W|')&&PUMPNOTE[k]&&!accOk(k.slice(2))).map(k=>{
-    const [n,t]=String(PUMPNOTE[k]).split('|'); return {d:k.slice(2),n:n||'—',t:+t||0}; })
-    .filter(x=>Date.now()-x.t<7*86400000).sort((a,b)=>a.t-b.t):[];
-  box.hidden=!L.length; if(!L.length){ box.innerHTML=''; return; }
-  box.innerHTML=`<div class="acc-t">🔔 Waiting for your approval (${L.length})</div>`+L.map(x=>`<div class="acc-r">
-    <span class="acc-n">👤 <b>${esc(x.n)}</b> wants to open the app</span><span class="acc-a">${AGO(x.t)}</span>
-    <span class="acc-sp"></span><button class="ap-btn ap-done acc-ok" data-d="${esc(x.d)}" data-n="${esc(x.n)}">✓ Approve</button>
-    <button class="ap-btn acc-no" data-d="${esc(x.d)}" data-n="${esc(x.n)}">✕ Refuse</button></div>`).join('');
-  box.querySelectorAll('.acc-ok').forEach(b=>b.onclick=async()=>{ b.disabled=true; const d=b.dataset.d;
-    await syncPush('pump',accKey(d),`ok|${b.dataset.n}|${Date.now()}`); await syncPush('pump',waitKey(d),''); });
-  box.querySelectorAll('.acc-no').forEach(b=>b.onclick=async()=>{ if(!confirm(`Refuse ${b.dataset.n}? The device will be blocked (you can unblock it from the Admin page).`)) return;
-    b.disabled=true; await accBlock(b.dataset.d,b.dataset.n); });
-}
+// admin: block a viewer (the Block button next to a name under "people viewing")
+async function accBlock(d,name){ await syncCall({action:'block', dev:d, name, by:ME}); }
 
 /* ---------- identity + admin mode ----------
    Everyone types a name once (kept on the device); it rides along with every edit so the
@@ -3775,7 +3698,7 @@ function applyRole(){
   const b=el('adminBtn'); if(b){ b.textContent = IS_ADMIN?'🔓 Admin ON':'🔑 Admin'; b.classList.toggle('on',IS_ADMIN); }
   const tb=el('adminTabBtn'); if(tb) tb.hidden = !IS_ADMIN;      // the top-bar admin button (next to the live pill)
   const mn=el('meName'); if(mn)mn.textContent=ME||'—';
-  try{ renderAccessReq(); showOnline(WHO.length); renderThemes(); }catch(e){}
+  try{ showOnline(WHO.length); renderThemes(); }catch(e){}
 }
 async function syncClear(type){
   const r=await syncCall({action:'clear', type, by:ME});
@@ -4527,7 +4450,7 @@ function requireAuth(){
     if(claim && claim.held){ IS_ADMIN=false; try{localStorage.removeItem(KEY_ADMIN);}catch(e){}
       if(view==='admin') view='summary'; applyRole(); renderViewTabs(); applyView(); }
   }
-  accessFlow();                                           // name + approval: only approved devices (and the admin) get in
+  askName(false);                                         // only prompts if we still have no name
   setInterval(whoamiCheck, 300000);                       // re-check block status every 5 min
   pingPresence(); setInterval(pingPresence,30000);        // "N people viewing" heartbeat
 })();
