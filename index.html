@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261021-000009">
+<meta name="app-build" content="20261021-000013">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -607,7 +607,7 @@
   .trk-why{margin-top:10px;padding:9px 12px;border-radius:12px;border:1px solid rgba(244,63,94,.4);
     background:rgba(244,63,94,.08);font-size:13.5px;line-height:1.5}
   .trk-why b{color:var(--rose);font-family:var(--mono)}
-  .trk-cards{display:grid;grid-template-columns:1fr;gap:8px}
+  .trk-cards{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
   .trk-card{display:flex;align-items:center;gap:12px;background:var(--glass,rgba(24,30,50,.5));
     border:1px solid var(--line2);border-radius:13px;padding:10px 13px}
   .tc-truck{font-family:var(--mono);font-size:22px;font-weight:800;min-width:48px;text-align:center;color:var(--cyan);flex:none}
@@ -1030,13 +1030,16 @@
   .tk-why{margin-top:4px;font-size:12px;font-weight:800;color:var(--rose)} .tk-hold .tk-why{color:var(--amber)}
   .tw-row.hd{border-inline-start-color:var(--amber)!important} .tw-ldx{color:var(--rose)}
   .tw-sub{margin:12px 2px 4px;font-size:12px;font-weight:800;color:var(--amber)}
-  .trk-kpi .l small{font-size:10px;color:var(--amber);font-weight:800}  /* station rules */
+  .trk-kpi .l small{font-size:10px;color:var(--amber);font-weight:800}
+  .trk-card .tc-info{min-width:0;flex:1} .trk-card .tc-top{overflow-wrap:anywhere}
+  .trk-kpi .kd{display:block;line-height:1.35;color:var(--rose)} .trk-kpi .kd b{font-family:var(--mono)} .trk-kpi .kd.kh{color:var(--amber)}  /* station rules */
   .rl-box{max-width:480px} .rl-f{display:block;margin-top:12px;font-size:12px;font-weight:700;color:var(--muted)} .rl-f select{width:100%;margin-top:4px}
   .rl-opts{display:flex;flex-direction:column;gap:6px;margin-top:6px;color:var(--ink);font-weight:600;font-size:13.5px} .rl-opts input{margin-inline-end:6px}
   .rl-note{margin-top:12px;font-size:12px;color:var(--muted);background:rgba(124,131,255,.1);border-radius:8px;padding:7px 9px}
   .rl-list{margin-top:12px;border:1px solid rgba(124,131,255,.45);background:rgba(124,131,255,.08);border-radius:14px;padding:10px 12px}
   .rl-h{font-weight:800;font-size:13px;margin-bottom:4px} .rl-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)} .rl-row:first-of-type{border-top:none}
-  .rl-row.off{opacity:.55} .rl-m{flex:1;min-width:0} .rl-m small{display:block;color:var(--muted);font-size:12px}
+  .rl-row.off{opacity:.55} .rl-full{color:var(--green)}
+  .rl-ext{font:inherit;font-size:12px;font-weight:800;border-radius:9px;padding:5px 11px;cursor:pointer;border:1px solid rgba(52,211,153,.55);background:rgba(52,211,153,.12);color:var(--green)} .rl-m{flex:1;min-width:0} .rl-m small{display:block;color:var(--muted);font-size:12px}
   .rl-stop{font:inherit;font-size:12px;font-weight:800;border-radius:9px;padding:5px 11px;cursor:pointer;border:1px solid rgba(251,113,133,.5);background:transparent;color:var(--rose)}  /* the Themes row in ⚙ */
   .th-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .th-opt{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer}
@@ -2615,13 +2618,20 @@ function renderTrucks(){
   const noEsBig=t.loaded.some(x=>!String(x.es||'').trim() && num(x.q)>=DP_START_MIX);
   const site=(es,q)=>{ es=String(es||'').trim(); if(es){ const n=esName(es); return esMap[es]||(n&&n.k?(n.c?n.c+' ':'')+n.k:es); }
     return (q!=null?num(q)>=DP_START_MIX:noEsBig)?'No ES':'Start mix'; };
+  // a no-ES truck that a 📌 station rule gives to a request: show that request instead of "No ES"
+  const RMt=ruleMap(), tok=p=>{ const m=String(p||'').match(/^\s*([LV])\D*(\d)/i); return m?(m[1]+m[2]).toUpperCase():String(p||'').trim(); };
+  const hm=s=>{ const t=parseTime(String(s||'')); return t==null?null:t; };
+  const ruleFor=x=>{ if(String(x.es||'').trim()) return null; const T=tok(x.plant), dm=hm(x.dep);
+    const n=NOES.find(y=>y.plant===T&&String(y.truck)===String(x.truck)&&(dm==null||hm(String(y.dep).replace(/^.*\s(\d{1,2}:\d{2}).*$/,'$1'))===dm)&&RMt.has(noEsKey(y)));
+    if(!n) return null; const to=RMt.get(noEsKey(n)).to, rq=ruleReq(to); return (rq?((rq.client?rq.client+' ':'')+rq.code):to)+' 📌'; };
+  const siteT=x=>ruleFor(x)||site(x.es,x.q);
   // the four numbers are buttons: each opens its own list (the lit one = the list on screen)
   const kpi=(tt,n,lab,col)=>`<div class="trk-kpi clk${truckTab===tt?' on':''}" data-tt="${tt}" style="--kc:${col}" role="button" tabindex="0"><div class="n"${tt==='working'?'':` style="color:${col}"`}>${n}</div><div class="l">${lab}</div></div>`;
   const counts=`<div class="trk-counts">
      ${kpi('working',t.working.length,'Working','#e2e8f0')}
      ${kpi('loaded',t.loaded.length,'Loaded','var(--cyan)')}
      ${kpi('empty',t.available.length,'Empty','var(--green)')}
-     ${kpi('down',t.breakdown.length,(t.hold&&t.hold.length)?`Breakdown <small>+${t.hold.length} hold</small>`:'Breakdown','var(--rose)')}
+     ${kpi('down',t.breakdown.length+((t.hold||[]).length),(t.hold&&t.hold.length)?`<span class="kd">Breakdown <b>${t.breakdown.length}</b></span><span class="kd kh">Hold <b>${t.hold.length}</b></span>`:'Breakdown','var(--rose)')}
    </div>`;
   const tabs=`<div class="spot-tabs" style="margin:14px 0 10px">
      <span class="spot-tab ${truckTab==='loaded'?'active':''}" data-tt="loaded">Loaded (${t.loaded.length})</span>
@@ -2635,14 +2645,14 @@ function renderTrucks(){
     const rows=t.working.map(String).map(tk=>({tk, l:byTk.get(tk), e:emp.has(tk)}))
       .sort((a,b)=>(!!b.l-!!a.l)||(a.tk.localeCompare(b.tk,undefined,{numeric:true})));
     body=rows.length?`<div class="tw-list">${rows.map(r=>r.l
-      ?`<div class="tw-row ld${r.l.flag?' tk-'+r.l.flag:''}"><span class="tw-tk">${esc(r.tk)}</span><span class="tw-st">Loaded</span><span class="tw-w">${esc(site(r.l.es,r.l.q))}${r.l.plant?` <small>· ${esc(r.l.plant)}</small>`:''}</span><span class="tw-t">${r.l.q?fmt(r.l.q,0)+' m³ · ':''}${r.l.elapsed?`out <span class="tc-out ${outClass(r.l.elapsed)}">${esc(r.l.elapsed)}</span>`:''}</span></div>`
+      ?`<div class="tw-row ld${r.l.flag?' tk-'+r.l.flag:''}"><span class="tw-tk">${esc(r.tk)}</span><span class="tw-st">Loaded</span><span class="tw-w">${esc(siteT(r.l))}${r.l.plant?` <small>· ${esc(r.l.plant)}</small>`:''}</span><span class="tw-t">${r.l.q?fmt(r.l.q,0)+' m³ · ':''}${r.l.elapsed?`out <span class="tc-out ${outClass(r.l.elapsed)}">${esc(r.l.elapsed)}</span>`:''}</span></div>`
       :`<div class="tw-row em"><span class="tw-tk">${esc(r.tk)}</span><span class="tw-st"></span><span class="tw-w">${r.e?'EMPTY':'—'}</span><span class="tw-t"></span></div>`).join('')}</div>`
       :'<div class="muted" style="font-size:13px;padding:10px 2px">No working trucks listed.</div>';
   } else if(truckTab==='down'){
     // the broken-down trucks with their reason written straight away
     const ldNow=new Set(t.loaded.map(x=>String(x.truck)));
     const dRow=(b,cls,lab)=>`<div class="tw-row ${cls}"><span class="tw-tk">${esc(b.truck)}</span><span class="tw-st">${lab}</span><span class="tw-w">${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}${ldNow.has(String(b.truck))?' <b class="tw-ldx">· LOADED now</b>':''}</span><span class="tw-t"></span></div>`;
-    body=(t.breakdown.length||(t.hold||[]).length)?`<div class="tw-list">${t.breakdown.map(b=>dRow(b,'dn','Breakdown')).join('')}${(t.hold||[]).length?`<div class="tw-sub">On hold — sound trucks parked for now (not counted as Breakdown)</div>${t.hold.map(b=>dRow(b,'hd','On hold')).join('')}`:''}</div>`
+    body=(t.breakdown.length||(t.hold||[]).length)?`<div class="tw-list">${t.breakdown.map(b=>dRow(b,'dn','Breakdown')).join('')}${(t.hold||[]).length?`<div class="tw-sub">On hold — sound trucks you parked on purpose</div>${t.hold.map(b=>dRow(b,'hd','On hold')).join('')}`:''}</div>`
       :'<div class="muted" style="font-size:13px;padding:10px 2px">No broken-down trucks.</div>';
   } else if(truckTab==='prod'){
     // month-to-date productivity per truck mixer, from the trucks sheet's own "Productivity" tab
@@ -2689,7 +2699,7 @@ function renderTrucks(){
         <div class="trk-card el${x.flag?' tk-'+x.flag:''}" data-es="${esc(String(x.es||'').trim())}" style="--ec:${colOf(x.es)}">
           <div class="tc-truck">${esc(x.truck)}</div>
           <div class="tc-info">
-            <div class="tc-top">${esc(site(x.es,x.q))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
+            <div class="tc-top">${esc(siteT(x))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
             <div class="tc-meta">${x.q?fmt(x.q,0)+' m³':''}${x.elapsed?` · out <span class="tc-out ${outClass(x.elapsed)}">${esc(x.elapsed)}</span>`:''}${x.dep?` · ${esc(x.dep)}`:''}${x.action?` <span class="tc-flag">⚠ ${esc(x.action)}</span>`:''}</div>
             ${x.flag?`<div class="tk-why">${x.flag==='down'?'⚠ Marked BREAKDOWN in the sheet':'⏸ Marked ON HOLD in the sheet'}${x.flagNote?' · '+esc(x.flagNote):''}</div>`:''}
           </div>
@@ -3102,16 +3112,20 @@ const noEsKey=x=>'x'+x.plant+'|'+x.truck+'|'+String(x.dep||'').trim();
    A truck the user attached by hand (x-key) keeps that; Start mix (under 3 m³) is never taken; trucks WITH an ES are never touched. */
 function stRules(){ const out=[];
   for(const k of Object.keys(PUMPNOTE)){ if(!k.startsWith('R|')||!PUMPNOTE[k]) continue; const [,plant,from]=k.split('|'); let v=null; try{ v=JSON.parse(PUMPNOTE[k]); }catch(e){} if(!v||!v.to) continue;
-    out.push({key:k, plant, from:+from||0, to:String(v.to), until:+v.until||0, qty:!!v.qty}); }
+    out.push({key:k, plant, from:+from||0, to:String(v.to), until:+v.until||0, qty:!!v.qty, qtyTo:+v.qtyTo||0}); }
   return out; }
 const noEsAt=x=>{ const s=String(x.dep||''), m=s.match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{1,2}):(\d{2})/); if(m) return new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).getTime();
   const d=parseDate(x.date), tm=parseTime(s); return (d&&tm!=null)?ts(d,tm):null; };
 const ruleReq=to=>{ const T=String(to).toUpperCase(), r=(PLAN_ROWS||[]).find(p=>String(p.es||'').trim().toUpperCase()===T)||(PLAN_ROWS||[]).find(p=>!String(p.es||'').trim()&&String(p.code||'').toUpperCase()===T); return r||null; };
+// the request's quantity NOW (follows a top-up: Required changed in the app / the sheet, or + Extend on the rule)
+const rulePour=to=>{ const T=String(to).toUpperCase(); return (VD.summary||[]).find(g=>String(g.esId||'').toUpperCase()===T)||(VD.summary||[]).find(g=>!g.esId&&String(g.elem||'').toUpperCase()===T)||null; };
+function ruleNeed(r){ const g=rulePour(r.to), rq=ruleReq(r.to); return Math.max(num(r.qtyTo)||0, g&&g.required>0?g.required:0, rq?num(rq.req):0)||null; }
 function ruleMap(){ const R=stRules(), m=new Map(); if(!R.length) return m;
   const used=new Map();
   NOES.filter(x=>!PUMPNOTE[noEsKey(x)]&&num(x.q)>=DP_START_MIX).map(x=>({x,at:noEsAt(x)})).filter(o=>o.at!=null).sort((a,b)=>a.at-b.at).forEach(o=>{
     const r=R.filter(r=>r.plant===o.x.plant&&o.at>=r.from&&(!r.until||o.at<r.until)).sort((a,b)=>b.from-a.from)[0]; if(!r) return;
-    if(r.qty){ const rq=ruleReq(r.to), need=rq?num(rq.req):null, u=used.get(r.key)||0; if(need>0&&u>=need-0.5) return; used.set(r.key,u+num(o.x.q)); }
+    // one count per REQUEST (several stations can feed the same request), not per rule
+    if(r.qty){ const T=String(r.to).toUpperCase(), need=ruleNeed(r), u=used.get(T)||0; if(need>0&&u>=need-0.5) return; used.set(T,u+num(o.x.q)); }
     m.set(noEsKey(o.x),{to:r.to, rule:r}); });
   return m; }
 // the rule form: which request, from when, stop when
@@ -3136,6 +3150,13 @@ function openRuleForm(plant, from){
     PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); o.style.display='none'; rerender(); await syncPush('pump',k,v); };
   o.style.display='flex';
 }
+// + Extend: the client asked for more — the new total goes on the rule AND on the request's Required (every device)
+async function extendRule(k){ const r=stRules().find(x=>x.key===k); if(!r) return; const now=ruleNeed(r)||0;
+  const a=prompt(`New total quantity for this request (m³)\nNow ${fmt(now,0)} — write the new total, or +20 to add 20:`, ''); if(a==null||!String(a).trim()) return;
+  const t=String(a).trim(), nv=/^\+/.test(t)?now+num(t.slice(1)):num(t); if(!(nv>now)){ alert('Write a total bigger than '+fmt(now,0)+' m³'); return; }
+  let v={}; try{ v=JSON.parse(PUMPNOTE[k]||'{}'); }catch(e){} v.qtyTo=nv; v.until=0; PUMPNOTE[k]=JSON.stringify(v); stSet(KEY_PUMP,PUMPNOTE);
+  const g=rulePour(r.to); if(g){ REQ[g.key]=nv; await stSet(KEY_REQ,REQ); }
+  rerender(); await syncPush('pump',k,PUMPNOTE[k]); if(g) syncPush('req',g.key,nv); }
 async function stopRule(k){ let v={}; try{ v=JSON.parse(PUMPNOTE[k]||'{}'); }catch(e){} v.until=Date.now();
   PUMPNOTE[k]=JSON.stringify(v); stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,PUMPNOTE[k]); }
 // "CLIENT CODE · 25 m³" of the plan / app request with this ES (or "APP-…" key)
@@ -3299,11 +3320,15 @@ function renderCheckList(cb, items){
   const RR=stRules().filter(r=>!r.until||r.until>Date.now()-12*3600000), RMm=ruleMap();
   const rules=RR.length?`<div class="rl-list"><div class="rl-h">📌 Station rules</div>${RR.map(r=>{ const tr=[...RMm.values()].filter(v=>v.rule.key===r.key).length, rq=ruleReq(r.to);
     const got=NOES.filter(x=>{ const v=RMm.get(noEsKey(x)); return v&&v.rule.key===r.key; }).reduce((a,x)=>a+num(x.q),0);
-    return `<div class="rl-row${r.until?' off':''}"><div class="rl-m"><b>${esc(r.plant)} → ${esc(rq?((rq.client?rq.client+' ':'')+rq.code):r.to)}</b><small>since ${timeShort(r.from)} · ${tr} truck${tr===1?'':'s'} · ${fmt(got,0)}${rq?' / '+fmt(rq.req,0):''} m³ · ${r.until?'stopped '+timeShort(r.until):(r.qty?'stops at its quantity':'until I stop it')}</small></div>${r.until?'':`<button class="rl-stop" data-k="${esc(r.key)}">Stop</button>`}</div>`; }).join('')}</div>`:'';  cb.innerHTML = rules + ((open.length||skipped.length)
+    // the request's total from every rule that feeds it (+ its own ES trucks): that is what the quantity is checked against
+    const T=String(r.to).toUpperCase(), all=NOES.filter(x=>{ const v=RMm.get(noEsKey(x)); return v&&String(v.to).toUpperCase()===T; }).reduce((a,x)=>a+num(x.q),0);
+    const need=ruleNeed(r), full=r.qty&&!r.until&&need>0&&all>=need-0.5, many=RR.filter(x=>String(x.to).toUpperCase()===T).length>1;
+    return `<div class="rl-row${r.until?' off':''}${full?' full':''}"><div class="rl-m"><b>${esc(r.plant)} → ${esc(rq?((rq.client?rq.client+' ':'')+rq.code):r.to)}</b><small>since ${timeShort(r.from)} · ${tr} truck${tr===1?'':'s'} · ${fmt(got,0)} m³${many?' · request '+fmt(all,0):''}${need?' / '+fmt(need,0):''} m³ · ${r.until?'stopped '+timeShort(r.until):(full?'<b class="rl-full">✓ quantity reached — paused</b>':(r.qty?'stops at its quantity':'until I stop it'))}</small></div>${r.qty&&!r.until?`<button class="rl-ext" data-k="${esc(r.key)}" title="The client asked for more: raise the quantity, the rule carries on">+ Extend</button>`:''}${r.until?'':`<button class="rl-stop" data-k="${esc(r.key)}">Stop</button>`}</div>`; }).join('')}</div>`:'';  cb.innerHTML = rules + ((open.length||skipped.length)
     ? `<div class="chk-box${open.length?'':' clear'}"><div class="chk-head">${open.length?`Data checks <span class="ck-pills">${pill('red','act now')}${pill('amber','to check')}${pill('blue','info')}</span>`:'&#10003; Data checks · nothing left to review'}</div>
         <div class="ck-list">${sorted.map(it=>row(it,false)).join('')}${showSkipped?skipped.map(it=>row(it,true)).join(''):''}</div>${foot}</div>`
     : `<div class="chk-ok">&#10003; Data checks: nothing to review on the open pours</div>`);
   cb.querySelectorAll('.chk-rule').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openRuleForm(b.dataset.plant, +b.dataset.from||0); }));
+  cb.querySelectorAll('.rl-ext').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); extendRule(b.dataset.k); }));
   cb.querySelectorAll('.rl-stop').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); if(confirm('Stop this station rule? Trucks already given stay with the request.')) stopRule(b.dataset.k); }));
   cb.querySelectorAll('.chk-skip').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
     for(const id of decodeURIComponent(b.dataset.id).split('\n')){ if(b.dataset.on==='1') SKIP[id]=Date.now(); else delete SKIP[id]; }
