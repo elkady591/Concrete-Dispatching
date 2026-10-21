@@ -24,7 +24,7 @@ const MAX_SEPARATE = 4;            // more new checks than this in one run -> on
 const TITLES = { 'No ES': 'Truck without ES', 'Rejected': 'Rejected truck', 'Late trucks': 'Late trucks',
                  'Gaps': 'Long gap between trucks', 'Overdue now': 'No truck — overdue now',
                  'Request due': 'Request time — start now', 'Late start': 'Request not started yet',
-                 'Wrong ES?': 'Truck ES not in the plan — typo?' };
+                 'Wrong ES?': 'Truck ES not in the plan — typo?', 'Hold truck loaded': 'ON HOLD truck was loaded' };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // The sync script sometimes answers with a Google "try again" HTML page instead of JSON: retry a few times.
