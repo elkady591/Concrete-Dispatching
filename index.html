@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261021-000019">
+<meta name="app-build" content="20261022-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1041,6 +1041,16 @@
   .rl-row.off{opacity:.55} .rl-full{color:var(--green)}
   .rl-ext{font:inherit;font-size:12px;font-weight:800;border-radius:9px;padding:5px 11px;cursor:pointer;border:1px solid rgba(52,211,153,.55);background:rgba(52,211,153,.12);color:var(--green)} .rl-m{flex:1;min-width:0} .rl-m small{display:block;color:var(--muted);font-size:12px}
   .rl-stop{font:inherit;font-size:12px;font-weight:800;border-radius:9px;padding:5px 11px;cursor:pointer;border:1px solid rgba(251,113,133,.5);background:transparent;color:var(--rose)}  /* the Themes row in ⚙ */
+  /* 🏗 site pumps on an Upcoming card (the site's own, info only) */
+  .uc-site{margin-top:8px;border:1px dashed var(--line2);border-radius:10px;padding:7px 10px;font-size:12px;color:var(--muted)}
+  .uc-site.ok{border-style:solid;border-color:color-mix(in srgb,var(--green) 55%,transparent);background:color-mix(in srgb,var(--green) 8%,transparent)}
+  .uc-site-h{font-weight:800;color:var(--ink);font-size:12.5px} .uc-site-h small{font-weight:600;color:var(--faint);margin-inline-start:4px}
+  .uc-site-l{margin-top:5px;display:flex;flex-wrap:wrap;align-items:center;gap:5px} .uc-site-t{min-width:52px;font-weight:700}
+  .uc-sc{font:700 12px var(--mono);border-radius:99px;padding:3px 10px;border:1px dashed var(--line2);background:transparent;color:var(--ink);cursor:pointer}
+  .uc-sc.mob{cursor:default;border-style:solid;color:var(--muted);background:rgba(255,255,255,.04)}
+  .uc-sc.on{border-style:solid;border-color:color-mix(in srgb,var(--green) 60%,transparent);background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
+  .uc-site-b{margin-top:6px;font:inherit;font-size:12px;font-weight:800;border-radius:9px;padding:4px 11px;cursor:pointer;border:1px solid var(--line2);background:transparent;color:var(--ink)}
+  .uc-site.ok .uc-site-b{border-color:color-mix(in srgb,var(--green) 55%,transparent);color:var(--green)}
   .th-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .th-opt{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer}
   .th-opt.on{border-color:var(--accent);color:var(--ink);background:rgba(124,131,255,.18)}
@@ -1301,6 +1311,8 @@
           <label>Temperature °<input id="rqTem" inputmode="decimal"></label>
           <label class="rq-wide">ES <small>(optional)</small><input id="rqEs" inputmode="numeric"></label>
           <label class="rq-wide">Pumps<div class="rq-pumps"><span id="rqPumpsTxt" class="rq-ptxt">—</span><span id="rqPumpBtns"></span><button type="button" class="rq-pclr" id="rqPumpClr">✕</button></div></label>
+          <label class="rq-wide">🏗 Site pumps · working <small>(the site's own — info only, not ours)</small><input id="rqSpW" placeholder="Pump 56 & S.P.3.7 & Spider Pump"></label>
+          <label class="rq-wide">🏗 Site pumps · spare<input id="rqSpS" placeholder="Pump 48 & Spider Pump"></label>
         </div>
         <datalist id="rqClients"></datalist>
         <div class="rq-msg" id="reqMsg"></div>
@@ -1456,7 +1468,7 @@ function rebuildPlan(){
 async function mergeAppReq(r, s){
   if(!PUMPNOTE['q'+r.id]) return;
   const to=s.es?String(s.es).trim():('PP:'+s.code), from=appEs(r), push=[];
-  for(const p of ['p','s']){ const v=PUMPNOTE[p+from]; if(v!=null && PUMPNOTE[p+to]==null){ PUMPNOTE[p+to]=v; push.push([p+to,v]); }
+  for(const p of ['p','s','Y']){ const v=PUMPNOTE[p+from]; if(v!=null && PUMPNOTE[p+to]==null){ PUMPNOTE[p+to]=v; push.push([p+to,v]); }
     if(v!=null){ delete PUMPNOTE[p+from]; push.push([p+from,'']); } }
   delete PUMPNOTE['q'+r.id]; push.push(['q'+r.id,'']);
   stSet(KEY_PUMP,PUMPNOTE); rerender();
@@ -2202,7 +2214,12 @@ const OPS_DEFAULT=7, OPS_CHOICES=[1,2,3,4,5,6,7,8,9,10,11,12];
 function opsCount(){ const n=parseInt(PUMPNOTE['ops'],10); return n>0&&n<=20?n:OPS_DEFAULT; }
 const hLabel=h=>{ const m=Math.round(h*60); return Math.floor(m/60)+':'+String(m%60).padStart(2,'0'); };
 let PUMPNOTE={};                 // pump index (0-based, as a string) -> problem note, shared via the sync script
+// the SITE's own fixed pumps written in the sheet's pumps box ("48-56-(3.7)-2 SPIDER" / "2SPIDER"): info only, not ours
+const isSiteP=s=>/spider|\(\s*\d+\.\d+\s*\)|\bs\.?\s*p\.?\s*\d/i.test(String(s||''));
 function pumpReq(s){             // "63, 59" / "63+59" / "2x63" / "63x2" -> [63,59] / [63,63]
+  // the site's list ("48-56-(3.7)-2 SPIDER"): only the MOBILE pumps (48, 56 …) come from ours, as usual;
+  // the stationary (S.P 3.7) and the spiders are the site's — only marked ready on the Upcoming card
+  if(isSiteP(s)) return siteItems(s).filter(x=>siteKind(x)==='mob').map(Number);
   const out=[]; String(s||'').split(/[,+&\/]|\s{2,}/).forEach(p=>{ p=p.trim(); if(!p) return;
     let m=p.match(/^(\d+)\s*[x×*]\s*(\d+)$/i);
     if(m){ const a=+m[1], b=+m[2]; const len=PUMPS.includes(a)?a:b, n=PUMPS.includes(a)?b:a; for(let i=0;i<Math.min(n,10);i++) out.push(len); return; }
@@ -2239,6 +2256,23 @@ function sentKey(g){ return 's'+(g.esId||g.key); }
 // Planned plants of a request, chosen in the app (Upcoming card chips), shared like the pump notes:
 // PUMPNOTE['p<request id>'] = "L1,V3". Shown light in the plan picture until the pour starts (then the real ones).
 function plantKey(g){ return 'p'+(g.esId||g.key); }
+// Site pumps: the client's own pumps fixed at the site — "Working Pumps / Spare Pumps" in the request message, or the
+// sheet's pumps box written like "48-56-(3.7)-2 SPIDER". INFO only: never in the Pumps page or our pump plan.
+// PUMPNOTE['Y<request id>'] = JSON {w: working, s: spare, ok: 1 = marked ready -> written in the WhatsApp plan photo}
+function siteKey(g){ return 'Y'+(g.esId||g.key); }
+function sitePumps(g){ let v=null; try{ v=JSON.parse(PUMPNOTE[siteKey(g)]||'null'); }catch(e){} v=v||{};
+  const w=String(v.w||'').trim()||(isSiteP(g.pumps)?String(g.pumps).trim():''), s=String(v.s||'').trim();
+  return (w||s)?{w,s,r:v.r||{}}:null; }   // r = {item: 1} the stationary / spider pumps marked ready
+// mob = a mobile pump of OURS (a length we have: 48, 56, 59, 63) · st = stationary "S.P 3.7" · sp = spider
+const siteKind=x=>/^\d{2}$/.test(x)&&PUMPS.includes(+x)?'mob':/^S\.P /.test(x)?'st':/spider/i.test(x)?'sp':'oth';
+// "Pump 56 & S.P.3.7 & Spider Pump" / "48-56-(3.7)-2SPIDER" -> ["56","S.P 3.7","Spider"] / ["48","56","S.P 3.7","2 SPIDER"]
+// (the number in brackets / after S.P = the stationary pump's number: 3.7, 3.8, 4.7 …)
+const siteItems=t=>String(t||'').split(/\s*[&,+]\s*|\s+and\s+|(?<=[\d)])\s*-\s*(?=[\d(A-Za-z])/i)
+  .map(x=>x.replace(/\bpumps?\b/ig,'').replace(/(\d)(spider)/i,'$1 $2').replace(/\s+/g,' ').trim())
+  .map(x=>{ const m=x.match(/^\(?\s*(?:s\.?\s*p\.?\s*)?(\d+\.\d+)\s*\)?$/i); return m?'S.P '+m[1]:x; }).filter(Boolean);
+async function siteReady(k,item){ let v={}; try{ v=JSON.parse(PUMPNOTE[k]||'{}'); }catch(e){} v.r=v.r||{};
+  if(v.r[item]) delete v.r[item]; else v.r[item]=1; v.by=ME||''; v.at=Date.now();
+  const s=JSON.stringify(v); PUMPNOTE[k]=s; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,s); }
 // planned plants of a request; '=same' = "Same working plants": whatever the request it follows (same client +
 // element before it, or its "after" link) is ACTUALLY loading from now — follows it by itself as that changes
 const SAME_PL='=same';
@@ -3654,10 +3688,16 @@ function renderUpcoming(){
         ${p.tem?('<span class="um">Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b></span><br>'):''}
         <span class="um">Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b></span>
         ${p.mix?('<br><span class="um">Grade: <b>'+esc(p.mix)+'</b></span>'):''}
-      </div>${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
+      </div>${(()=>{ const sp=sitePumps(p); if(!sp) return '';   // 🏗 the request's pump list: mobile = ours (pump plan), stationary / spider = tap when ready
+        const chips=t=>siteItems(t).map(x=>{ const kd=siteKind(x), on=!!sp.r[x];
+          return kd==='mob'?`<span class="uc-sc mob" title="A mobile pump — taken from our pumps as usual">🚚 ${esc(x)}</span>`
+            :`<button type="button" class="uc-sc${on?' on':''}" data-k="${esc(siteKey(p))}" data-i="${esc(x)}" title="Tap when it is ready — then it goes in the WhatsApp photo">${on?'✓ ':''}${kd==='st'?'🏗 ':kd==='sp'?'🕷 ':''}${esc(x)}</button>`; }).join('');
+        return `<div class="uc-site"><div class="uc-site-h">Pumps on this request <small>🚚 ours · 🏗 stationary · 🕷 spider — tap when ready</small></div>
+          ${sp.w?`<div class="uc-site-l"><span class="uc-site-t">Working</span>${chips(sp.w)}</div>`:''}${sp.s?`<div class="uc-site-l"><span class="uc-site-t">Spare</span>${chips(sp.s)}</div>`:''}</div>`; })()}${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
     </div>`; }).join('')+'</div>';
   // app requests: delete / merge with the sheet copy / keep both
   const A=el('upcomingArea');
+  A.querySelectorAll('button.uc-sc').forEach(b=>b.addEventListener('click',()=>siteReady(b.dataset.k,b.dataset.i)));
   A.querySelectorAll('.uc-edit').forEach(b=>b.addEventListener('click',()=>{ if(window.openReqForm) window.openReqForm({edit:b.dataset.id}); }));
   A.querySelectorAll('.uc-del:not(.uc-edit)').forEach(b=>b.addEventListener('click',async()=>{ const id=b.dataset.id;
     if(!confirm('Delete this request added in the app?')) return;
@@ -4760,7 +4800,11 @@ function planPhotoRows(){
     return [...s].sort().join(', '); };
   // Working Pumps: the lengths of the pumps the pour got ("63 (x2), 59"); not started / none free -> what it asked for
   const PP=pumpPlan(now).byPour;
-  const pumpsOf=g=>{ const a=g.trucks>0?PP.get(g):null; const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps); return pumpLabel(lens); };
+  const pumpsOf=g=>{ const a=g.trucks>0?PP.get(g):null; const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps);
+    // + the site's own working pumps, once marked ready on the Upcoming card ("63, Site: 56, S.P 3.7, Spider")
+    const sp=sitePumps(g), si=sp?siteItems(sp.w).filter(x=>siteKind(x)!=='mob'&&sp.r[x]):[];   // only the ones marked ready
+    // written like the sheet: "48-56-(3.7)-2 SPIDER" (the photo draws the commas as "-")
+    return [pumpLabel(lens)].concat(si.map(x=>x.replace(/^S\.P (\S+)$/,'($1)'))).filter(Boolean).join(', '); };
   const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
     qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g),
     // a request waiting behind its chain sibling (same client + element) gets no time of its own
@@ -4811,7 +4855,8 @@ function planPhotoRows(){
 function drawPlanPhoto(rows, at){
   rows=rows||planPhotoRows(); at=at||Date.now();
   const S=2, W=1500, PAD=40, HEAD=150, TH=64, RH=58;
-  const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305],['Working\nPumps',170]];
+  // the Working Pumps column grows when a row carries the site's own pumps ("Site: …")
+  const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305],['Working\nPumps',rows.some(r=>/spider|\(\d+\.\d+\)/i.test(r.pumps||''))?250:170]];
   const tableW=cols.reduce((s,c)=>s+c[1],0), H=HEAD+TH+Math.max(rows.length,1)*RH+PAD;
   // planned times are written OUTSIDE the table, left of their row (like on the paper) — margin only when any
   const BR=rows.some(r=>r.grp)?34:0;                       // room for the bracket arrows of pours that follow each other
@@ -4847,7 +4892,8 @@ function drawPlanPhoto(rows, at){
   // a "L1, L2, V3" / "48, (63)⁵" list, centred; strike = a red "/" over EACH item (finished pour: none of them is on it any more)
   const drawList=(s,xc,yc,font,strike)=>{
     const fs=parseInt(font.match(/(\d+)px/)[1]);
-    const pieces=s.split(/(,\s*)/).filter(p=>p!=='').map(p=>({p, sep:/^,\s*$/.test(p), segs:richSegs(p,font)}));
+    // between the items a "-" (user's choice, like the sheet: "L1-L2-V3", "63-59")
+    const pieces=s.split(/(,\s*)/).filter(p=>p!=='').map(p=>{ const sep=/^,\s*$/.test(p); return {p, sep, segs:richSegs(sep?'-':p,font)}; });
     pieces.forEach(q=>q.w=q.segs.reduce((a,g)=>a+g.w,0));
     let xx=xc-pieces.reduce((a,q)=>a+q.w,0)/2; x.textAlign='left';
     pieces.forEach(q=>{ const x0=xx;
@@ -4882,8 +4928,8 @@ function drawPlanPhoto(rows, at){
       if(k>=8 && x.measureText(s).width>w-14){         // plants / pumps lists: break after a comma onto a 2nd line
         const f2='500 18px Arial';
         const parts=s.split(', '), ls=['']; x.font=f2;
-        parts.forEach((p,j)=>{ const t=ls[ls.length-1]?ls[ls.length-1]+', '+p:p;
-          if(ls[ls.length-1] && x.measureText(t+(j<parts.length-1?',':'')).width>w-14) { ls[ls.length-1]+=','; ls.push(p); } else ls[ls.length-1]=t; });
+        parts.forEach((p,j)=>{ const t=ls[ls.length-1]?ls[ls.length-1]+'-'+p:p;
+          if(ls[ls.length-1] && x.measureText(t+(j<parts.length-1?'-':'')).width>w-14) { ls[ls.length-1]+=','; ls.push(p); } else ls[ls.length-1]=ls[ls.length-1]?ls[ls.length-1]+', '+p:p; });
         const two=ls.length>2?[ls[0],ls.slice(1).join(' ')]:ls;
         two.forEach((l,j)=>drawList(l,cx+w/2,y+RH/2+1+(j-(two.length-1)/2)*21,f2,r.finished));
       } else if(k>=8) drawList(s,cx+w/2,y+RH/2+1,font,r.finished);
@@ -4928,7 +4974,8 @@ async function planPhoto(){
     if(pre&&pre.edit){ try{ er=JSON.parse(PUMPNOTE['q'+pre.edit]); editId=pre.edit; }catch(e){} }
     if(er){ const S=(id,v)=>{ el(id).value=v==null?'':String(v); };
       S('rqDate',er.date); S('rqTime',er.time); S('rqClient',er.client); S('rqCode',er.code); S('rqQty',er.qty); S('rqRate',er.rate||'');
-      S('rqSc',er.sc); S('rqTem',er.tem); S('rqEs',er.es); pumps=String(er.pumps||'').split(/[-,\s]+/).map(Number).filter(Boolean); showP(); }
+      S('rqSc',er.sc); S('rqTem',er.tem); S('rqEs',er.es); pumps=String(er.pumps||'').split(/[-,\s]+/).map(Number).filter(Boolean); showP();
+      let sp={}; try{ sp=JSON.parse(PUMPNOTE['Y'+appEs(Object.assign({},er,{id:editId}))]||'{}'); }catch(e){} S('rqSpW',sp.w); S('rqSpS',sp.s); }
     el('rqTitle').textContent=editId?'✎ Edit request':forReq?'✎ Request for these trucks':'➕ New request';
     el('rqFor').hidden=el('rqAttachL').hidden=!forReq;
     if(forReq){
@@ -4955,6 +5002,12 @@ async function planPhoto(){
     const k=forReq.kind==='noes'?forReq.key:esFixKey(forReq.es,forReq.dk);
     if(forReq.kind==='es'&&target===forReq.es) return;   // the new request carries that ES itself: nothing to attach
     PUMPNOTE[k]=target; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,target); };
+  // 🏗 site pumps of a saved request -> PUMPNOTE['Y<its id>'] (every device); unchanged text keeps its "ready" mark
+  const saveSite=async(id,r,w,s)=>{ w=String(w||'').trim(); s=String(s||'').trim();
+    const k='Y'+appEs(Object.assign({},r,{id})); let old={}; try{ old=JSON.parse(PUMPNOTE[k]||'{}'); }catch(e){}
+    if(!w&&!s){ if(old.w||old.s){ delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); await syncPush('pump',k,''); } return; }
+    if(old.w===w&&old.s===s) return;
+    const v=JSON.stringify({w,s,ok:0}); PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,v); };
   el('reqClose').addEventListener('click',close); el('reqCancel').addEventListener('click',close);
   M.addEventListener('click',e=>{ if(e.target===M) close(); });
   el('rqPumpBtns').addEventListener('click',e=>{ const b=e.target.closest('.rq-pb'); if(!b) return; pumps.push(+b.dataset.l); showP(); });
@@ -4975,7 +5028,7 @@ async function planPhoto(){
     const M=T.split(/\r?\n/).filter(l=>!/[А-Яа-яЁё]/.test(l)).join('\n');
     const gm=re=>{ const m=M.match(re); return m?m[1].trim():''; };
     // first line = contractor, sometimes with the ES after it ("HAC PS 45062")
-    let first=M.split(/\r?\n/).map(s=>s.trim()).find(Boolean)||'';
+    let first=M.split(/\r?\n/).map(s=>s.trim()).find(s=>s&&!/^\d{1,2}(?::\d{2})?\s*(?:AM|PM)?$/i.test(s))||'';   // a time line on top ("7:00PM") is not the contractor
     first=first.replace(/[\s.]*\d*\s*REQ(?:UEST)?S?\b.*$/i,'').replace(/[.\s]+$/,'');   // "NIKIMT..2REQ" -> "NIKIMT"
     const fe=first.match(/^(.*?)[\s#:-]*(\d{5})$/); if(fe&&fe[1]&&!/\d{2}[A-Z]{3}/i.test(fe[1])) first=fe[1].trim();
     // ES: "№45014" (the page) / "ES 45014" / "HAC PS 45062" / "11UKT(45292&45294)" — every 5-digit number of the
@@ -5014,18 +5067,29 @@ async function planPhoto(){
     const es=el('rqEs').value.trim().split(/[\s,&+/]+/)[0];
     if(es && !el('rqCode').value){ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===es), nm=pr?{c:pr.client,k:pr.code}:esName(es);
       if(nm&&nm.k) set('rqCode', nm.k, 'Code (from ES)'); }
+    // the SITE's own pumps: the lines under "Working Pumps" / "Spare Pumps" -> info boxes, never our pumps
+    // ("Working Pumps / Pump 56 & S.P.3.7 & Spider Pump / Spare Pumps / Pump 48 & Spider Pump")
+    const spW=[], spS=[], keepL=[]; let sec=null;
+    M.split(/\r?\n/).forEach(l=>{ const t=l.trim(), h=t.match(/^(working|spare)\s*pumps?\s*[:\-]?\s*(.*)$/i);
+      if(h){ sec=h[1].toLowerCase(); if(h[2]) (sec==='spare'?spS:spW).push(h[2]); return; }
+      if(sec && t && /pump|spider|s\.?\s*p\.?\s*\d|\(\s*\d+(?:\.\d+)?\s*\)|^\d{2}\b/i.test(t)){ (sec==='spare'?spS:spW).push(t); return; }
+      sec=null; keepL.push(l); });
+    if(spW.length||spS.length){ el('rqSpW').value=spW.join(' & '); el('rqSpS').value=spS.join(' & '); got.push('Site pumps'); }
+    const MP=keepL.join('\n');
     // pumps: "one pump 63" / "2 pumps 63" / "pump 63-59" / "4(63)+(56)+(59)"
     const W={one:1,two:2,three:3,four:4,a:1,single:1};
     let pm=[];
-    const br=M.split(/\r?\n/).find(l=>/^\s*(\d\s*)?\(\s*\d{2}\s*\)(\s*\+\s*(\d\s*)?\(\s*\d{2}\s*\))*\s*$/.test(l));
+    const br=MP.split(/\r?\n/).find(l=>/^\s*(\d\s*)?\(\s*\d{2}\s*\)(\s*\+\s*(\d\s*)?\(\s*\d{2}\s*\))*\s*$/.test(l));
     if(br) pm=[...br.matchAll(/(\d)?\s*\(\s*(\d{2})\s*\)/g)].flatMap(m=>Array(Math.min(+(m[1]||1),6)).fill(+m[2]));
     // "2PUMPS(63)" / "2 pumps (63)+(56)" / "pump(56)"
-    if(!pm.length){ const pl=M.split(/\r?\n/).find(l=>/pumps?\s*\(\s*\d{2}\s*\)/i.test(l));
+    if(!pm.length){ const pl=MP.split(/\r?\n/).find(l=>/pumps?\s*\(\s*\d{2}\s*\)/i.test(l));
       if(pl) pm=[...pl.matchAll(/(?:\b(\d|one|two|three|four|a)\s*)?(?:pumps?\s*)?\(\s*(\d{2})\s*\)/gi)]
         .flatMap(m=>Array(Math.min(W[String(m[1]||'').toLowerCase()]||+m[1]||1,6)).fill(+m[2])); }
-    if(!pm.length) pm=[...M.matchAll(/\b(one|two|three|four|a|single|\d)\s+pumps?\s*(?:of\s*)?(\d{2})\b/gi)].flatMap(m=>{ const k=W[m[1].toLowerCase()]||+m[1]||1; return Array(Math.min(k,6)).fill(+m[2]); });
-    if(!pm.length){ const m=M.match(/\bpumps?\s*[:.]?\s*(\d{2}(?:\s*[-+,&]\s*\d{2})*)/i); if(m) pm=m[1].split(/[-+,&\s]+/).map(Number).filter(Boolean); }
+    if(!pm.length) pm=[...MP.matchAll(/\b(one|two|three|four|a|single|\d)\s+pumps?\s*(?:of\s*)?(\d{2})\b/gi)].flatMap(m=>{ const k=W[m[1].toLowerCase()]||+m[1]||1; return Array(Math.min(k,6)).fill(+m[2]); });
+    if(!pm.length){ const m=MP.match(/\bpumps?\s*[:.]?\s*(\d{2}(?:\s*[-+,&]\s*\d{2})*)/i); if(m) pm=m[1].split(/[-+,&\s]+/).map(Number).filter(Boolean); }
     pm=pm.filter(L=>PUMPS.includes(L));
+    // no pumps of ours written apart: the MOBILE pumps of the site lists are ours (Working + Spare), as usual
+    if(!pm.length) pm=siteItems(spW.concat(spS).join(' & ')).filter(x=>siteKind(x)==='mob').map(Number);
     if(pm.length){ pumps=pm; showP(); got.push('Pumps'); }
     const nReq=Math.max(esAll.length, qtyL.length);
     el('rqFilled').innerHTML=got.length?`✓ Filled: ${got.map(esc).join(' · ')}${el('rqCode').value?'':' — <b>write the Code</b>'}`:'';
@@ -5036,7 +5100,7 @@ async function planPhoto(){
     drawTabs();
   };
   // ---- request tabs (one message, several requests) ----
-  const RQ_F=['rqDate','rqTime','rqClient','rqCode','rqQty','rqRate','rqSc','rqTem','rqEs'];
+  const RQ_F=['rqDate','rqTime','rqClient','rqCode','rqQty','rqRate','rqSc','rqTem','rqEs','rqSpW','rqSpS'];
   let rqTabs=null, rqTab=0;
   function snapForm(){ const o={}; RQ_F.forEach(id=>o[id]=el(id).value); o.pumps=pumps.slice(); return o; }
   function loadForm(o){ RQ_F.forEach(id=>el(id).value=o[id]==null?'':o[id]); pumps=(o.pumps||[]).slice(); showP(); }
@@ -5067,6 +5131,7 @@ async function planPhoto(){
       stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
       if(L.some(r=>!inDateFilter(r.date))) alert('Saved. Some are dated outside the From/To dates — change them to see those in Upcoming.');
       for(const [k,val] of saved) await syncPush('pump',k,val);
+      for(let i=0;i<saved.length;i++) await saveSite(saved[i][0].slice(1), L[i], rqTabs[i].rqSpW, rqTabs[i].rqSpS);
       if(forReq){ const [k0,v0]=saved[0], r0=JSON.parse(v0); await attachTo(r0.es?String(r0.es).trim():'APP-'+k0.slice(1)); }
       return; }
     const qs=v('rqQty').split(/\s*[+&/]\s*|\s+and\s+/i).map(num).filter(x=>x>0);
@@ -5096,12 +5161,13 @@ async function planPhoto(){
       const r=Object.assign({},list[0],{by:old.by||base.by, at:old.at||base.at, keep:old.keep, editedBy:ME||'', editedAt:Date.now()}), val=JSON.stringify(r);
       PUMPNOTE[k]=val; stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
       if(hidden) alert(`Saved. It is dated ${base.date} — change the From/To dates to see it in Upcoming.`);
-      await syncPush('pump',k,val); return; }
+      await syncPush('pump',k,val); await saveSite(editId, r, v('rqSpW'), v('rqSpS')); return; }
     const saved=list.map((r,i)=>{ const id=Date.now().toString(36)+i+Math.random().toString(36).slice(2,5); return ['q'+id, JSON.stringify(r)]; });
     for(const [k,val] of saved) PUMPNOTE[k]=val;
     stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
     if(hidden) alert(`Saved. It is dated ${base.date} — change the From/To dates to see it in Upcoming.`);
     for(const [k,val] of saved) await syncPush('pump',k,val);
+    for(let i=0;i<saved.length;i++) await saveSite(saved[i][0].slice(1), list[i], v('rqSpW'), v('rqSpS'));
     // opened for trucks with no ES / an unknown ES: they now count on the new request
     if(forReq){ const [k0,v0]=saved[0], r0=JSON.parse(v0); await attachTo(r0.es?String(r0.es).trim():'APP-'+k0.slice(1)); } });
 }
