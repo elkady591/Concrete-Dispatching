@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261022-000002">
+<meta name="app-build" content="20261022-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3657,10 +3657,15 @@ function renderUpcoming(){
     const warns=on.map(st=>{ const b=plantBusy(st,at); return b&&!u.includes(b.g)&&b.g!==pred?`⚠ <b>${esc(st)}</b> busy on ${esc((b.g.client?b.g.client+' ':'')+b.g.elem)}${b.till?` till ≈${timeShort(b.till)}`:''}`:''; }).filter(Boolean);
     const sameBtn=pred?`<button class="uc-pl uc-plsame${same?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-same="1" title="Use the plants ${esc(site(pred))} is working with — follows them by itself">${same?'✓ ':''}Same working plants</button>`:'';
     return `<div class="uc-plants">🏭 ${sameBtn}${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="Planned plant">${esc(st)}</button>`).join('')}</div>${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
-  const sendChips=p=>{ const need=pumpReq(p.pumps); if(!need.length) return '';
+  // + right after our pumps: the site's stationary (🏗 S.P 3.7) and spider (🕷) pumps — tap when ready (-> WhatsApp photo)
+  const siteChips=p=>{ const sp=sitePumps(p); if(!sp) return '';
+    const ch=(t,spare)=>siteItems(t).filter(x=>siteKind(x)!=='mob').map(x=>{ const kd=siteKind(x), on=!!sp.r[x];
+      return `<button type="button" class="uc-sc${on?' on':''}" data-k="${esc(siteKey(p))}" data-i="${esc(x)}" title="${spare?'Spare · ':''}Tap when it is ready — then it goes in the WhatsApp photo">${on?'✓ ':''}${kd==='st'?'🏗 ':kd==='sp'?'🕷 ':''}${esc(x)}${spare?' <small>spare</small>':''}</button>`; }).join('');
+    return ch(sp.w,false)+(sp.s?ch(sp.s,true):''); };
+  const sendChips=p=>{ const need=pumpReq(p.pumps), sc=siteChips(p); if(!need.length&&!sc) return '';
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
-      return `<button class="uc-snd${on?' on':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}" title="${on?'Sent — tap to undo':'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}</button>`; }).join('')}</div>`; };
+      return `<button class="uc-snd${on?' on':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}" title="${on?'Sent — tap to undo':'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}</button>`; }).join('')}${sc}</div>`; };
   // chains (same client + element, poured one after the other) become ONE card; its place = its first request
   const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
   // carries on with the pumps of the pour before it (same element, or an "after" link asking for the same pumps)
@@ -3691,12 +3696,7 @@ function renderUpcoming(){
         ${p.tem?('<span class="um">Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b></span><br>'):''}
         <span class="um">Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b></span>
         ${p.mix?('<br><span class="um">Grade: <b>'+esc(p.mix)+'</b></span>'):''}
-      </div>${(()=>{ const sp=sitePumps(p); if(!sp) return '';   // 🏗 the request's pump list: mobile = ours (pump plan), stationary / spider = tap when ready
-        const chips=t=>siteItems(t).map(x=>{ const kd=siteKind(x), on=!!sp.r[x];
-          return kd==='mob'?`<span class="uc-sc mob" title="A mobile pump — taken from our pumps as usual">🚚 ${esc(x)}</span>`
-            :`<button type="button" class="uc-sc${on?' on':''}" data-k="${esc(siteKey(p))}" data-i="${esc(x)}" title="Tap when it is ready — then it goes in the WhatsApp photo">${on?'✓ ':''}${kd==='st'?'🏗 ':kd==='sp'?'🕷 ':''}${esc(x)}</button>`; }).join('');
-        return `<div class="uc-site"><div class="uc-site-h">Pumps on this request <small>🚚 ours · 🏗 stationary · 🕷 spider — tap when ready</small></div>
-          ${sp.w?`<div class="uc-site-l"><span class="uc-site-t">Working</span>${chips(sp.w)}</div>`:''}${sp.s?`<div class="uc-site-l"><span class="uc-site-t">Spare</span>${chips(sp.s)}</div>`:''}</div>`; })()}${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+      </div>${plantChips(u)}${!pc&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
           // the ones after it with NO pumps written start without them; the pumps go washing once #1 finishes
           if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} without pumps — they wash after #1 finishes</div>`;
           if(rest.every(g=>pumpReq(g.pumps).slice().sort().join()===pumpReq(p.pumps).slice().sort().join())) return `<div class="uc-same">${n}${u.length>2?' continue':' continues'} with the same pumps</div>`;
