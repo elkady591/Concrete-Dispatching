@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261022-000001">
+<meta name="app-build" content="20261022-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1830,7 +1830,10 @@ function buildPours(full, now){
       p.carried=(p.carried||0)+(l.q||0); p.carriedTrucks=(p.carriedTrucks||0)+1; if(!p.carriedFrom||l.prev<p.carriedFrom)p.carriedFrom=l.prev; }
     enrichGroup(p, now);
     p.mix=row.mix; p.client=row.client;   // keep the plan row's grade/client (planLookup can't find the starred code)
-    if(row.sc) p.sc=row.sc; if(row.tem) p.tem=row.tem; if(row.pumps) p.pumps=row.pumps;   // …and its own selection card / temperature
+    if(row.sc) p.sc=row.sc; if(row.tem) p.tem=row.tem;   // …and its own selection card / temperature
+    // …and its OWN pumps: a request that follows another with no pumps written starts without them (the first one's
+    // pumps go washing when it finishes) — it must not take the first one's pumps from the element's merged plan
+    p.pumps=row.pumps||'';
     if(row.app) p.app=row.app;                                                              // added in the app (not in the sheet yet)
     return p;
   }
@@ -3693,7 +3696,11 @@ function renderUpcoming(){
           return kd==='mob'?`<span class="uc-sc mob" title="A mobile pump — taken from our pumps as usual">🚚 ${esc(x)}</span>`
             :`<button type="button" class="uc-sc${on?' on':''}" data-k="${esc(siteKey(p))}" data-i="${esc(x)}" title="Tap when it is ready — then it goes in the WhatsApp photo">${on?'✓ ':''}${kd==='st'?'🏗 ':kd==='sp'?'🕷 ':''}${esc(x)}</button>`; }).join('');
         return `<div class="uc-site"><div class="uc-site-h">Pumps on this request <small>🚚 ours · 🏗 stationary · 🕷 spider — tap when ready</small></div>
-          ${sp.w?`<div class="uc-site-l"><span class="uc-site-t">Working</span>${chips(sp.w)}</div>`:''}${sp.s?`<div class="uc-site-l"><span class="uc-site-t">Spare</span>${chips(sp.s)}</div>`:''}</div>`; })()}${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?`<div class="uc-same">#2${u.length>2?'–#'+u.length+' continue':' continues'} with the same pumps</div>`:''}</div>`:''}
+          ${sp.w?`<div class="uc-site-l"><span class="uc-site-t">Working</span>${chips(sp.w)}</div>`:''}${sp.s?`<div class="uc-site-l"><span class="uc-site-t">Spare</span>${chips(sp.s)}</div>`:''}</div>`; })()}${plantChips(u)}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+          // the ones after it with NO pumps written start without them; the pumps go washing once #1 finishes
+          if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} without pumps — they wash after #1 finishes</div>`;
+          if(rest.every(g=>pumpReq(g.pumps).slice().sort().join()===pumpReq(p.pumps).slice().sort().join())) return `<div class="uc-same">${n}${u.length>2?' continue':' continues'} with the same pumps</div>`;
+          return ''; })():''}</div>`:''}
     </div>`; }).join('')+'</div>';
   // app requests: delete / merge with the sheet copy / keep both
   const A=el('upcomingArea');
