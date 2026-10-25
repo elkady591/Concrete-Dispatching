@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261025-000004">
+<meta name="app-build" content="20261025-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3726,7 +3726,7 @@ function renderUpcoming(){
         ${p.tem?('<span class="um">Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b></span><br>'):''}
         <span class="um">Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b></span>
         ${p.mix?('<br><span class="um">Grade: <b>'+esc(p.mix)+'</b></span>'):''}
-      </div>${plantChips(u)}${!pc&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?(siteChips(p)?`<div class="uc-sends">${siteChips(p)}</div>`:''):sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+      </div>${plantChips(u)}${!pc&&!carriesOn(p)&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
           // the ones after it with NO pumps written start without them; the pumps go washing once #1 finishes
           if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} without pumps — they wash after #1 finishes</div>`;
           if(rest.every(g=>pumpReq(g.pumps).slice().sort().join()===pumpReq(p.pumps).slice().sort().join())) return `<div class="uc-same">${n}${u.length>2?' continue':' continues'} with the same pumps</div>`;
