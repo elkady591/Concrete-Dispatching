@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261025-000005">
+<meta name="app-build" content="20261025-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -921,6 +921,8 @@
   .su-n{font-weight:800;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .su-n span{color:var(--muted);font-weight:600}
   .su-q{font:800 17px var(--mono);text-align:end} .su-q small{font-size:11px;color:var(--faint)}
   .su-m{font-size:12px;color:var(--muted);min-width:0} .su-p{justify-self:end;display:flex;gap:3px}
+  /* phone: the plants get their own line under the details (5 plants beside them squeezed the name / rate to a few letters) */
+  @media(max-width:560px){ .su-m{grid-column:2/-1} .su-p{grid-column:2/-1;justify-self:start;flex-wrap:wrap;margin-top:4px} }
   .su-p i{font:700 11px var(--mono);font-style:normal;border-radius:8px;padding:2px 8px;background:rgba(167,139,250,.2);color:#c4b5fd}
   .su-late{font-size:11px;font-weight:800;color:#fb923c;background:rgba(251,146,60,.14);border-radius:99px;padding:1px 8px}
   [data-theme="3"] .su{background:#f7f8fc} [data-theme="3"] .su-p i{background:#ede9fe;color:#5b21b6}
