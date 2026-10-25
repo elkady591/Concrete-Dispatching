@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261025-000006">
+<meta name="app-build" content="20261025-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -237,6 +237,9 @@
   .ap-grp .t{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
   .ap-grp .big{font-family:var(--mono);font-size:24px;font-weight:800;line-height:1.15} .ap-grp .big small{font-size:13px;color:var(--muted)}
   .ap-grp .sub{font-size:12px;color:var(--muted);margin-top:3px} .ap-grp .sub b{color:var(--ink);font-family:var(--mono);white-space:nowrap}
+  /* finish on another day: the date on its own line above the time (it ran out of the card) */
+  .ap-grp .big .s-day{display:block;font-size:13px;font-weight:700;letter-spacing:.5px;opacity:.85;line-height:1.2}
+  .ap-grp .sub .s-day{margin-inline-end:5px}
   .ap-pill{display:inline-block;font-size:11px;font-weight:800;border-radius:99px;padding:1px 8px;margin-top:5px}
   .ap-pill.ok{color:var(--green);background:rgba(52,211,153,.14)} .ap-pill.bad{color:var(--rose);background:rgba(251,113,133,.14)}
   .ap-hourly{margin-top:8px}
