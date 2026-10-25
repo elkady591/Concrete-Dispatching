@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261025-000007">
+<meta name="app-build" content="20261025-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2067,6 +2067,9 @@ function build(matrix, colHeader){
 const barClass=s=>s==='done'?'g':s==='active'?'b':s==='over'?'v':s==='closed'?'n':'a';
 const stLabel={done:'Completed',active:'Active',wait:'Waiting',none:'Set target',over:'Over',closed:'Closed'};
 function timeShort(t){ if(t==null)return'—'; const d=new Date(t); let h=d.getHours();const m=pad(d.getMinutes());const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${m} ${ap}`; }
+// a pour that all 5 stations work on is written "All Plants" instead of "L1, L2, V3, V4, V5" (cards + WhatsApp photo)
+const ALL_PLANTS=['L1','L2','V3','V4','V5'];
+function plantsLabel(s){ const t=String(s||'').split(/[,\s-]+/).filter(Boolean); return ALL_PLANTS.every(p=>t.includes(p))?'All Plants':(s||''); }
 // a finish time; one that falls on another day than today carries its date ("14-OCT 2:40 AM")
 const MON3=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function finishDay(t){ if(t==null)return''; const d=new Date(t), n=new Date();   // '' when it is today
@@ -2973,11 +2976,11 @@ function renderSummary(){
         <div class="apr-row ap-tog" title="Tap to open the details"><span class="apr-pc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</span>
           <span class="su-n">${g.client?esc(g.client)+' ':''}<span>${esc(g.elem||'—')}</span></span>
           <span class="su-q">${fmt(g.delivered,0)}<small> / ${g.required!=null?fmt(g.required,0):'—'} m³</small></span>
-          <span class="su-m">${parts}</span><span class="su-p">${String(g.plant||'').split(/[,\s]+/).filter(Boolean).map(x=>`<i>${esc(x)}</i>`).join('')}</span></div>
+          <span class="su-m">${parts}</span><span class="su-p">${(plantsLabel(g.plant)==='All Plants'?['All Plants']:String(g.plant||'').split(/[,\s]+/).filter(Boolean)).map(x=>`<i>${esc(x)}</i>`).join('')}</span></div>
         <div class="bar ap-bar ap-bar-s"><i class="${barClass(g.status)}" style="width:${pct}%"></i></div></div>`;
     }
     return `<div class="ap${isOpen?' open':''}${g.carried>0?' carry-row':''}" data-k="${encodeURIComponent(g.key)}" style="--ec:${EL_EDGE[i%EL_EDGE.length]}">
-      <div class="ap-hd ap-tog" title="Tap to open / close the details">${g.client?`<span class="ap-cl">${esc(g.client)}</span>`:''}<span class="ap-el">${esc(g.elem||'—')}</span><span class="ap-st">${esc(g.plant||'')}</span>
+      <div class="ap-hd ap-tog" title="Tap to open / close the details">${g.client?`<span class="ap-cl">${esc(g.client)}</span>`:''}<span class="ap-el">${esc(g.elem||'—')}</span><span class="ap-st">${esc(plantsLabel(g.plant))}</span>
         <span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span>${stopTag}${carryBadge(g,true)}<span class="ap-last">last truck ${timeShort(g.endMax)}</span><span class="ap-chev">${isOpen?'▴':'▾'}</span></div>
       ${!isOpen?`<div class="ap-sum">
         <span class="ap-s"><b style="color:var(--cyan)">${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</span>
@@ -3506,7 +3509,7 @@ function renderAllPours(){
     rows+=`<tr${g.carried>0?' class="carry-row"':''}>
       <td style="text-align:center"><input type="checkbox" class="done-chk" data-e="${encodeURIComponent(doneKey(g))}" ${DONE[doneKey(g)]?'checked':''} title="Mark this pour completed"></td>
       <td class="num muted" style="white-space:nowrap">${dateCell(g)}</td>
-      <td class="pour-name">${g.plant||'<span class="muted">—</span>'}</td>
+      <td class="pour-name">${plantsLabel(g.plant)||'<span class="muted">—</span>'}</td>
       <td>${g.elem?g.elem:'<span class="muted">—</span>'}${carryBadge(g)}${(g.mix||g.client)?`<div class="pour-sub">${[g.mix,g.client].filter(Boolean).join(' · ')}</div>`:''}</td>
       ${fs?`<td class="num" style="font-weight:800;color:var(--cyan)">${fs.n}</td><td class="num" style="font-weight:800;color:var(--cyan)">${fmt(fs.q)}</td>`:''}
       <td class="num">${fmt(g.delivered)}</td>
@@ -3593,7 +3596,7 @@ function renderOrigActive(open){
   if(sp){
     const isActive=sp.status==='active';
     const bc=barClass(sp.status); const pct=sp.pct!=null?Math.min(100,sp.pct):0;
-    const opts=open.map(g=>`<option value="${encodeURIComponent(g.key)}" ${g.key===sp.key?'selected':''}>${g.elem||'—'}${g.plant?(' ('+g.plant+')'):''} · ${g.dk}</option>`).join('');
+    const opts=open.map(g=>`<option value="${encodeURIComponent(g.key)}" ${g.key===sp.key?'selected':''}>${g.elem||'—'}${g.plant?(' ('+plantsLabel(g.plant)+')'):''} · ${g.dk}</option>`).join('');
     const meta=[sp.mix&&('Grade '+sp.mix), sp.client, sp.sc&&('Card '+sp.sc), sp.pumps, sp.tem&&('TEM '+sp.tem)].filter(Boolean).join(' · ');
     const body = spotTab==='hourly' ? hourlyHtml(sp) : `
         <div class="spot-grid">
@@ -3636,7 +3639,7 @@ function renderOrigActive(open){
   el('activeList').innerHTML = list.length ? list.map(g=>{
     const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
     return `<div class="apy${g.carried>0?' carry-row':''}">
-      <div class="apy-el">${g.elem||'—'}<span class="p">${g.plant||''}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div class="apy-el">${g.elem||'—'}<span class="p">${plantsLabel(g.plant)}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
       <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
       <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc,0)+' m³/h':'—'}</div>
@@ -3784,7 +3787,7 @@ function buildReport(){
   let rows='';
   for(const g of open){
     rows+=`<tr>
-      <td>${g.elem||'—'}</td><td>${g.plant||'—'}</td><td>${g.mix||''}</td><td>${g.client||''}</td>
+      <td>${g.elem||'—'}</td><td>${plantsLabel(g.plant)||'—'}</td><td>${g.mix||''}</td><td>${g.client||''}</td>
       <td class="n">${g.required!=null?fmt(g.required):'—'}</td>
       <td class="n">${fmt(g.delivered)}</td>
       <td class="n">${g.remaining!=null?(g.remaining>0?fmt(g.remaining):'✓'):'—'}</td>
@@ -4840,7 +4843,7 @@ function planPhotoRows(){
   const tgt=g=>g.rateManual!=null?g.rateManual:g.planRate;
   const plantsOf=(g,recentOnly)=>{ const s=new Set();
     (g.loads||[]).forEach(l=>{ if(l.p && (!recentOnly || (l.t!=null && now-l.t<ACTIVE_WINDOW))) s.add(l.p); });
-    return [...s].sort().join(', '); };
+    return plantsLabel([...s].sort().join(', ')); };
   // Working Pumps: the lengths of the pumps the pour got ("63 (x2), 59"); not started / none free -> what it asked for
   const PP=pumpPlan(now).byPour;
   const pumpsOf=g=>{ const a=g.trucks>0?PP.get(g):null; const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps);
@@ -4881,7 +4884,7 @@ function planPhotoRows(){
   const base=fin.map(g=>({g,r:row(g,true,true,plantsOf(g,false))}))
     .concat(run.map(g=>({g,r:row(g,true,false,plantsOf(g,true))})),
       // not started: the plants planned in the app, drawn light (they become the real ones once it starts)
-      up.map(g=>{ const pl=planPlants(plantKey(g)).join(', '), r=row(g,false,false,pl); r.plPlan=!!pl; return {g,r}; }));
+      up.map(g=>{ const pl=plantsLabel(planPlants(plantKey(g)).join(', ')), r=row(g,false,false,pl); r.plPlan=!!pl; return {g,r}; }));
   // pours that follow each other (same client + element, or an "after" link) stay TOGETHER, in pouring order,
   // at the place of the first of them — drawn with a bracket arrow on the left like on the paper
   const LK=pourLinks(), par=new Map(), find=g=>{ while(par.get(g)!==g) g=par.get(g); return g; };
