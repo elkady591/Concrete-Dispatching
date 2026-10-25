@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261025-000003">
+<meta name="app-build" content="20261025-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -433,6 +433,7 @@
 
   /* Upcoming cards */
   .ucards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:12px}
+  .thn .ucards{grid-template-columns:repeat(auto-fill,minmax(min(100%,370px),1fr))}   /* themes 2 / 3: wider cards on a computer */
   @media (max-width:640px){ .ucards{grid-template-columns:1fr} }
   .ucard{border-radius:15px;padding:14px 15px;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);box-shadow:var(--shadow)}
   .ucard .uc-code{font-weight:800;font-size:16px;font-family:var(--mono);color:#c7cbff}
@@ -901,7 +902,11 @@
   .thn .ucard>.uc-code{grid-column:2;grid-row:1;font-family:var(--sans);font-size:15px;color:var(--ink)} .thn .uc-cl{color:var(--muted)}
   .thn .ucard>.uc-req{grid-column:3;grid-row:1;margin:0;font-size:17px;text-align:end}
   .thn .ucard>.uc-meta{grid-column:2/-1;grid-row:2;margin:0;font-size:12px;line-height:1.5}
-  .thn .uc-meta br{display:none} .thn .uc-meta .um{display:block;white-space:nowrap}
+  .thn .uc-meta br{display:none} .thn .uc-meta .um{display:block}
+  .thn .ucard>.uc-meta,.thn .ucard>.uc-code{min-width:0;overflow-wrap:anywhere}
+  /* the time column: never wider than this, its small lines ("after the 855 m³ (running)") wrap under the time */
+  .thn .ucard>.uc-time{max-width:122px} .thn .uc-time .uc-tm{white-space:nowrap} .thn .uc-time .uc-day{order:-1;letter-spacing:.5px;opacity:.85}
+  .thn .uc-time .uc-after,.thn .uc-time .uc-late{white-space:normal;line-height:1.3}
   .thn .uc-time .uc-exp,.thn .ucard>.uc-time>*:not(:first-child){font-size:11px}
   .thn .cl-more{display:block;text-align:center;margin-top:6px;padding:7px;border-radius:10px;border:1px dashed var(--line2);color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer}
   .st-sum,.st-chev{display:none}
@@ -2273,6 +2278,9 @@ function sitePumps(g){ let v=null; try{ v=JSON.parse(PUMPNOTE[siteKey(g)]||'null
   return (w||s)?{w,s,r:v.r||{}}:null; }   // r = {item: 1} the stationary / spider pumps marked ready
 // mob = a mobile pump of OURS (a length we have: 48, 56, 59, 63) · st = stationary "S.P 3.7" · sp = spider
 const siteKind=x=>/^\d{2}$/.test(x)&&PUMPS.includes(+x)?'mob':/^S\.P /.test(x)?'st':/spider/i.test(x)?'sp':'oth';
+// ALL the pumps of a request for a card line, written like the sheet: "(63)³-(4.1)-(4.3)-2 SPIDER" (ours + stationary + spiders)
+function allPumpsLabel(g,need){ const sp=sitePumps(g), si=sp?siteItems(sp.w).filter(x=>siteKind(x)!=='mob').map(x=>x.replace(/^S\.P (\S+)$/,'($1)')):[];
+  return [pumpLabel(need||pumpReq(g.pumps)).replace(/,\s*/g,'-')].concat(si).filter(Boolean).join('-'); }
 // "Pump 56 & S.P.3.7 & Spider Pump" / "48-56-(3.7)-2SPIDER" -> ["56","S.P 3.7","Spider"] / ["48","56","S.P 3.7","2 SPIDER"]
 // (the number in brackets / after S.P = the stationary pump's number: 3.7, 3.8, 4.7 …)
 const siteItems=t=>String(t||'').split(/\s*[&,+]\s*|\s+and\s+|(?<=[\d)])\s*-\s*(?=[\d(A-Za-z])/i)
@@ -2520,10 +2528,10 @@ function upcomingPumpCheck(now){
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
-    if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(pumpLabel(need))}</b> — setting up`}); continue; }
+    if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(allPumpsLabel(g,need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
-      out.set(g,{cls:'ok', html:sameOn?`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(pumpLabel(need))}</b>`
-                                     :`Pumps ready: <b>${esc(pumpLabel(need))}</b>`}); continue; }
+      out.set(g,{cls:'ok', html:sameOn?`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(allPumpsLabel(g,need))}</b>`
+                                     :`Pumps ready: <b>${esc(allPumpsLabel(g,need))}</b>`}); continue; }
     const byLen={}; res.forEach(r=>{ (byLen[r.len]=byLen[r.len]||[]).push(r); });
     const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok'||r.kind==='same'||r.kind==='sent').length, miss=rs.filter(r=>r.kind!=='ok'&&r.kind!=='same'&&r.kind!=='sent');
       if(!miss.length) return `${L} ✓`;
@@ -3699,7 +3707,8 @@ function renderUpcoming(){
   for(const p of sorted){ if(inUnit.has(p)) continue;
     const ch=CH.get(p), mem=ch?ch.members.filter(m=>m.trucks===0 && rest.includes(m)):[p];
     if(mem.length>1){ mem.forEach(m=>inUnit.add(m)); units.push(mem); } else { inUnit.add(p); units.push([p]); } }
-  const timeLine=(rt,late,sent,p)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">⏰ ${dayLbl(rt.at)}${rt.time}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span><span class="uc-after">expected start ≈ now</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(afterName(rt.after,p))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
+  // themes 2 / 3: the time on its own (big), the day ("26-OCT") small above it — so the time column stays narrow
+  const timeLine=(rt,late,sent,p)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">${THN?`<span class="uc-tm">⏰ ${rt.time}</span>${dayLbl(rt.at)?`<span class="uc-day">${dayLbl(rt.at).trim()}</span>`:''}`:`⏰ ${dayLbl(rt.at)}${rt.time}`}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span><span class="uc-after">expected start ≈ now</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(afterName(rt.after,p))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
   el('upcomingArea').innerHTML='<div class="ucards">'+units.map(u=>{ const p=u[0], pc=PC.get(p), rt=RT.get(p), sent=pumpSent(p);
     const late=rt&&!rt.est&&now>rt.at&&!sent.length?Math.round((now-rt.at)/60000):0;   // pumps on their way / waiting behind its chain = not late
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
@@ -3717,7 +3726,7 @@ function renderUpcoming(){
         ${p.tem?('<span class="um">Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b></span><br>'):''}
         <span class="um">Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b></span>
         ${p.mix?('<br><span class="um">Grade: <b>'+esc(p.mix)+'</b></span>'):''}
-      </div>${plantChips(u)}${!pc&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+      </div>${plantChips(u)}${!pc&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?(siteChips(p)?`<div class="uc-sends">${siteChips(p)}</div>`:''):sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
           // the ones after it with NO pumps written start without them; the pumps go washing once #1 finishes
           if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} without pumps — they wash after #1 finishes</div>`;
           if(rest.every(g=>pumpReq(g.pumps).slice().sort().join()===pumpReq(p.pumps).slice().sort().join())) return `<div class="uc-same">${n}${u.length>2?' continue':' continues'} with the same pumps</div>`;
