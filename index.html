@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261022-000003">
+<meta name="app-build" content="20261025-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -374,15 +374,17 @@
   .ck-tag.tk{color:var(--ink);font-family:var(--mono)}
   .ck-det{font-size:12.5px;color:var(--muted);line-height:1.45}
   .ck-det b{color:var(--ink)}
-  .ck-btns{display:flex;justify-content:flex-end;gap:6px}
+  .ck-btns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+  .ck-btns>button{flex:none;white-space:nowrap}   /* several buttons on a phone: wrap to a 2nd line instead of squeezing */
   .ck-btns .chk-skip,.ck-btns .chk-fix{margin-inline-start:0}
-  @media(max-width:640px){ .ck-list{grid-template-columns:1fr} }
+  @media(max-width:640px){ .ck-list{grid-template-columns:minmax(0,1fr)} }
   .chk-skip{margin-inline-start:auto;background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--ink);border-radius:99px;
     padding:2px 12px;font-size:11.5px;font-weight:700;cursor:pointer}
   .chk-skip:hover{background:rgba(255,255,255,.14)}
   .chk-fix{margin-inline-start:auto;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.5);color:var(--green);border-radius:99px;
     padding:2px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--mono)}
   .chk-fix+.chk-skip{margin-inline-start:6px}
+  .chk-fix.chk-sm{border-color:rgba(251,191,36,.55);background:rgba(251,191,36,.12);color:var(--amber);font-family:inherit}
   .chk-fix.chk-unfix{background:rgba(255,255,255,.06);border-color:var(--line2);color:var(--ink);font-family:inherit}
   .chk-row.skipped .tl-flag,.chk-row.skipped .chk-txt{opacity:.45}
   .chk-foot{padding-top:8px;border-top:1px solid var(--line);font-size:11.5px}
@@ -2659,7 +2661,9 @@ function renderTrucks(){
   const RMt=ruleMap(), tok=p=>{ const m=String(p||'').match(/^\s*([LV])\D*(\d)/i); return m?(m[1]+m[2]).toUpperCase():String(p||'').trim(); };
   const hm=s=>{ const t=parseTime(String(s||'')); return t==null?null:t; };
   const ruleFor=x=>{ if(String(x.es||'').trim()) return null; const T=tok(x.plant), dm=hm(x.dep);
-    const n=NOES.find(y=>y.plant===T&&String(y.truck)===String(x.truck)&&(dm==null||hm(String(y.dep).replace(/^.*\s(\d{1,2}:\d{2}).*$/,'$1'))===dm)&&RMt.has(noEsKey(y)));
+    const same=y=>y.plant===T&&String(y.truck)===String(x.truck)&&(dm==null||hm(String(y.dep).replace(/^.*\s(\d{1,2}:\d{2}).*$/,'$1'))===dm);
+    if(NOES.some(y=>same(y)&&PUMPNOTE[noEsKey(y)]===SM_MARK)) return 'Start mix';   // marked Start mix by hand (Data checks)
+    const n=NOES.find(y=>same(y)&&RMt.has(noEsKey(y)));
     if(!n) return null; const to=RMt.get(noEsKey(n)).to, rq=ruleReq(to); return (rq?((rq.client?rq.client+' ':'')+rq.code):to)+' 📌'; };
   const siteT=x=>ruleFor(x)||site(x.es,x.q);
   // the four numbers are buttons: each opens its own list (the lit one = the list on screen)
@@ -3141,13 +3145,15 @@ const esFixKey=(es,dk)=>'e'+es+'|'+dk;
 function applyEsFix(matrix){
   // trucks with NO ES that the user attached to a request in the app: PUMPNOTE['x<plant>|<truck>|<departure>'] = its ES
   const RM=ruleMap();   // + the trucks a station rule gives a request
-  const att=NOES.filter(x=>x.row&&(PUMPNOTE[noEsKey(x)]||RM.has(noEsKey(x)))).map(x=>{ const r=x.row.slice(); r[2]=PUMPNOTE[noEsKey(x)]||RM.get(noEsKey(x)).to; return r; });
+  const att=NOES.filter(x=>x.row&&PUMPNOTE[noEsKey(x)]!==SM_MARK&&(PUMPNOTE[noEsKey(x)]||RM.has(noEsKey(x)))).map(x=>{ const r=x.row.slice(); r[2]=PUMPNOTE[noEsKey(x)]||RM.get(noEsKey(x)).to; return r; });
   if(att.length) matrix=matrix.concat(att);
   if(!Object.keys(PUMPNOTE).some(k=>/^e\d/.test(k))) return matrix;
   return matrix.map(r=>{ const d=parseDate(r[0]), to=PUMPNOTE[esFixKey(String(r[2]||'').trim(), d?dateKey(d):'')];
     return to?[r[0],r[1],to,...r.slice(3)]:r; });
 }
 const noEsKey=x=>'x'+x.plant+'|'+x.truck+'|'+String(x.dep||'').trim();
+// a no-ES truck of 3 m³ or more that really WAS the Start mix: PUMPNOTE[noEsKey] = SM_MARK (Data checks "Start mix" button)
+const SM_MARK='=SM';
 /* ---------- station rules: "every truck from L2 with no ES goes to this request" (instead of one truck at a time) ----------
    PUMPNOTE['R|<station>|<from ms>'] = JSON {to: ES / "APP-…" / plan code, until: ms (0 = open), qty: stop when the request's m³ is reached}.
    A truck the user attached by hand (x-key) keeps that; Start mix (under 3 m³) is never taken; trucks WITH an ES are never touched. */
@@ -3239,6 +3245,11 @@ function collectChecks(pours){
   for(const x of NOES){ const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
     if(x.q<DP_START_MIX) continue;   // no ES and under 3 m³ = Start mix (the priming batch), not a missing ES
     const tm=parseTime(x.dep), at=tm!=null?ts(d,tm):null, xk=noEsKey(x);
+    if(PUMPNOTE[xk]===SM_MARK){   // marked Start mix by hand (Undo under "Show skipped")
+      items.push({id:'noesf|'+xk, ids:[], skipped:true, fixed:{key:xk}, kind:'Attached', cls:'',
+        txt:`${esc(x.plant)} · TM ${esc(x.truck)} → Start mix`,
+        ui:{sev:'ok', icon:'✓', head:'Marked Start mix', at, tags:[CT(esc(x.plant),'st'),CT('TM '+esc(x.truck),'tk'),CT(fmt(x.q)+' m³')],
+          det:'Counted as Start mix, not as a missing ES'}}); continue; }
     if(PUMPNOTE[xk]){   // already attached to a request in the app (Undo under "Show skipped")
       items.push({id:'noesf|'+xk, ids:[], skipped:true, fixed:{key:xk}, kind:'Attached', cls:'',
         txt:`${esc(x.plant)} · TM ${esc(x.truck)} → ${esc(String(PUMPNOTE[xk]))}`,
@@ -3251,10 +3262,11 @@ function collectChecks(pours){
   for(const G of noGrp.values()){ G.list.sort((a,b)=>(a.at||0)-(b.at||0));
     const n=G.list.length, tot=G.list.reduce((a,o)=>a+num(o.x.q),0), t0=G.list[0].at, t1=G.list[n-1].at, o=G.list[0];
     if(n===1){ items.push({id:o.id, kind:'No ES', cls:'noes', txt:`${esc(o.x.plant)} · TM ${esc(o.x.truck)} · ${t0!=null?timeShort(t0):'no time'} · ${fmt(o.x.q)} m³ — not counted on any element`,
-      req:{kind:'noes', key:o.xk, dk:G.dk, plant:o.x.plant, truck:o.x.truck, q:o.x.q, at:t0}, rule:{plant:G.plant, from:t0},
+      req:{kind:'noes', key:o.xk, dk:G.dk, plant:o.x.plant, truck:o.x.truck, q:o.x.q, at:t0}, rule:{plant:G.plant, from:t0}, sm:[{key:o.xk}],
       ui:{sev:'red', icon:'🏷️', head:'Truck without ES', at:t0, tags:[CT(esc(o.x.plant),'st'),CT('TM '+esc(o.x.truck),'tk'),CT(fmt(o.x.q)+' m³')],
         det:'Not counted on any request — write its ES in the trucks sheet, give it its request, or a 📌 rule for the whole station'}}); continue; }
     items.push({id:`noesg|${G.plant}|${G.dk}`, ids:G.list.map(o=>o.id), skipped:G.list.every(o=>SKIP[o.id]), kind:'No ES', cls:'noes',
+      sm:G.list.filter(o=>num(o.x.q)<=4).map(o=>({key:o.xk, tk:o.x.truck})),   // the small ones may really be the Start mix
       txt:`${n} trucks without ES at ${esc(G.plant)} · ${timeShort(t0)} → ${timeShort(t1)} · ${fmt(tot,0)} m³ — not counted on any element`,
       rule:{plant:G.plant, from:t0},
       ui:{sev:'red', icon:'🏷️', head:`${n} trucks without ES · ${esc(G.plant)}`, at:t1,
@@ -3339,7 +3351,7 @@ function renderCheckList(cb, items){
   const isSk=it=>it.ids?!!it.skipped:!!SKIP[it.id];
   const open=items.filter(it=>!isSk(it)), skipped=items.filter(isSk);
   // one card per check: icon + the problem in big letters + WHERE as chips (element / station / truck) + what it means
-  const btns=(it,sk)=>`${it.rule&&!sk?`<button class="chk-fix chk-rule" data-plant="${esc(it.rule.plant)}" data-from="${it.rule.from||''}" title="Every no-ES truck from this station goes to one request">📌 Station rule</button>`:''}${it.req&&!sk?`<button class="chk-fix chk-req" data-req="${esc(JSON.stringify(it.req))}" title="Write this request's details (contractor, code, quantity…) or attach it to a request">✎ Request</button>`:''}${it.fix&&!sk?`<button class="chk-fix" data-key="${esc(it.fix.key)}" data-to="${esc(it.fix.to)}">Fix → ${esc(it.fix.to)}</button>`:''}${it.fixed
+  const btns=(it,sk)=>`${it.rule&&!sk?`<button class="chk-fix chk-rule" data-plant="${esc(it.rule.plant)}" data-from="${it.rule.from||''}" title="Every no-ES truck from this station goes to one request">📌 Station rule</button>`:''}${it.req&&!sk?`<button class="chk-fix chk-req" data-req="${esc(JSON.stringify(it.req))}" title="Write this request's details (contractor, code, quantity…) or attach it to a request">✎ Request</button>`:''}${it.sm&&!sk?it.sm.map(s=>`<button class="chk-fix chk-sm" data-key="${esc(s.key)}" data-to="${SM_MARK}" title="It really was the Start mix (priming batch) — count it as Start mix">🧪 ${s.tk?'TM '+esc(s.tk)+' = ':''}Start mix</button>`).join(''):''}${it.fix&&!sk?`<button class="chk-fix" data-key="${esc(it.fix.key)}" data-to="${esc(it.fix.to)}">Fix → ${esc(it.fix.to)}</button>`:''}${it.fixed
       ?`<button class="chk-fix chk-unfix" data-key="${esc(it.fixed.key)}" data-to="">Undo fix</button>`
       :`<button class="chk-skip" data-id="${encodeURIComponent((it.ids||[it.id]).join('\n'))}" data-on="${sk?0:1}">${sk?'Undo':'Skip'}</button>`}`;
   const row=(it,sk)=>{ const u=it.ui||{sev:'amber',icon:'⚠️',head:esc(it.kind),tags:[],det:it.txt};
@@ -4243,6 +4255,7 @@ function dpBuild(start){
       const note=(c.fu>=0?String(x[c.fu]||''):'')+' '+(c.ac>=0?String(x[c.ac]||''):'');
       if(EXCL.test(note)){ st.rej.push({es,q,tk,t}); continue; }
       st.total+=q;
+      if(es===SM_MARK){ st.start+=q; continue; }   // marked "Start mix" by hand in Data checks
       if(!es){ if(q<DP_START_MIX) st.start+=q; else st.noes.push({q,tk,t}); continue; }
       const L=st.lines.get(es)||{es,q:0,n:0,t,trucks:[]}; L.q+=q; L.n++; if(t<L.t) L.t=t; L.trucks.push({tk,q,t}); st.lines.set(es,L); }
     st.list=[...st.lines.values()].sort((a,b)=>a.t-b.t).map(L=>{ const p=esName(L.es)||(()=>{ const pr=(PLAN_ROWS||[]).find(r=>String(r.es||'').trim()===L.es)||ruleReq(L.es); return pr?{c:pr.client,k:pr.code}:null; })();
@@ -4809,7 +4822,8 @@ function planPhotoRows(){
   const PP=pumpPlan(now).byPour;
   const pumpsOf=g=>{ const a=g.trucks>0?PP.get(g):null; const lens=a&&a.got.length?a.got.map(i=>PUMPS[i]).concat(a.missing):pumpReq(g.pumps);
     // + the site's own working pumps, once marked ready on the Upcoming card ("63, Site: 56, S.P 3.7, Spider")
-    const sp=sitePumps(g), si=sp?siteItems(sp.w).filter(x=>siteKind(x)!=='mob'&&sp.r[x]):[];   // only the ones marked ready
+    // every pump of the request is written, sent / ready or not (user's choice) — the stationary and spiders too
+    const sp=sitePumps(g), si=sp?siteItems(sp.w).filter(x=>siteKind(x)!=='mob'):[];
     // written like the sheet: "48-56-(3.7)-2 SPIDER" (the photo draws the commas as "-")
     return [pumpLabel(lens)].concat(si.map(x=>x.replace(/^S\.P (\S+)$/,'($1)'))).filter(Boolean).join(', '); };
   const row=(g,started,finished,plants)=>({started,finished,sc:g.sc||'',client:g.client||'',code:g.elem||'',
