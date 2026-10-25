@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261025-000002">
+<meta name="app-build" content="20261025-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -606,6 +606,9 @@
     padding:9px 12px;border-radius:11px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:var(--green)}
   .trk-chip.down{background:rgba(244,63,94,.12);border-color:rgba(244,63,94,.4);color:var(--rose);cursor:pointer}
   .trk-chip.down.sel{background:rgba(244,63,94,.28);border-color:var(--rose);color:#fff}
+  .trk-chip.down.hold{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.45);color:var(--amber)}
+  .trk-chip.down.hold.sel{background:rgba(245,158,11,.3);border-color:var(--amber);color:var(--ink)}
+  .trk-why.hold{border-color:rgba(245,158,11,.45)} .trk-why.hold b{color:var(--amber)}
   .trk-why{margin-top:10px;padding:9px 12px;border-radius:12px;border:1px solid rgba(244,63,94,.4);
     background:rgba(244,63,94,.08);font-size:13.5px;line-height:1.5}
   .trk-why b{color:var(--rose);font-family:var(--mono)}
@@ -2755,6 +2758,12 @@ function renderTrucks(){
          // tap a broken truck = its reason (a hover title never shows on a phone)
          const b=t.breakdown.find(x=>String(x.truck)===truckDown); if(!b) return '';
          return `<div class="trk-why"><b>${esc(b.truck)}</b> — ${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}</div>`; })()}</div>`;
+    // On hold (sound trucks parked on purpose), the same way under Breakdown — amber; tap = its note
+    const H=t.hold||[];
+    if(H.length) body += `<div style="margin-top:18px"><div class="section-title" style="font-size:13px;margin-bottom:8px">Hold (${H.length})</div>
+       <div class="trk-grid">${H.map(b=>`<span class="trk-chip down hold${truckDown===String(b.truck)?' sel':''}" data-tk="${esc(b.truck)}" title="${esc(b.note)}">${esc(b.truck)}</span>`).join('')}</div>${(()=>{
+         const b=H.find(x=>String(x.truck)===truckDown); if(!b) return '';
+         return `<div class="trk-why hold"><b>${esc(b.truck)}</b> — ${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}</div>`; })()}</div>`;
   }
   area.innerHTML=counts+tabs+body;
   area.querySelectorAll('.spot-tab, .trk-kpi.clk').forEach(s=>s.addEventListener('click',()=>{ truckTab=s.dataset.tt; renderTrucks(); }));
