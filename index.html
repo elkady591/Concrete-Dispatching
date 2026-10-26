@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000012">
+<meta name="app-build" content="20261026-000015">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2713,14 +2713,17 @@ function renderTrucks(){
   const siteT=x=>ruleFor(x)||site(x.es,x.q);
   // the four numbers are buttons: each opens its own list (the lit one = the list on screen)
   const kpi=(tt,n,lab,col)=>`<div class="trk-kpi clk${truckTab===tt?' on':''}" data-tt="${tt}" style="--kc:${col}" role="button" tabindex="0"><div class="n"${tt==='working'?'':` style="color:${col}"`}>${n}</div><div class="l">${lab}</div></div>`;
+  // Loaded = TRUCKS out, not rows: one truck can carry two small requests in the same trip (TM 107: 0.5 + 2.5 m³,
+  // two ESs, two rows) — counted once, so Loaded + Empty = Working
+  const nLoaded=new Set(t.loaded.map(x=>String(x.truck))).size;
   const counts=`<div class="trk-counts">
      ${kpi('working',t.working.length,'Working','#e2e8f0')}
-     ${kpi('loaded',t.loaded.length,'Loaded','var(--cyan)')}
+     ${kpi('loaded',nLoaded,'Loaded','var(--cyan)')}
      ${kpi('empty',t.available.length,'Empty','var(--green)')}
      ${kpi('down',t.breakdown.length+((t.hold||[]).length),(t.hold&&t.hold.length)?`<span class="kd">Breakdown <b>${t.breakdown.length}</b></span><span class="kd kh">Hold <b>${t.hold.length}</b></span>`:'Breakdown','var(--rose)')}
    </div>`;
   const tabs=`<div class="spot-tabs" style="margin:14px 0 10px">
-     <span class="spot-tab ${truckTab==='loaded'?'active':''}" data-tt="loaded">Loaded (${t.loaded.length})</span>
+     <span class="spot-tab ${truckTab==='loaded'?'active':''}" data-tt="loaded">Loaded (${nLoaded})</span>
      <span class="spot-tab ${truckTab==='empty'?'active':''}" data-tt="empty">Empty (${t.available.length})</span>
      <span class="spot-tab ${truckTab==='prod'?'active':''}" data-tt="prod">Productivity</span>
    </div>`;
@@ -3386,6 +3389,25 @@ function collectChecks(pours){
       txt:`ES ${esc(m[1])} → <b>${esc(PUMPNOTE[k])}</b>${p?' '+esc((p.client?p.client+' ':'')+p.elem):''} · ${esc(m[2])}`,
       ui:{sev:'ok', icon:'✓', head:'ES fixed in the app', tags:[CT('ES '+esc(m[1])+' → '+esc(PUMPNOTE[k]),'el'), ...(p?[elTag(p)]:[]), CT(esc(m[2]))],
         det:'Its trucks are counted on the right request — fix the trucks sheet too'}}); }
+  // ONE truck, two (or more) requests in the same trip — loads of the same truck left within 10 min for different pours
+  // (TM 107: 0.5 m³ + 2.5 m³). Normal, but the user wants to see it (and Skip it): counted as one truck, each request its m³
+  { const byTk=new Map();
+    // every pour of the dates on screen, closed ones too (two small requests are often finished at once)
+    for(const p of (VD.summary||[]).filter(g=>g.trucks>0)) for(const l of (p.loads||[])){ if(!l.k||l.t==null||l.prev) continue; const L=byTk.get(String(l.k))||[]; L.push({l,p}); byTk.set(String(l.k),L); }
+    for(const [tk,L] of byTk){ L.sort((a,b)=>a.l.t-b.l.t);
+      for(let i=0;i<L.length;i++){ const grp=[L[i]]; while(i+1<L.length && L[i+1].l.t-grp[0].l.t<=10*60000){ grp.push(L[i+1]); i++; }
+        if(grp.length<2) continue;   // a truck can't do two trips in 10 min = two requests in the drum (even of the same element code)
+        const t0=grp[0].l.t, tot=grp.reduce((a,o)=>a+num(o.l.q),0);
+        // two DIFFERENT contractors (or stations) in one drum can't be: then it is a wrong truck number -> red, act now
+        const cls=new Set(grp.map(o=>String(o.p.client||'').trim().toUpperCase()).filter(Boolean)), sts=new Set(grp.map(o=>o.l.p).filter(Boolean));
+        const odd=cls.size>1||sts.size>1;
+        items.push({id:`tworeq|${tk}|${t0}`, kind:odd?'Truck twice':'One truck, two requests', cls:odd?'noes':'', k:grp[0].p.key,
+          txt:odd?`TM ${esc(tk)} written twice within 10 min for ${cls.size>1?'different contractors':'different stations'} · ${grp.map(o=>`${elName(o.p)} ${fmt(o.l.q)} m³`).join(' + ')} — a wrong truck number?`
+            :`TM ${esc(tk)} · ${grp.length} requests in one trip · ${grp.map(o=>`${elName(o.p)} ${fmt(o.l.q)} m³`).join(' + ')} = ${fmt(tot)} m³`,
+          ui:{sev:odd?'red':'amber', icon:'🚚', head:odd?`TM ${esc(tk)} written twice — ${cls.size>1?'2 contractors':'2 stations'}`:`TM ${esc(tk)} — ${grp.length} requests in one trip`, at:t0,
+            tags:[CT('TM '+esc(tk),'tk'), ...[...sts].map(s=>CT(esc(s),'st')), ...grp.map(o=>CT(esc((o.p.client?o.p.client+' ':'')+(o.p.elem||''))+' · '+fmt(o.l.q)+' m³','el'))],
+            det:odd?`One truck can't carry ${cls.size>1?'two contractors\' concrete':'loads of two stations'} in the same trip — probably a wrong truck number in the trucks sheet`
+              :`One truck (counted once) — each request gets its own m³ · ${fmt(tot)} m³ in the drum. Or the same load typed twice by mistake?`}}); } } }
   // a truck number that is NOT one of the fleet (the trucks sheet's status list, 101 … 134) — e.g. "1111": a typo,
   // whether it carries an ES or not (user asked 2026-10-26). One card per wrong number.
   { const fleet=new Set(((TRUCKS&&TRUCKS.order)||[]).map(o=>String(o.truck)));
@@ -3427,7 +3449,8 @@ function collectChecks(pours){
           det:'The next truck is overdue — call the station'}});
     }
     const FLAG_DET={'no quantity':'The truck has no m³ in the sheet','no load time':'The truck has no departure time in the sheet','entered twice?':'Same truck twice within minutes — one may be a duplicate'};
-    for(const r of rows){ for(const f of (r.l.f||[])) items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`,
+    // ('entered twice?' gets no card of its own any more: the "same truck within 10 min" card below says it once per trip)
+    for(const r of rows){ for(const f of (r.l.f||[])) if(f!=='entered twice?') items.push({id:flagId(p,r.l,f), kind:f, cls:'', k:p.key, txt:`${elName(p)} · ${esc(r.l.p||'—')} · TM ${esc(r.l.k||'—')} · ${loadWhen(r.l)} · ${fmt(r.l.q)} m³`,
       ui:{sev:'amber', icon:'⚠️', head:f.charAt(0).toUpperCase()+f.slice(1), at:r.l.nt?null:r.l.t, tags:[elTag(p),...lTags(r.l)],
         det:FLAG_DET[f]||'More than one truck can carry — check the quantity in the sheet'}}); }
   }
