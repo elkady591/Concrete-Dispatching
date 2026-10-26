@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000006">
+<meta name="app-build" content="20261026-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -899,7 +899,7 @@
   .thn .vtab .cnt{position:absolute;top:2px;right:calc(50% - 26px);margin:0;min-width:17px;height:17px;padding:0 4px;border-radius:99px;
     background:var(--cyan);color:#06202a;font:800 10px/17px var(--mono);opacity:1}
   .thn .vtab.active .cnt{background:#fff;color:#4c51bf}
-  .thn .vtab .pm-alert{position:absolute;top:21px;right:calc(50% - 22px);left:auto;margin:0;font-size:12px;line-height:1}   /* phone: right UNDER the count badge, inside its own tab */
+  .thn .vtab .pm-alert{position:absolute;top:20px;right:calc(50% - 22px);left:auto;margin:0;font-size:11px;line-height:1}   /* phone: right UNDER the count badge, inside its own tab */
   @media(min-width:900px){ .thn .vtab{flex-direction:row;justify-content:center;gap:8px;font-size:13.5px;padding:9px 8px}
     .thn .vtab .cnt{position:static} .thn .vtab .pm-alert{position:static} }
   @media(max-width:560px){ .thn .vtabs{flex-wrap:nowrap;gap:2px;padding:4px} .thn .vtab{flex:1 1 0;padding:6px 0;font-size:10px;font-weight:700;letter-spacing:-.15px}
@@ -3271,7 +3271,7 @@ function openRuleForm(plant, from){
     <label class="rl-f">Request<select id="rlTo">${reqs.map(x=>`<option value="${esc(x.v)}">${esc((x.r.client?x.r.client+' ':'')+x.r.code)} · ${fmt(x.r.req,0)} m³${x.r.es?(/^APP-/i.test(x.r.es)?' · app':' · ES '+esc(x.r.es)):' · no ES'}${x.pl?' · planned '+esc(plant):''}</option>`).join('')}</select></label>
     <div class="rl-f">From<div class="rl-opts"><label><input type="radio" name="rlFrom" value="first" checked> ${from?timeShort(from)+' (first no-ES truck)':'the first no-ES truck'}</label><label><input type="radio" name="rlFrom" value="now"> Now</label></div></div>
     <div class="rl-f">Stops by itself<div class="rl-opts"><label><input type="radio" name="rlStop" value="qty" checked> when its quantity is reached</label><label><input type="radio" name="rlStop" value="manual"> only when I stop it</label></div></div>
-    <div class="rl-note">Trucks that have an ES are not touched. A truck under ${DP_START_MIX} m³ with no ES stays Start mix. Every device follows the rule.</div>
+    <div class="rl-note">Trucks that have an ES are not touched, nor the ones you marked 🧪 Start mix. Every device follows the rule.</div>
     <div class="rq-foot"><button type="button" class="btn alt rl-x">Cancel</button><button type="submit" class="btn">Save rule</button></div></form>`;
   o.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const to=el('rlTo').value; if(!to) return;
     const f=o.querySelector('input[name=rlFrom]:checked').value==='now'?Date.now():(from||Date.now()), qty=o.querySelector('input[name=rlStop]:checked').value==='qty';
@@ -3325,7 +3325,7 @@ function collectChecks(pours){
   const from=CFG.fromDate||'', to=CFG.toDate||'';
   const items=[], RM=ruleMap(), noGrp=new Map();
   for(const x of NOES){ const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
-    if(x.q<DP_START_MIX) continue;   // no ES and under 3 m³ = Start mix (the priming batch), not a missing ES
+    if(x.q<DP_START_MIX) continue;   // (DP_START_MIX = 0: every no-ES truck is checked — Start mix only when the user says so)
     const tm=parseTime(x.dep), at=tm!=null?ts(d,tm):null, xk=noEsKey(x);
     if(PUMPNOTE[xk]===SM_MARK){   // marked Start mix by hand (Undo under "Show skipped")
       items.push({id:'noesf|'+xk, ids:[], skipped:true, fixed:{key:xk}, kind:'Attached', cls:'',
@@ -4319,7 +4319,9 @@ async function rememberEsNames(){
       await syncCall({action:'set', type:'pump', key:k, value:v, by:ME}); }   // no re-render per name
     if(push.length) stSet(KEY_PUMP,PUMPNOTE);
   }finally{ esNamesBusy=false; } }
-const DP_START_MIX=3;
+// a truck with no ES is NEVER Start mix by itself any more (user's choice 2026-10-26, whatever its m³): it shows as
+// "Truck without ES" until the user presses 🧪 Start mix on it (SM_MARK) or gives it a request. 0 = no automatic size.
+const DP_START_MIX=0;
 let dpStart=null, dpMsg='', dpOpen=null;
 function dpDefaultStart(){ const n=new Date(), t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),8).getTime(); return (n.getTime()>=t?t:t-86400000)-86400000; }
 const stName=tok=>String(tok).replace(/^([A-Z]+)\s*(\d+)$/i,'$1.$2').toUpperCase();
