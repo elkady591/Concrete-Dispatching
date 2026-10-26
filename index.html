@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000021">
+<meta name="app-build" content="20261026-000022">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -785,6 +785,8 @@
   .pm-ed{flex:none;width:24px;height:22px;padding:0;border-radius:6px;border:1px solid var(--line2);background:transparent;color:var(--faint);font-size:12px;cursor:pointer}
   .pm-ed.on{color:var(--rose);border-color:var(--rose)}
   .pm-note{width:100%;margin-top:3px;font:inherit;font-size:12.5px;color:var(--ink);background:transparent;border:1px solid var(--rose);border-radius:8px;padding:5px 8px}
+  .pm-undo{flex:none;height:22px;padding:0 8px;font:inherit;font-size:11.5px;font-weight:800;color:var(--amber);background:rgba(251,191,36,.1);
+    border:1px solid rgba(251,191,36,.45);border-radius:7px;cursor:pointer;white-space:nowrap}
   /* small ✓ next to ✎ = free this pump now (no big "Available" text on a busy pump) */
   .pm-btns{display:flex;gap:4px;flex:none}
   .pm-free{flex:none;width:24px;height:22px;padding:0;font:inherit;font-size:12px;font-weight:800;color:var(--green);background:transparent;
@@ -2298,6 +2300,8 @@ function pumpFam(g){ return String(g.client||'').trim().toLowerCase()+'|'+
 // "Available now" pressed on a busy/washing pump: stored as PUMPNOTE['r<i>'] = ms. It frees the pump from
 // that moment — but only for the pour it was on; a truck that loads AFTER the press (a top-up) cancels it.
 function pumpRelease(i){ const v=+String(PUMPNOTE['r'+i]||'').trim(); return v>0?v:0; }
+const UNDO_FREE=30*60000;   // the ↶ Undo next to a freed pump stays this long after the ✓
+
 // Pumps already SENT to a request's site before its first truck (they drive there and set up first):
 // PUMPNOTE['s<request id>'] = "56@ms;63@ms" — one entry per pump sent. Such a request holds those pumps
 // from that moment ("Setting up") and is never shown as Late. A send with no truck after 12 h is ignored.
@@ -2632,7 +2636,7 @@ function renderPumps(){
         <input class="pm-note" placeholder="problem…" value="${esc(d.text)}"><button class="pm-ok" title="Save">✓</button></div>`;
     return `<div class="pm-row st-${s.noop?'noop':s.st}">
       <div class="pm-top"><div class="pm-len">${s.len}${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
-      <div class="pm-btns">${!editing&&(s.st==='on'||s.st==='wash')?`<button class="pm-free" data-i="${s.i}" title="Free this pump now (finished early / pulled out to another site)">✓</button>`:''}<button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div></div>
+      <div class="pm-btns">${!editing&&(s.st==='on'||s.st==='wash')?`<button class="pm-free" data-i="${s.i}" title="Free this pump now (finished early / pulled out to another site)">✓</button>`:''}${!editing&&s.st==='free'&&pumpRelease(s.i)&&Date.now()-pumpRelease(s.i)<UNDO_FREE?`<button class="pm-undo" data-i="${s.i}" title="Undo — put this pump back on its pour">↶ Undo</button>`:''}<button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div></div>
       <div class="pm-mid">${editing?editor
         :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div></div>`; }).join('');
   area.innerHTML=`<div class="pm-head">${counts}<div class="pm-ctls">${opsCtl}${washCtl}</div></div>`+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
@@ -2649,6 +2653,10 @@ function renderPumps(){
     const i=b.dataset.i; if(!confirm(`Make pump ${PUMPS[i]} available now?`)) return;
     const val=String(Date.now()); PUMPNOTE['r'+i]=val; stSet(KEY_PUMP,PUMPNOTE); renderPumps();
     await syncPush('pump','r'+i,val); }));
+  // ✓ pressed by mistake: ↶ Undo (for UNDO_FREE after the press) takes the release back — the pump returns to its pour
+  area.querySelectorAll('.pm-undo').forEach(b=>b.addEventListener('click',async()=>{
+    const i=b.dataset.i; delete PUMPNOTE['r'+i]; stSet(KEY_PUMP,PUMPNOTE); renderPumps(); renderViewTabs();
+    await syncPush('pump','r'+i,''); }));
   area.querySelectorAll('.pm-chip[data-f]').forEach(c=>c.addEventListener('click',()=>{
     const f=c.dataset.f||null; pumpFilter=(pumpFilter===f)?null:f; renderPumps(); }));
   // ✎ opens the editor (code + problem); ✓ or Enter saves, ✎ again or Esc closes without saving.
