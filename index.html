@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000011">
+<meta name="app-build" content="20261026-000012">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3386,6 +3386,21 @@ function collectChecks(pours){
       txt:`ES ${esc(m[1])} → <b>${esc(PUMPNOTE[k])}</b>${p?' '+esc((p.client?p.client+' ':'')+p.elem):''} · ${esc(m[2])}`,
       ui:{sev:'ok', icon:'✓', head:'ES fixed in the app', tags:[CT('ES '+esc(m[1])+' → '+esc(PUMPNOTE[k]),'el'), ...(p?[elTag(p)]:[]), CT(esc(m[2]))],
         det:'Its trucks are counted on the right request — fix the trucks sheet too'}}); }
+  // a truck number that is NOT one of the fleet (the trucks sheet's status list, 101 … 134) — e.g. "1111": a typo,
+  // whether it carries an ES or not (user asked 2026-10-26). One card per wrong number.
+  { const fleet=new Set(((TRUCKS&&TRUCKS.order)||[]).map(o=>String(o.truck)));
+    if(fleet.size>=5){ const bad=new Map(), add=(tk,o)=>{ tk=String(tk||'').trim(); if(!tk||fleet.has(tk)) return; const L=bad.get(tk)||[]; L.push(o); bad.set(tk,L); };
+      for(const p of pours) for(const l of (p.loads||[])) add(l.k,{p:l.p, q:l.q, t:l.t, on:(p.client?p.client+' ':'')+(p.elem||'')});
+      for(const x of NOES){ const d=parseDate(x.date), dk=d?dateKey(d):''; if(!dk||(from&&dk<from)||(to&&dk>to)) continue;
+        const xk=noEsKey(x); if((PUMPNOTE[xk]&&PUMPNOTE[xk]!==SM_MARK)||RM.has(xk)) continue;   // given a request = already in a pour's loads above
+        const tm=parseTime(x.dep); add(x.truck,{p:x.plant, q:x.q, t:tm!=null?ts(d,tm):null, on:PUMPNOTE[xk]===SM_MARK?'Start mix':'no ES'}); }
+      const lo=[...fleet].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+      for(const [tk,L] of bad){ const t1=Math.max(...L.map(o=>o.t||0))||null, tot=L.reduce((a,o)=>a+num(o.q),0);
+        items.push({id:`badtm|${tk}|${L.length}`, kind:'Unknown truck', cls:'noes',
+          txt:`TM ${esc(tk)} is not one of your trucks (${lo[0]}–${lo[lo.length-1]}) · ${L.length} load${L.length>1?'s':''} · ${fmt(tot,0)} m³ — a typo in the trucks sheet?`,
+          ui:{sev:'red', icon:'🚚', head:`TM ${esc(tk)} is not one of your trucks`, at:t1,
+            tags:[CT('TM '+esc(tk),'tk'), ...[...new Set(L.map(o=>o.p).filter(Boolean))].map(s=>CT(esc(s),'st')), CT(fmt(tot,0)+' m³'), ...[...new Set(L.map(o=>o.on))].map(s=>CT(esc(s),'el'))],
+            det:`Your trucks are ${lo[0]} – ${lo[lo.length-1]}. Probably a typo in the trucks sheet — write the right truck number there`}}); } } }
   for(const p of pours){
     const rows=gapRows(p);
     for(const r of rows){ if(r.l.rej) items.push({id:rejId(r.l), kind:'Rejected', cls:'rejd', k:p.key,
