@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000007">
+<meta name="app-build" content="20261026-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4991,8 +4991,30 @@ function drawPlanPhoto(rows, at){
   { x.save(); x.fillStyle='#1f2a44'; x.font='600 14px Arial'; x.textAlign='center'; x.textBaseline='alphabetic';
     const cxr=L+tableW-120; ['Document Code: NCM-PRC-OP-01-F-17','Issue Date: 23/11/2023','Issue No.: 1'].forEach((t,k)=>x.fillText(t,cxr,PAD+12+k*20)); x.restore(); }
   const d=new Date(at); const dd=`${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()}`;
+  // header: the title on TOP, the date under it in a soft pill — style B, the user's choice 2026-10-26
+  // (A = date in words, C = boxed like the paper, 0 = the old "Date:" line on top; window.__phHead only to compare)
+  const HV=window.__phHead!=null?window.__phHead:2, cx0=L+tableW/2;
+  const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], MONS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const rr=(x0,y0,w,h,r)=>{ x.beginPath(); x.moveTo(x0+r,y0); x.arcTo(x0+w,y0,x0+w,y0+h,r); x.arcTo(x0+w,y0+h,x0,y0+h,r); x.arcTo(x0,y0+h,x0,y0,r); x.arcTo(x0,y0,x0+w,y0,r); x.closePath(); };
+  x.textAlign='center'; x.textBaseline='alphabetic';
+  if(HV===1){        // A: big title, the date in words under it (grey)
+    x.fillStyle='#1f2a44'; x.font='800 32px Arial'; x.fillText('Daily Production Plan',cx0,PAD+30);
+    x.fillStyle='#5b6b80'; x.font='600 18px Arial'; x.fillText(`${DAYS[d.getDay()]}, ${d.getDate()} ${MONS[d.getMonth()]} ${d.getFullYear()}`,cx0,PAD+62);
+  } else if(HV===2){ // B: title, the date in a soft rounded pill
+    x.fillStyle='#1f2a44'; x.font='800 32px Arial'; x.fillText('Daily Production Plan',cx0,PAD+30);
+    const t=`${d.getDate()} ${MONS[d.getMonth()].slice(0,3)} ${d.getFullYear()}  ·  ${DAYS[d.getDay()]}`; x.font='700 17px Arial'; const w=x.measureText(t).width+40;
+    x.fillStyle='#e8f0fb'; x.strokeStyle='#a9c1e6'; x.lineWidth=1.2; rr(cx0-w/2,PAD+44,w,32,16); x.fill(); x.stroke();
+    x.fillStyle='#1d4ed8'; x.fillText(t,cx0,PAD+66);
+  } else if(HV===3){ // C: title, then a small "DATE" label and the date boxed like the paper form
+    x.fillStyle='#1f2a44'; x.font='800 32px Arial'; x.fillText('Daily Production Plan',cx0,PAD+30);
+    const t=`${pad(d.getDate())} / ${pad(d.getMonth()+1)} / ${d.getFullYear()}`; x.font='700 19px Arial'; const w=x.measureText(t).width+34;
+    x.fillStyle='#ffffff'; x.strokeStyle='#5b6b80'; x.lineWidth=1.2; x.fillRect(cx0-w/2+30,PAD+44,w,32); x.strokeRect(cx0-w/2+30,PAD+44,w,32);
+    x.fillStyle='#1f2a44'; x.fillText(t,cx0+30,PAD+67);
+    x.textAlign='right'; x.font='800 13px Arial'; x.fillStyle='#5b6b80'; x.fillText('DATE',cx0-w/2+22,PAD+65); x.textAlign='center';
+  } else {
   x.fillStyle='#1f2a44'; x.textAlign='center'; x.font='700 26px Arial'; x.fillText('Daily Production Plan',L+tableW/2,PAD+58);
   x.font='600 18px Arial'; x.fillStyle='#3a4a63'; x.fillText('Date: '+dd,L+tableW/2,PAD+26);
+  }
   x.textAlign='left';
   // table header
   let y=HEAD, cx=L;
