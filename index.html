@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000004">
+<meta name="app-build" content="20261026-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -899,7 +899,7 @@
   .thn .vtab .cnt{position:absolute;top:2px;right:calc(50% - 26px);margin:0;min-width:17px;height:17px;padding:0 4px;border-radius:99px;
     background:var(--cyan);color:#06202a;font:800 10px/17px var(--mono);opacity:1}
   .thn .vtab.active .cnt{background:#fff;color:#4c51bf}
-  .thn .vtab .pm-alert{position:absolute;top:1px;left:calc(50% - 30px);margin:0;font-size:12px}
+  .thn .vtab .pm-alert{position:absolute;top:21px;right:calc(50% - 22px);left:auto;margin:0;font-size:12px;line-height:1}   /* phone: right UNDER the count badge, inside its own tab */
   @media(min-width:900px){ .thn .vtab{flex-direction:row;justify-content:center;gap:8px;font-size:13.5px;padding:9px 8px}
     .thn .vtab .cnt{position:static} .thn .vtab .pm-alert{position:static} }
   @media(max-width:560px){ .thn .vtabs{flex-wrap:nowrap;gap:2px;padding:4px} .thn .vtab{flex:1 1 0;padding:6px 0;font-size:10px;font-weight:700;letter-spacing:-.15px}
@@ -2196,8 +2196,9 @@ function renderViewTabs(){
   // themes 2 / 3: line icon over the name, count as a badge (THN); theme 1 keeps its emoji / drawn icons
   const mk=(id,label,cnt,ln,name)=>`<div class="vtab ${view===id?'active':''}" data-v="${id}">${THN?`<svg class="vt-ln"><use href="#ln-${ln}"/></svg><span class="vt-l"${name==='Production'?' data-s="Prod."':''}>${name}</span>${label.includes('pm-alert')?label.slice(label.indexOf('<span class="pm-alert')):''}`:label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</div>`;
   // ⚠ on Upcoming when a request's pumps are not ready
+  const chkWarn=CHK_ALERT>0?`<span class="pm-alert" title="${CHK_ALERT} data check${CHK_ALERT>1?'s':''} to look at">⚠</span>`:'';
   let upWarn=''; try{ for(const v of upcomingPumpCheck().values()) if(v.cls!=='ok'){ upWarn='<span class="pm-alert" title="Pumps not ready for a request">⚠</span>'; break; } }catch(e){}
-  box.innerHTML=mk('summary','📋 Summary',VD.open.length,'sum','Summary')+mk('pours','🏗️ All Pours',VD.started.length,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
+  box.innerHTML=mk('summary','📋 Summary',VD.open.length,'sum','Summary')+mk('pours','🏗️ All Pours'+chkWarn,VD.started.length,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
     // Trucks / Pumps: the number = what is AVAILABLE now (empty trucks · free pumps that have an operator)
     +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?TRUCKS.available.length:null,'trk','Trucks')
     +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', (()=>{ try{ return pumpPlan(Date.now()).state.filter(s=>s.st==='free'&&!s.noop).length; }catch(e){ return null; } })(),'pmp','Pumps')
@@ -2678,6 +2679,7 @@ async function tpToggle(tk){ const s=tpExcluded(); s.has(tk)?s.delete(tk):s.add(
   if(v) PUMPNOTE['TPX']=v; else delete PUMPNOTE['TPX']; stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPX',v); }
 const tpCount=()=>parseInt(PUMPNOTE['TPN'])||(()=>{ try{ return parseInt(localStorage.getItem('cmpour:planN'))||15; }catch(e){ return 15; } })();
 let planN=15, TP_PICK=[], TP_SHEET='';
+let CHK_ALERT=0;   // Data checks waiting (act now + to check) -> ⚠ on the All Pours tab
 let truckDown=null;      // broken truck tapped on the Available tab = its reason shows under the chips
 let truckSort='new';     // Loaded tab order: 'new' = latest truck on top, 'old' = longest out on top (kept per device)
 try{ if(localStorage.getItem('cmpour:trucksort')==='old') truckSort='old'; }catch(e){}
@@ -3430,6 +3432,9 @@ function renderCheckList(cb, items){
   // on this device until Undo. Kept in local storage; entries older than a week are dropped.
   const isSk=it=>it.ids?!!it.skipped:!!SKIP[it.id];
   const open=items.filter(it=>!isSk(it)), skipped=items.filter(isSk);
+  // ⚠ on the All Pours tab while checks are waiting (act now / to check — the same ones the notifications are about)
+  { const n=open.filter(it=>{ const s=(it.ui&&it.ui.sev)||'amber'; return s==='red'||s==='amber'; }).length;
+    if(n!==CHK_ALERT){ CHK_ALERT=n; try{ renderViewTabs(); }catch(e){} } }
   // one card per check: icon + the problem in big letters + WHERE as chips (element / station / truck) + what it means
   const btns=(it,sk)=>`${it.rule&&!sk?`<button class="chk-fix chk-rule" data-plant="${esc(it.rule.plant)}" data-from="${it.rule.from||''}" title="Every no-ES truck from this station goes to one request">📌 Station rule</button>`:''}${it.req&&!sk?`<button class="chk-fix chk-req" data-req="${esc(JSON.stringify(it.req))}" title="Write this request's details (contractor, code, quantity…) or attach it to a request">✎ Request</button>`:''}${it.sm&&!sk?it.sm.map(s=>`<button class="chk-fix chk-sm" data-key="${esc(s.key)}" data-to="${SM_MARK}" title="It really was the Start mix (priming batch) — count it as Start mix">🧪 ${s.tk?'TM '+esc(s.tk)+' = ':''}Start mix</button>`).join(''):''}${it.fix&&!sk?`<button class="chk-fix" data-key="${esc(it.fix.key)}" data-to="${esc(it.fix.to)}">Fix → ${esc(it.fix.to)}</button>`:''}${it.fixed
       ?`<button class="chk-fix chk-unfix" data-key="${esc(it.fixed.key)}" data-to="">Undo fix</button>`
