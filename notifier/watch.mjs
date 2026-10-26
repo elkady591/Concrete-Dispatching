@@ -27,7 +27,8 @@ const TITLES = { 'No ES': 'Truck without ES', 'Rejected': 'Rejected truck', 'Lat
                  'Wrong ES?': 'Truck ES not in the plan — typo?', 'Hold truck loaded': 'ON HOLD truck was loaded',
                  'Unknown truck': 'Truck number not in the fleet',
                  'One truck, two requests': 'One truck carrying two requests',
-                 'Truck twice': 'Same truck written twice — wrong number?' };
+                 'Truck twice': 'Same truck written twice — wrong number?',
+                 'Send pumps': 'Time to send the pumps', 'Pumps not sent': 'Pumps not sent yet' };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // The sync script sometimes answers with a Google "try again" HTML page instead of JSON: retry a few times.
