@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000017">
+<meta name="app-build" content="20261026-000018">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2728,9 +2728,11 @@ function renderTrucks(){
   // Loaded = TRUCKS out, not rows: one truck can carry two small requests in the same trip (TM 107: 0.5 + 2.5 m³,
   // two ESs, two rows) — counted once, so Loaded + Empty = Working
   const nLoaded=new Set(t.loaded.map(x=>String(x.truck))).size;
+  // a HOLD truck that is out stays in Hold (user's rule) — so it is said under Loaded, else Loaded + Empty ≠ Working
+  const holdOut=[...new Set(t.loaded.filter(x=>x.flag==='hold').map(x=>String(x.truck)))];
   const counts=`<div class="trk-counts">
      ${kpi('working',t.working.length,'Working','#e2e8f0')}
-     ${kpi('loaded',nLoaded,'Loaded','var(--cyan)')}
+     ${kpi('loaded',nLoaded,holdOut.length?`Loaded<span class="kd kh">${holdOut.length} on hold (${holdOut.map(esc).join(', ')})</span>`:'Loaded','var(--cyan)')}
      ${kpi('empty',t.available.length,'Empty','var(--green)')}
      ${kpi('down',t.breakdown.length+((t.hold||[]).length),(t.hold&&t.hold.length)?`<span class="kd">Breakdown <b>${t.breakdown.length}</b></span><span class="kd kh">Hold <b>${t.hold.length}</b></span>`:'Breakdown','var(--rose)')}
    </div>`;
