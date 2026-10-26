@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000002">
+<meta name="app-build" content="20261026-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -619,6 +619,9 @@
   .tp-c{display:flex;flex-direction:column;align-items:center;border:1px solid var(--line2);border-radius:10px;padding:5px 4px;background:rgba(255,255,255,.04)}
   .tp-c b{font:800 16px var(--mono)} .tp-c small{font-size:10.5px;color:var(--muted)}
   .tp-c.hd{border-color:rgba(245,158,11,.55)} .tp-c.hd small{color:var(--amber)}
+  .tp-c[data-tk]{cursor:pointer} .tp-c[data-tk]:hover{border-color:var(--rose)}
+  .tp-ex{margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px} .tp-ex b{color:var(--rose)}
+  .tp-x{font:700 13px var(--mono);border:1px dashed rgba(244,63,94,.55);color:var(--rose);border-radius:9px;padding:3px 9px;cursor:pointer;text-decoration:line-through}
   .tp-hold{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line2);font-size:13px} .tp-hold b{color:var(--amber)} .tp-hold .btn{margin-top:8px}
   .trk-chip.down.hold{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.45);color:var(--amber)}
   .trk-chip.down.hold.sel{background:rgba(245,158,11,.3);border-color:var(--amber);color:var(--ink)}
@@ -2668,8 +2671,13 @@ let clAll=false;          // themes 2 / 3: Closed Pours shows the last 3 until '
 let apHourly=new Set();  // Active Pours cards showing their Hourly rate instead of the overview
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
 let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = every loaded truck
-// Productivity › "Trucks for today": how many to run (kept on this device) and the ones picked (for Copy)
-let planN=(()=>{ try{ return parseInt(localStorage.getItem('cmpour:planN'))||15; }catch(e){ return 15; } })(), TP_PICK=[], TP_SHEET='';
+// Productivity › "Trucks for today": how many to run and the trucks taken out by hand. Both STAY until the user changes
+// them (no daily reset) and are shared with every device: PUMPNOTE['TPN'] = "15", PUMPNOTE['TPX'] = "104,107"
+function tpExcluded(){ return new Set(String(PUMPNOTE['TPX']||'').split(',').map(s=>s.trim()).filter(Boolean)); }
+async function tpToggle(tk){ const s=tpExcluded(); s.has(tk)?s.delete(tk):s.add(tk); const v=[...s].join(',');
+  if(v) PUMPNOTE['TPX']=v; else delete PUMPNOTE['TPX']; stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPX',v); }
+const tpCount=()=>parseInt(PUMPNOTE['TPN'])||(()=>{ try{ return parseInt(localStorage.getItem('cmpour:planN'))||15; }catch(e){ return 15; } })();
+let planN=15, TP_PICK=[], TP_SHEET='';
 let truckDown=null;      // broken truck tapped on the Available tab = its reason shows under the chips
 let truckSort='new';     // Loaded tab order: 'new' = latest truck on top, 'old' = longest out on top (kept per device)
 try{ if(localStorage.getItem('cmpour:trucksort')==='old') truckSort='old'; }catch(e){}
@@ -2739,23 +2747,28 @@ function renderTrucks(){
       const down=new Set(ORD.length?ORD.filter(isDownO).map(o=>String(o.truck)):(t.breakdown||[]).map(b=>String(b.truck))), qOf=new Map(rows.map(r=>[String(r.tm),r.q||0]));
       // the fleet = the trucks in the sheet's status list (else the productivity table + working / hold)
       const fleet=(ORD.length?ORD.map(o=>String(o.truck)):[...new Set([...rows.map(r=>String(r.tm)), ...(t.working||[]).map(String), ...(t.hold||[]).map(b=>String(b.truck))])]).filter(tk=>tk&&!down.has(tk));
-      const pickN=Math.max(1,Math.min(fleet.length,planN));
-      const pick=fleet.slice().sort((a,b)=>(qOf.get(a)||0)-(qOf.get(b)||0)||a.localeCompare(b,undefined,{numeric:true})).slice(0,pickN)
+      // trucks the user took out by hand today (tap a truck): the next lowest one takes its place; tap again = back in
+      const exS=tpExcluded(), exL=fleet.filter(tk=>exS.has(tk));
+      planN=tpCount(); const pickN=Math.max(1,Math.min(fleet.length-exL.length,planN));
+      const pick=fleet.filter(tk=>!exS.has(tk)).sort((a,b)=>(qOf.get(a)||0)-(qOf.get(b)||0)||a.localeCompare(b,undefined,{numeric:true})).slice(0,pickN)
         .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
       TP_PICK=pick;
-      // the sheet's status block (checkbox + note columns), row by row in the sheet's own order: picked = ✓ and no note,
-      // Breakdown = unticked with its own note kept, every other truck = unticked + "HOLD" — pasted at the first truck's checkbox
+      // the sheet's NOTE column (Q) only, row by row in the sheet's own order — the checkbox (P) and the number (R) are
+      // formulas on it (P =IF(Q<>"",FALSE,TRUE), R =IF(Q<>"",O,"")), never pasted over: picked = empty note,
+      // Breakdown = its own note kept, every other truck = "HOLD". Pasted at the note cell of the first truck.
       const pickS=new Set(pick), holdToday=ORD.filter(o=>!pickS.has(String(o.truck))&&!isDownO(o)).map(o=>String(o.truck));
-      TP_SHEET=ORD.map(o=>{ const tk=String(o.truck); return pickS.has(tk)?'TRUE\t':isDownO(o)?'FALSE\t'+String(o.note||'').replace(/[\t\r\n]+/g,' '):'FALSE\tHOLD'; }).join('\n');
+      TP_SHEET=ORD.map(o=>{ const tk=String(o.truck); return pickS.has(tk)?'':isDownO(o)?String(o.note||'').replace(/[\t\r\n]+/g,' '):'HOLD'; }).join('\n');
       const holdS=new Set((t.hold||[]).map(b=>String(b.truck)));
       body=`<div class="tp-box"><div class="tp-h"><b>🗓 Trucks for today</b>
           <label class="tp-n">How many <input id="tpN" type="number" min="1" max="${fleet.length}" value="${pickN}" inputmode="numeric"></label>
           <button class="btn sm" id="tpCopy" type="button">📋 Copy</button></div>
         <div class="muted" style="font-size:12px;margin:2px 0 8px">The ${pickN} with the lowest m³ this month · Breakdown left out${(t.breakdown||[]).length?' ('+(t.breakdown||[]).map(b=>esc(b.truck)).join(', ')+')':''}</div>
-        <div class="tp-list">${pick.map(tk=>`<span class="tp-c${holdS.has(tk)?' hd':''}"><b>${esc(tk)}</b><small>${fmt(qOf.get(tk)||0,0)} m³${holdS.has(tk)?' · hold':''}</small></span>`).join('')}</div>
+        <div class="tp-list">${pick.map(tk=>`<span class="tp-c${holdS.has(tk)?' hd':''}" data-tk="${esc(tk)}" title="Tap to take it out — the next one comes in"><b>${esc(tk)}</b><small>${fmt(qOf.get(tk)||0,0)} m³${holdS.has(tk)?' · hold':''}</small></span>`).join('')}</div>
+        <div class="muted" style="font-size:11.5px;margin-top:6px">Tap a truck to take it out — the next lowest comes in its place</div>
+        ${exL.length?`<div class="tp-ex"><b>🚫 Taken out</b> <span class="muted" style="font-size:11px">(stay out until you tap them back)</span> ${exL.map(tk=>`<span class="tp-x" data-tk="${esc(tk)}" title="Tap to put it back">${esc(tk)} ↺</span>`).join('')}</div>`:''}
         ${ORD.length?`<div class="tp-hold"><div><b>⏸ HOLD today (${holdToday.length})</b> <span class="muted">${holdToday.map(esc).join(' · ')||'—'}</span></div>
-          <button class="btn sm alt" id="tpSheet" type="button" title="Copy the checkbox + note columns for all ${ORD.length} trucks, in the sheet's order — click the checkbox of the first truck (${esc(ORD[0].truck)}) in the trucks sheet and paste">📋 Copy for the sheet</button>
-          <div class="muted" style="font-size:11.5px;margin-top:4px">Paste on the checkbox of truck ${esc(ORD[0].truck)} (first row) — ${ORD.length} rows: ✓ for today's, HOLD for the rest, Breakdown kept with its note</div></div>`:''}</div>
+          <button class="btn sm alt" id="tpSheet" type="button" title="Copy the note column (Q) for all ${ORD.length} trucks, in the sheet's order — click the note cell of the first truck (${esc(ORD[0].truck)}) and paste">📋 Copy for the sheet</button>
+          <div class="muted" style="font-size:11.5px;margin-top:4px">Paste in column <b>Q</b> (the note) on the row of truck ${esc(ORD[0].truck)} — ${ORD.length} rows: empty for today's, HOLD for the rest, Breakdown keeps its note. The ✓ and the number fill by themselves.</div></div>`:''}</div>
         <div class="muted" style="font-size:12px;margin-bottom:8px">${month} · month to date · ${rows.length} truck mixers</div>
         <div class="tbl-wrap"><table>
         <thead><tr><th>#</th><th>TM</th><th>Loaded (m³)</th><th>Trips</th><th>Not fully loaded</th>${p.plants.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead>
@@ -2817,11 +2830,13 @@ function renderTrucks(){
          return `<div class="trk-why hold"><b>${esc(b.truck)}</b> — ${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}</div>`; })()}</div>`;
   }
   area.innerHTML=counts+tabs+body;
-  { const ni=el('tpN'); if(ni) ni.addEventListener('change',()=>{ planN=Math.max(1,parseInt(ni.value)||15); try{ localStorage.setItem('cmpour:planN',planN); }catch(e){} renderTrucks(); });
+  { const ni=el('tpN'); if(ni) ni.addEventListener('change',async()=>{ planN=Math.max(1,parseInt(ni.value)||15);
+      PUMPNOTE['TPN']=String(planN); stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPN',String(planN)); });
     const cb=el('tpCopy'); if(cb) cb.addEventListener('click',async()=>{ const txt='العربيات اللي شغالة النهاردة ان شاء الله\n'+TP_PICK.join('\n');
       let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){} cb.textContent=ok?'Copied ✓':'Copy failed'; });
+    area.querySelectorAll('.tp-c[data-tk],.tp-x[data-tk]').forEach(c=>c.addEventListener('click',()=>tpToggle(c.dataset.tk)));
     const sb=el('tpSheet'); if(sb) sb.addEventListener('click',async()=>{ let ok=false; try{ await navigator.clipboard.writeText(TP_SHEET); ok=true; }catch(e){}
-      sb.textContent=ok?'Copied ✓ — paste on the first checkbox':'Copy failed'; }); }
+      sb.textContent=ok?'Copied ✓ — paste in column Q, first truck row':'Copy failed'; }); }
   area.querySelectorAll('.spot-tab, .trk-kpi.clk').forEach(s=>s.addEventListener('click',()=>{ truckTab=s.dataset.tt; renderTrucks(); }));
   area.querySelectorAll('.tc-chip[data-es], .trk-card.el .tc-top').forEach(c=>c.addEventListener('click',()=>{
     const es=c.dataset.es!=null?c.dataset.es:c.closest('.trk-card').dataset.es;
