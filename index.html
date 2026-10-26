@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000015">
+<meta name="app-build" content="20261026-000017">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -620,6 +620,11 @@
   .tp-c b{font:800 16px var(--mono)} .tp-c small{font-size:10.5px;color:var(--muted)}
   .tp-c.hd{border-color:rgba(245,158,11,.55)} .tp-c.hd small{color:var(--amber)}
   .tp-c[data-tk]{cursor:pointer} .tp-c[data-tk]:hover{border-color:var(--rose)}
+  .tp-c.fx{border-color:color-mix(in srgb,var(--accent) 65%,transparent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+  .tp-c.out{border-color:color-mix(in srgb,var(--cyan) 60%,transparent);background:color-mix(in srgb,var(--cyan) 10%,transparent)} .tp-c.out small{color:var(--cyan)}
+  .tp-hl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .tp-in{font:700 13px var(--mono);border:1px dashed rgba(245,158,11,.6);color:var(--amber);border-radius:9px;padding:3px 9px;cursor:pointer}
+  .tp-in small{font-size:10px;opacity:.75}
   .tp-ex{margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px} .tp-ex b{color:var(--rose)}
   .tp-x{font:700 13px var(--mono);border:1px dashed rgba(244,63,94,.55);color:var(--rose);border-radius:9px;padding:3px 9px;cursor:pointer;text-decoration:line-through}
   .tp-hold{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line2);font-size:13px} .tp-hold b{color:var(--amber)} .tp-hold .btn{margin-top:8px}
@@ -2681,6 +2686,13 @@ let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = 
 function tpExcluded(){ return new Set(String(PUMPNOTE['TPX']||'').split(',').map(s=>s.trim()).filter(Boolean)); }
 async function tpToggle(tk){ const s=tpExcluded(); s.has(tk)?s.delete(tk):s.add(tk); const v=[...s].join(',');
   if(v) PUMPNOTE['TPX']=v; else delete PUMPNOTE['TPX']; stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPX',v); }
+// trucks the user wants to run whatever their m³ (tap one under HOLD today): always in, they push out the highest-m³ ones;
+// PUMPNOTE['TPI'] = "110,124" — shared, stays until tapped again
+function tpForced(){ return new Set(String(PUMPNOTE['TPI']||'').split(',').map(s=>s.trim()).filter(Boolean)); }
+async function tpForce(tk){ const s=tpForced(), x=tpExcluded(); s.has(tk)?s.delete(tk):s.add(tk);
+  const v=[...s].join(','); if(v) PUMPNOTE['TPI']=v; else delete PUMPNOTE['TPI'];
+  if(s.has(tk)&&x.has(tk)){ x.delete(tk); const xv=[...x].join(','); if(xv) PUMPNOTE['TPX']=xv; else delete PUMPNOTE['TPX']; }
+  stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPI',v); await syncPush('pump','TPX',PUMPNOTE['TPX']||''); }
 const tpCount=()=>parseInt(PUMPNOTE['TPN'])||(()=>{ try{ return parseInt(localStorage.getItem('cmpour:planN'))||15; }catch(e){ return 15; } })();
 let planN=15, TP_PICK=[], TP_SHEET='';
 let CHK_ALERT=0;   // Data checks waiting (act now + to check) -> ⚠ on the All Pours tab
@@ -2759,7 +2771,12 @@ function renderTrucks(){
       // trucks the user took out by hand today (tap a truck): the next lowest one takes its place; tap again = back in
       const exS=tpExcluded(), exL=fleet.filter(tk=>exS.has(tk));
       planN=tpCount(); const pickN=Math.max(1,Math.min(fleet.length-exL.length,planN));
-      const pick=fleet.filter(tk=>!exS.has(tk)).sort((a,b)=>(qOf.get(a)||0)-(qOf.get(b)||0)||a.localeCompare(b,undefined,{numeric:true})).slice(0,pickN)
+      // the forced ones first (📌, whatever their m³), then the lowest m³ until the count is reached
+      // …and a truck that is OUT with concrete right now is working today anyway: always in (🚚), never on HOLD
+      const outS=new Set((t.loaded||[]).map(x=>String(x.truck)));
+      const fxS=tpForced(), fxL=fleet.filter(tk=>(fxS.has(tk)||outS.has(tk))&&!exS.has(tk));
+      const pick=fxL.concat(fleet.filter(tk=>!exS.has(tk)&&!fxS.has(tk)&&!outS.has(tk)).sort((a,b)=>(qOf.get(a)||0)-(qOf.get(b)||0)||a.localeCompare(b,undefined,{numeric:true}))
+          .slice(0,Math.max(0,pickN-fxL.length)))
         .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
       TP_PICK=pick;
       // the sheet's NOTE column (Q) only, row by row in the sheet's own order — the checkbox (P) and the number (R) are
@@ -2772,10 +2789,11 @@ function renderTrucks(){
           <label class="tp-n">How many <input id="tpN" type="number" min="1" max="${fleet.length}" value="${pickN}" inputmode="numeric"></label>
           <button class="btn sm" id="tpCopy" type="button">📋 Copy</button></div>
         <div class="muted" style="font-size:12px;margin:2px 0 8px">The ${pickN} with the lowest m³ this month · Breakdown left out${(t.breakdown||[]).length?' ('+(t.breakdown||[]).map(b=>esc(b.truck)).join(', ')+')':''}</div>
-        <div class="tp-list">${pick.map(tk=>`<span class="tp-c${holdS.has(tk)?' hd':''}" data-tk="${esc(tk)}" title="Tap to take it out — the next one comes in"><b>${esc(tk)}</b><small>${fmt(qOf.get(tk)||0,0)} m³${holdS.has(tk)?' · hold':''}</small></span>`).join('')}</div>
-        <div class="muted" style="font-size:11.5px;margin-top:6px">Tap a truck to take it out — the next lowest comes in its place</div>
+        <div class="tp-list">${pick.map(tk=>{ const fx=fxS.has(tk), out=outS.has(tk)&&!fx; return `<span class="tp-c${holdS.has(tk)?' hd':''}${fx?' fx':''}${out?' out':''}" data-tk="${esc(tk)}" ${fx?'data-fx="1"':''} title="${fx?'Run by you (📌) — tap to stop forcing it':out?'Out with concrete now — working today (tap to take it out anyway)':'Tap to take it out — the next one comes in'}"><b>${fx?'📌 ':out?'🚚 ':''}${esc(tk)}</b><small>${out?'out now':fmt(qOf.get(tk)||0,0)+' m³'}${holdS.has(tk)?' · hold':''}</small></span>`; }).join('')}</div>
+        <div class="muted" style="font-size:11.5px;margin-top:6px">Tap a truck to take it out — the next lowest comes in its place · tap a truck under HOLD to run it anyway (📌)</div>
         ${exL.length?`<div class="tp-ex"><b>🚫 Taken out</b> <span class="muted" style="font-size:11px">(stay out until you tap them back)</span> ${exL.map(tk=>`<span class="tp-x" data-tk="${esc(tk)}" title="Tap to put it back">${esc(tk)} ↺</span>`).join('')}</div>`:''}
-        ${ORD.length?`<div class="tp-hold"><div><b>⏸ HOLD today (${holdToday.length})</b> <span class="muted">${holdToday.map(esc).join(' · ')||'—'}</span></div>
+        ${ORD.length?`<div class="tp-hold"><div><b>⏸ HOLD today (${holdToday.length})</b> <span class="muted" style="font-size:11px">tap one to run it anyway</span>
+          <div class="tp-hl">${holdToday.length?holdToday.map(tk=>`<span class="tp-in" data-in="${esc(tk)}" title="Run it today anyway — it takes the place of the highest-m³ truck">${esc(tk)} <small>${fmt(qOf.get(tk)||0,0)}</small> ＋</span>`).join(''):'<span class="muted">—</span>'}</div></div>
           <button class="btn sm alt" id="tpSheet" type="button" title="Copy the note column (Q) for all ${ORD.length} trucks, in the sheet's order — click the note cell of the first truck (${esc(ORD[0].truck)}) and paste">📋 Copy for the sheet</button>
           <div class="muted" style="font-size:11.5px;margin-top:4px">Paste in column <b>Q</b> (the note) on the row of truck ${esc(ORD[0].truck)} — ${ORD.length} rows: empty for today's, HOLD for the rest, Breakdown keeps its note. The ✓ and the number fill by themselves.</div></div>`:''}</div>
         <div class="muted" style="font-size:12px;margin-bottom:8px">${month} · month to date · ${rows.length} truck mixers</div>
@@ -2843,7 +2861,8 @@ function renderTrucks(){
       PUMPNOTE['TPN']=String(planN); stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPN',String(planN)); });
     const cb=el('tpCopy'); if(cb) cb.addEventListener('click',async()=>{ const txt='العربيات اللي شغالة النهاردة ان شاء الله\n'+TP_PICK.join('\n');
       let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){} cb.textContent=ok?'Copied ✓':'Copy failed'; });
-    area.querySelectorAll('.tp-c[data-tk],.tp-x[data-tk]').forEach(c=>c.addEventListener('click',()=>tpToggle(c.dataset.tk)));
+    area.querySelectorAll('.tp-c[data-tk],.tp-x[data-tk]').forEach(c=>c.addEventListener('click',()=>c.dataset.fx?tpForce(c.dataset.tk):tpToggle(c.dataset.tk)));
+    area.querySelectorAll('.tp-in[data-in]').forEach(c=>c.addEventListener('click',()=>tpForce(c.dataset.in)));
     const sb=el('tpSheet'); if(sb) sb.addEventListener('click',async()=>{ let ok=false; try{ await navigator.clipboard.writeText(TP_SHEET); ok=true; }catch(e){}
       sb.textContent=ok?'Copied ✓ — paste in column Q, first truck row':'Copy failed'; }); }
   area.querySelectorAll('.spot-tab, .trk-kpi.clk').forEach(s=>s.addEventListener('click',()=>{ truckTab=s.dataset.tt; renderTrucks(); }));
