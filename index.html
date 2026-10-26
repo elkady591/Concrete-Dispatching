@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000019">
+<meta name="app-build" content="20261026-000021">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -436,6 +436,12 @@
 
   /* Upcoming cards */
   .ucards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:12px}
+  /* requests that follow each other (an "after" link, other elements): one frame, numbered steps in pouring order */
+  .useq{grid-column:1/-1;border:1.5px dashed color-mix(in srgb,var(--accent) 55%,transparent);border-radius:18px;padding:10px;background:color-mix(in srgb,var(--accent) 5%,transparent)}
+  .useq-h{font-size:13px;margin:0 4px 8px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline} .useq-h span{color:var(--muted);font-family:var(--mono);font-size:12px}
+  .useq-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px}
+  .useq-i{position:relative} .useq-i>.ucard{height:100%;box-sizing:border-box}
+  .useq-n{position:absolute;top:-7px;inset-inline-start:-7px;z-index:2;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:800 12px var(--mono);background:var(--accent);color:#fff}
   .thn .ucards{grid-template-columns:repeat(auto-fill,minmax(min(100%,370px),1fr))}   /* themes 2 / 3: wider cards on a computer */
   @media (max-width:640px){ .ucards{grid-template-columns:1fr} }
   .ucard{border-radius:15px;padding:14px 15px;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);box-shadow:var(--shadow)}
@@ -2425,6 +2431,9 @@ function pumpPlan(now){
 // Planned time of each pour (plan "TIME" column + its DATE, today when the date is empty)
 // -> Map(pour -> {time:'HH:MM', at:ms}) — only pours that have a time
 const LATE_START=30*60000;       // not started this long after its planned time -> a Data check / notification
+// a request WITH pumps: its planned time = the time to send the pumps; not marked sent 30 min later -> alert;
+// the first truck is due about 1½ h after the planned time -> no "not loaded" alert before that
+const PUMP_SEND_LATE=30*60000, PUMP_LOAD_AFTER=90*60000;
 // plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
 function planRowsOf(){
   const out=new Map(), used=new Set();
@@ -3480,8 +3489,28 @@ function collectChecks(pours){
   // requests with a planned time (Upcoming): its time has come -> "Request due" (one notification),
   // still not started 30 min later -> "Late start" (a second one)
   try{ const RT=requestTimes(), now=Date.now();
-    for(const g of (VD.upcoming||[])){ const t=RT.get(g); if(!t||t.est||now<t.at||pumpSent(g).length) continue;   // pumps already sent / waiting behind its chain = on time
+    for(const g of (VD.upcoming||[])){ const t=RT.get(g); if(!t||t.est||now<t.at) continue;   // waiting behind its chain = no time of its own
       const nm=esc((g.client?g.client+' ':'')+g.elem), id=(g.esId||g.key)+'|'+t.at;
+      // a request WITH pumps (user 2026-10-26): its time = the time to SEND the pumps; the first truck comes about 1½ h later.
+      //   time came → "Time to send the pumps" · 30 min and not marked sent → "Pumps not sent" (red)
+      //   sent, but no truck 1½ h after the time → "Not loaded yet" (red). Nothing about loading before that.
+      const need=pumpReq(g.pumps); if(need.length){ const sent=pumpSent(g), pl=esc(allPumpsLabel(g,need));
+        if(!sent.length){
+          if(now-t.at<PUMP_SEND_LATE) items.push({id:`psend|${id}`, kind:'Send pumps', cls:'',
+            txt:`${nm} · planned ${t.time} — time to send the pumps ${pl}`,
+            ui:{sev:'blue', icon:'🔔', head:'Time to send the pumps', at:t.at, tags:[elTag(g), CT('planned '+t.time,'tk'), CT('pumps '+pl)],
+              det:'Mark them sent on the Upcoming card when they leave'}});
+          else items.push({id:`plate|${id}`, kind:'Pumps not sent', cls:'gap',
+            txt:`${nm} · planned ${t.time} — pumps ${pl} not marked sent (${mins(now-t.at)} late)`,
+            ui:{sev:'red', icon:'🚧', head:`Pumps not sent — ${mins(now-t.at)} late`, at:t.at, tags:[elTag(g), CT('planned '+t.time,'tk'), CT('pumps '+pl)],
+              det:'Its pumps should be on their way — send them, or mark them sent on the Upcoming card'}});
+        } else if(now-t.at>=PUMP_LOAD_AFTER){ const due=t.at+PUMP_LOAD_AFTER;
+          items.push({id:`late|${id}`, kind:'Late start', cls:'gap',
+            txt:`${nm} · pumps sent, loading expected ${timeShort(due)} — no truck yet (${mins(now-due)} late)`,
+            ui:{sev:'red', icon:'🕒', head:`Not loaded yet — ${mins(now-due)} late`, at:due, tags:[elTag(g), CT('planned '+t.time,'tk'), CT('loading ≈ '+timeShort(due),'tk')],
+              det:'The pumps were sent — the first truck was due about 1½ h after the planned time'}}); }
+        continue; }
+      if(pumpSent(g).length) continue;
       if(now-t.at<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
         txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time} — start this one`:`planned ${t.time} — it is time to start`}${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`,
         ui:{sev:'blue', icon:'🔔', head:'Time to start', at:t.at, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk'), ...(g.pumps&&pumpReq(g.pumps).length?[CT('pumps '+esc(pumpLabel(pumpReq(g.pumps))))]:[])],
@@ -3841,9 +3870,12 @@ function renderUpcoming(){
     const ch=CH.get(p), mem=ch?ch.members.filter(m=>m.trucks===0 && rest.includes(m)):[p];
     if(mem.length>1){ mem.forEach(m=>inUnit.add(m)); units.push(mem); } else { inUnit.add(p); units.push([p]); } }
   // themes 2 / 3: the time on its own (big), the day ("26-OCT") small above it — so the time column stays narrow
-  const timeLine=(rt,late,sent,p)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">${THN?`<span class="uc-tm">⏰ ${rt.time}</span>${dayLbl(rt.at)?`<span class="uc-day">${dayLbl(rt.at).trim()}</span>`:''}`:`⏰ ${dayLbl(rt.at)}${rt.time}`}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span><span class="uc-after">expected start ≈ now</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(afterName(rt.after,p))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
-  el('upcomingArea').innerHTML='<div class="ucards">'+units.map(u=>{ const p=u[0], pc=PC.get(p), rt=RT.get(p), sent=pumpSent(p);
-    const late=rt&&!rt.est&&now>rt.at&&!sent.length?Math.round((now-rt.at)/60000):0;   // pumps on their way / waiting behind its chain = not late
+  const timeLine=(rt,late,sent,p)=>rt?`<div class="uc-time${late?' late':''}${rt.est?' est':''}">${THN?`<span class="uc-tm">⏰ ${rt.time}</span>${dayLbl(rt.at)?`<span class="uc-day">${dayLbl(rt.at).trim()}</span>`:''}`:`⏰ ${dayLbl(rt.at)}${rt.time}`}${late?`<span class="uc-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span><span class="uc-after">${pumpReq(p.pumps).length?(sent?'pumps sent — no truck yet':'pumps not sent yet'):'expected start ≈ now'}</span>`:''}${sent?`<span class="uc-setup">Setting up</span>`:''}${rt.est&&rt.after?`<span class="uc-after">after ${esc(afterName(rt.after,p))}${rt.after.trucks>0?' (running)':''}</span>`:''}${rt.afterDone?`<span class="uc-after">previous finished</span>`:''}</div>`:'';
+  const card=u=>{ const p=u[0], pc=PC.get(p), rt=RT.get(p), sent=pumpSent(p);
+    // with pumps: late = pumps not sent 30 min after the time, or sent but no truck 1½ h after it (same rule as the Data checks)
+    const needP=pumpReq(p.pumps).length>0;
+    const late=!rt||rt.est?0:needP?(!sent.length?(now-rt.at>=PUMP_SEND_LATE?Math.round((now-rt.at)/60000):0):(now-rt.at>=PUMP_LOAD_AFTER?Math.round((now-rt.at-PUMP_LOAD_AFTER)/60000):0))
+      :(now>rt.at&&!sent.length?Math.round((now-rt.at)/60000):0);   // pumps on their way / waiting behind its chain = not late
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
     return `
     <div class="ucard${multi?' chain':''}">${timeLine(rt,late,sent.length,p)}
@@ -3864,7 +3896,18 @@ function renderUpcoming(){
           if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} without pumps — they wash after #1 finishes</div>`;
           if(rest.every(g=>pumpReq(g.pumps).slice().sort().join()===pumpReq(p.pumps).slice().sort().join())) return `<div class="uc-same">${n}${u.length>2?' continue':' continues'} with the same pumps</div>`;
           return ''; })():''}</div>`:''}
-    </div>`; }).join('')+'</div>';
+    </div>`; };
+  // requests that follow each other through an "after" link (OTHER elements, e.g. Doosan 30UGB → 10USG → 10UGB): kept
+  // together in pouring order inside one frame, each still its own card (own pumps / plants); a lone one stays as it is
+  const uOf=new Map(); units.forEach((u,i)=>u.forEach(g=>uOf.set(g,i)));
+  const kids=units.map(()=>[]), hasPar=units.map(()=>false);
+  units.forEach((u,i)=>{ const pr=LKu.get(u[0]); const j=pr&&uOf.has(pr)?uOf.get(pr):-1; if(j>=0&&j!==i){ kids[j].push(i); hasPar[i]=true; } });
+  const seqOf=i=>[i].concat(...kids[i].map(seqOf));
+  const blocks=[]; units.forEach((u,i)=>{ if(!hasPar[i]) blocks.push(seqOf(i)); });
+  const nm=u=>esc((u[0].client?u[0].client+' ':'')+u[0].elem);
+  el('upcomingArea').innerHTML='<div class="ucards">'+blocks.map(b=>b.length<2?card(units[b[0]])
+    :`<div class="useq"><div class="useq-h">🔗 <b>${b.length} requests one after the other</b> <span>${b.map(i=>nm(units[i])).join(' → ')}</span></div>
+       <div class="useq-l">${b.map((i,k)=>`<div class="useq-i"><span class="useq-n">${k+1}</span>${card(units[i])}</div>`).join('')}</div></div>`).join('')+'</div>';
   // app requests: delete / merge with the sheet copy / keep both
   const A=el('upcomingArea');
   A.querySelectorAll('button.uc-sc').forEach(b=>b.addEventListener('click',()=>siteReady(b.dataset.k,b.dataset.i)));
