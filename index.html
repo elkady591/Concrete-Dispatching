@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000008">
+<meta name="app-build" content="20261026-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -989,6 +989,10 @@
   [data-theme="3"] body::before{display:none}
   [data-theme="3"] .card,[data-theme="3"] .ucard,[data-theme="3"] .config,[data-theme="3"] .kpi,[data-theme="3"] .tbl-wrap{-webkit-backdrop-filter:none;backdrop-filter:none}
   [data-theme="3"] option{background:#fff;color:#14203a}
+  /* light: every list / date box drawn light too (some were forced dark → the open list was dark with dark text) */
+  [data-theme="3"] select,[data-theme="3"] input{color-scheme:light}
+  [data-theme="3"] select option,[data-theme="3"] .rq-attach select option,[data-theme="3"] .pic-cut select option{background:#fff!important;color:#14203a!important}
+  [data-theme="3"] optgroup{background:#eef2f8;color:#334063} .rq-attach optgroup{font-weight:800}
   [data-theme="3"] input,[data-theme="3"] select{background:#f7f8fc}
   [data-theme="3"] .ap{background:#f7f8fc} [data-theme="3"] .ap-grp{background:#fff}
   [data-theme="3"] .ucard .uc-code{color:var(--ink)}
@@ -1339,8 +1343,8 @@
           <label>Temperature °<input id="rqTem" inputmode="decimal"></label>
           <label class="rq-wide">ES <small>(optional)</small><input id="rqEs" inputmode="numeric"></label>
           <label class="rq-wide">Pumps<div class="rq-pumps"><span id="rqPumpsTxt" class="rq-ptxt">—</span><span id="rqPumpBtns"></span><button type="button" class="rq-pclr" id="rqPumpClr">✕</button></div></label>
-          <label class="rq-wide">🏗 Site pumps · working <small>(the site's own — info only, not ours)</small><input id="rqSpW" placeholder="Pump 56 & S.P.3.7 & Spider Pump"></label>
-          <label class="rq-wide">🏗 Site pumps · spare<input id="rqSpS" placeholder="Pump 48 & Spider Pump"></label>
+          <label class="rq-wide">🏗 Site pumps · working <small>(stationary / spider — filled from the message, empty if none)</small><input id="rqSpW"></label>
+          <label class="rq-wide">🏗 Site pumps · spare<input id="rqSpS"></label>
         </div>
         <datalist id="rqClients"></datalist>
         <div class="rq-msg" id="reqMsg"></div>
@@ -5125,8 +5129,18 @@ async function planPhoto(){
       if(forReq.dk) el('rqDate').value=forReq.dk;
       if(forReq.kind==='es') el('rqEs').value=forReq.es;
       // requests of that day it may belong to (sheet + app)
-      const opts=(PLAN_ROWS||[]).filter(r=>String(r.es||'').trim() && (!r.date||!forReq.dk||r.date===forReq.dk) && String(r.es).trim()!==forReq.es);
-      el('rqAttach').innerHTML='<option value="">— no, a new request (write it below) —</option>'+opts.map(r=>`<option value="${esc(String(r.es).trim())}">${esc(reqLabel(String(r.es).trim()))}${/^APP-/.test(r.es)?' (app)':' · ES '+esc(r.es)}</option>`).join('');
+      // two groups (user 2026-10-26): the requests with NO ES first — a truck with an ES finds its request by itself, so a
+      // no-ES truck almost always belongs to one of these; the ones WITH an ES below, for a driver who forgot to type it.
+      // A sheet request with no ES is reached by its element code (the trucks' ES column also takes a code).
+      const sameDay=r=>!r.date||!forReq.dk||r.date===forReq.dk, esOf=r=>String(r.es||'').trim();
+      const noEsR=(PLAN_ROWS||[]).filter(r=>sameDay(r) && (!esOf(r)||/^APP-/.test(esOf(r))));
+      const esR=(PLAN_ROWS||[]).filter(r=>sameDay(r) && esOf(r) && !/^APP-/.test(esOf(r)) && esOf(r)!==forReq.es);
+      const nm=r=>`${r.client?r.client+' ':''}${r.code} · ${fmt(r.req,0)} m³`;
+      const oNo=noEsR.map(r=>{ const v=esOf(r)||String(r.base||r.code); return `<option value="${esc(v)}">${esc(nm(r))}${esOf(r)?' · app':' · no ES'}${r.time?' · '+esc(r.time):''}</option>`; }).join('');
+      const oEs=esR.map(r=>`<option value="${esc(esOf(r))}">${esc(nm(r))} · ES ${esc(esOf(r))}</option>`).join('');
+      const gNo=noEsR.length?`<optgroup label="Requests with NO ES (${noEsR.length})">${oNo}</optgroup>`:'';
+      const gEs=esR.length?`<optgroup label="Requests with an ES — driver forgot to type it">${oEs}</optgroup>`:'';
+      el('rqAttach').innerHTML='<option value="">— no, a new request (write it below) —</option>'+(forReq.kind==='es'?gEs+gNo:gNo+gEs);
     }
     // contractors already used in the plan, for quick picking
     el('rqClients').innerHTML=[...new Set((PLAN_ROWS||[]).map(r=>String(r.client||'').trim()).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}">`).join('');
