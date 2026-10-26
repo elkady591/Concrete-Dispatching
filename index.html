@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261026-000018">
+<meta name="app-build" content="20261026-000019">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2739,6 +2739,7 @@ function renderTrucks(){
   const tabs=`<div class="spot-tabs" style="margin:14px 0 10px">
      <span class="spot-tab ${truckTab==='loaded'?'active':''}" data-tt="loaded">Loaded (${nLoaded})</span>
      <span class="spot-tab ${truckTab==='empty'?'active':''}" data-tt="empty">Empty (${t.available.length})</span>
+     <span class="spot-tab ${truckTab==='plan'?'active':''}" data-tt="plan">Hold</span>
      <span class="spot-tab ${truckTab==='prod'?'active':''}" data-tt="prod">Productivity</span>
    </div>`;
   let body;
@@ -2757,7 +2758,7 @@ function renderTrucks(){
     const dRow=(b,cls,lab)=>`<div class="tw-row ${cls}"><span class="tw-tk">${esc(b.truck)}</span><span class="tw-st">${lab}</span><span class="tw-w">${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}${ldNow.has(String(b.truck))?' <b class="tw-ldx">· LOADED now</b>':''}</span><span class="tw-t"></span></div>`;
     body=(t.breakdown.length||(t.hold||[]).length)?`<div class="tw-list">${t.breakdown.map(b=>dRow(b,'dn','Breakdown')).join('')}${(t.hold||[]).length?`<div class="tw-sub">On hold — sound trucks you parked on purpose</div>${t.hold.map(b=>dRow(b,'hd','On hold')).join('')}`:''}</div>`
       :'<div class="muted" style="font-size:13px;padding:10px 2px">No broken-down trucks.</div>';
-  } else if(truckTab==='prod'){
+  } else if(truckTab==='prod'||truckTab==='plan'){   // 'plan' = the Hold tab (today's trucks / HOLD), 'prod' = the table
     // month-to-date productivity per truck mixer, from the trucks sheet's own "Productivity" tab
     const p=TRUCK_PROD, rows=p.rows||[];
     if(!rows.length) body='<div class="muted" style="font-size:13px;padding:10px 2px">Productivity data not available — check the "Productivity" tab in the trucks sheet.</div>';
@@ -2787,7 +2788,7 @@ function renderTrucks(){
       const pickS=new Set(pick), holdToday=ORD.filter(o=>!pickS.has(String(o.truck))&&!isDownO(o)).map(o=>String(o.truck));
       TP_SHEET=ORD.map(o=>{ const tk=String(o.truck); return pickS.has(tk)?'':isDownO(o)?String(o.note||'').replace(/[\t\r\n]+/g,' '):'HOLD'; }).join('\n');
       const holdS=new Set((t.hold||[]).map(b=>String(b.truck)));
-      body=`<div class="tp-box"><div class="tp-h"><b>🗓 Trucks for today</b>
+      const tpBox=`<div class="tp-box"><div class="tp-h"><b>🗓 Trucks for today</b>
           <label class="tp-n">How many <input id="tpN" type="number" min="1" max="${fleet.length}" value="${pickN}" inputmode="numeric"></label>
           <button class="btn sm" id="tpCopy" type="button">📋 Copy</button></div>
         <div class="muted" style="font-size:12px;margin:2px 0 8px">The ${pickN} with the lowest m³ this month · Breakdown left out${(t.breakdown||[]).length?' ('+(t.breakdown||[]).map(b=>esc(b.truck)).join(', ')+')':''}</div>
@@ -2797,8 +2798,8 @@ function renderTrucks(){
         ${ORD.length?`<div class="tp-hold"><div><b>⏸ HOLD today (${holdToday.length})</b> <span class="muted" style="font-size:11px">tap one to run it anyway</span>
           <div class="tp-hl">${holdToday.length?holdToday.map(tk=>`<span class="tp-in" data-in="${esc(tk)}" title="Run it today anyway — it takes the place of the highest-m³ truck">${esc(tk)} <small>${fmt(qOf.get(tk)||0,0)}</small> ＋</span>`).join(''):'<span class="muted">—</span>'}</div></div>
           <button class="btn sm alt" id="tpSheet" type="button" title="Copy the note column (Q) for all ${ORD.length} trucks, in the sheet's order — click the note cell of the first truck (${esc(ORD[0].truck)}) and paste">📋 Copy for the sheet</button>
-          <div class="muted" style="font-size:11.5px;margin-top:4px">Paste in column <b>Q</b> (the note) on the row of truck ${esc(ORD[0].truck)} — ${ORD.length} rows: empty for today's, HOLD for the rest, Breakdown keeps its note. The ✓ and the number fill by themselves.</div></div>`:''}</div>
-        <div class="muted" style="font-size:12px;margin-bottom:8px">${month} · month to date · ${rows.length} truck mixers</div>
+          <div class="muted" style="font-size:11.5px;margin-top:4px">Paste in column <b>Q</b> (the note) on the row of truck ${esc(ORD[0].truck)} — ${ORD.length} rows: empty for today's, HOLD for the rest, Breakdown keeps its note. The ✓ and the number fill by themselves.</div></div>`:''}</div>`;
+      const tbl=`<div class="muted" style="font-size:12px;margin-bottom:8px">${month} · month to date · ${rows.length} truck mixers</div>
         <div class="tbl-wrap"><table>
         <thead><tr><th>#</th><th>TM</th><th>Loaded (m³)</th><th>Trips</th><th>Not fully loaded</th>${p.plants.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead>
         <tbody>${rows.map((r,i)=>`<tr>
@@ -2812,6 +2813,7 @@ function renderTrucks(){
         <tr style="font-weight:800"><td></td><td>Total</td><td class="num">${fmt(tot('q'),0)}</td><td class="num">${fmt(tot('trips'),0)}</td><td class="num">${fmt(tot('partial'),0)}</td>
           ${p.plants.map((n,j)=>`<td class="num">${fmt(rows.reduce((s,r)=>s+((r.byPlant&&r.byPlant[j])||0),0),0)}</td>`).join('')}</tr>
         </tbody></table></div>`;
+      body=truckTab==='plan'?tpBox:tbl;
     }
   } else if(truckTab==='loaded'){
     // card layout (not a wide table) so it reads cleanly on a phone without horizontal scroll.
