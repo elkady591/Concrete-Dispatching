@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261027-000008">
+<meta name="app-build" content="20261027-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3441,6 +3441,7 @@ function collectChecks(pours){
     for(const [tk,L] of byTk){ L.sort((a,b)=>a.l.t-b.l.t);
       for(let i=0;i<L.length;i++){ const grp=[L[i]]; while(i+1<L.length && L[i+1].l.t-grp[0].l.t<=10*60000){ grp.push(L[i+1]); i++; }
         if(grp.length<2) continue;   // a truck can't do two trips in 10 min = two requests in the drum (even of the same element code)
+        if(grp.every(o=>pourDone(o.p))) continue;   // every request of it is closed / finished = nothing left to check
         const t0=grp[0].l.t, tot=grp.reduce((a,o)=>a+num(o.l.q),0);
         // two DIFFERENT contractors (or stations) in one drum can't be: then it is a wrong truck number -> red, act now
         const cls=new Set(grp.map(o=>String(o.p.client||'').trim().toUpperCase()).filter(Boolean)), sts=new Set(grp.map(o=>o.l.p).filter(Boolean));
