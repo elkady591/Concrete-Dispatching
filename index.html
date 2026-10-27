@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261027-000005">
+<meta name="app-build" content="20261027-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3312,8 +3312,9 @@ function openRuleForm(plant, from){
   let o=el('ruleModal'); if(!o){ o=document.createElement('div'); o.id='ruleModal'; o.className='rq-back'; document.body.appendChild(o);
     o.addEventListener('click',e=>{ if(e.target===o||e.target.closest('.rl-x')) o.style.display='none'; }); }
   const now=Date.now(), dk=d=>{ const x=new Date(d); return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}`; };
-  const days=new Set([dk(from||now), dk(now)]);
-  const reqs=(PLAN_ROWS||[]).filter(r=>!r.date||days.has(r.date)).map(r=>({v:String(r.es||'').trim()||String(r.code||'').toUpperCase(), r,
+  // the WORK day (8 AM to 8 AM) of the first truck and of now: a truck at 12:06 AM still belongs to yesterday's requests
+  const hm=cutDaily()||'08:00', days=new Set([dk(from||now), dk(now), dk(lastDailyCut(hm,from||now)), dk(lastDailyCut(hm,now))]);
+  const reqs=(PLAN_ROWS||[]).filter(r=>!r.date||days.has(r.date)||inDateFilter(r.date)).map(r=>({v:String(r.es||'').trim()||String(r.code||'').toUpperCase(), r,
       pl:planPlants(plantKey((VD.summary||[]).find(g=>(r.es&&g.esId===String(r.es).trim())||(!r.es&&g.elem===r.code))||{key:''})).includes(plant)}))
     .filter((x,i,a)=>x.v&&a.findIndex(y=>y.v===x.v)===i).sort((a,b)=>(b.pl-a.pl)||((a.r.es?1:0)-(b.r.es?1:0)));
   o.innerHTML=`<form class="rq-box rl-box"><div class="rq-head"><b>📌 Station rule · ${esc(plant)}</b><button type="button" class="rq-x rl-x">✕</button></div>
