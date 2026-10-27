@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261027-000009">
+<meta name="app-build" content="20261027-000010">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3177,6 +3177,16 @@ const LATE_TOL=1.75;    // with a target rate: late = more than 1.75 × the expe
 const LATE_MIN=10*60000;// …and at least 10 min past it (so a 6-min interval isn't flagged at 9 min)
 const KEY_SKIP='cmpour:chkskip';
 let SKIP={};            // checks the user marked as reviewed on this device: {id: when}
+// an ON HOLD truck seen loaded: kept here so its check stays after the truck is back / its request is finished,
+// until the user Skips it (user's rule). {id: {truck, plant, es, q, dep, flagNote, seen}}
+const KEY_HOLDSEEN='cmpour:holdseen';
+let HOLDSEEN={};
+const holdId=x=>`hold|${x.truck}|${x.dep}`;
+function rememberHolds(){ let ch=false;
+  for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold')){ const id=holdId(x);
+    if(!HOLDSEEN[id]){ HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flagNote:x.flagNote||'', seen:Date.now()}; ch=true; } }
+  for(const id in HOLDSEEN){ if(SKIP[id] && Date.now()-HOLDSEEN[id].seen>7*86400000){ delete HOLDSEEN[id]; ch=true; } }   // skipped + a week old
+  if(ch) stSet(KEY_HOLDSEEN,HOLDSEEN); }
 let showSkipped=false;
 const gapId=(p,r)=>`gap|${p.key}|${r.l.t}`;
 const flagId=(p,l,f)=>`f|${f}|${p.key}|${l.k}|${l.t}`;
@@ -3421,8 +3431,9 @@ function collectChecks(pours){
         det: best ? `Closest request: <b>${esc(best.p.esId)}</b> · ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)} — ${esSimilar(es,best.p.esId)===2?'2 digits swapped':'1 digit different'}`
                   : 'No request has this ES and none is close — if it is a new request, give it its details here'} }); }
   // a truck the user put ON HOLD (parked on purpose) that has been loaded anyway
-  for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold')){ const st=esc(x.plant||''), site=x.es?(()=>{ const n=esName(x.es); return n&&n.k?(n.c?n.c+' ':'')+n.k:'ES '+x.es; })():'';
-    items.push({id:`hold|${x.truck}|${x.dep}`, kind:'Hold truck loaded', cls:'rejd',
+  rememberHolds();
+  for(const x of Object.values(HOLDSEEN)){ const st=esc(x.plant||''), site=x.es?(()=>{ const n=esName(x.es); return n&&n.k?(n.c?n.c+' ':'')+n.k:'ES '+x.es; })():'';
+    items.push({id:holdId(x), kind:'Hold truck loaded', cls:'rejd',
       txt:`TM ${esc(x.truck)} is ON HOLD but was loaded${st?' at '+st:''}${x.dep?' · '+esc(x.dep):''}${x.q?' · '+fmt(x.q,0)+' m³':''}${site?' · '+esc(site):''}`,
       ui:{sev:'red', icon:'⏸', head:'ON HOLD truck loaded', tags:[CT('TM '+esc(x.truck),'tk'), ...(st?[CT(st,'st')]:[]), ...(x.q?[CT(fmt(x.q,0)+' m³')]:[]), ...(site?[CT(esc(site),'el')]:[])],
         det:`You put it on hold${x.flagNote?' ('+esc(x.flagNote)+')':''} — it left the plant${x.dep?' at '+esc(x.dep):''}`}}); }
@@ -4968,6 +4979,7 @@ function requireAuth(){
   PUMPNOTE=(await stGet(KEY_PUMP))||{};
   DONE_ORDER=(await stGet(KEY_DONE_ORDER))||[];
   SKIP=(await stGet(KEY_SKIP))||{};
+  HOLDSEEN=(await stGet(KEY_HOLDSEEN))||{};
   for(const k in SKIP){ if(Date.now()-SKIP[k]>7*86400000) delete SKIP[k]; }   // reviewed-check marks expire after a week
   const savedCfg=await stGet(KEY_CFG);
   if(savedCfg){
