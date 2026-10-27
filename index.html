@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261027-000010">
+<meta name="app-build" content="20261027-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -679,6 +679,7 @@
   .uc-k{font-family:var(--mono);font-weight:800;color:var(--cyan);width:24px}
   .uc-st{margin-inline-start:auto;font-family:var(--mono);font-weight:700;color:var(--ink)} .uc-st i{font-style:normal;color:var(--muted)}
   .uc-same{margin-top:6px;font-size:12px;color:var(--muted)}
+  .uc-pnow{font-size:12px;font-weight:500;opacity:.85}
   .uc-app{font-family:inherit;font-size:11px;font-weight:800;color:#0b1020;background:#fbbf24;border-radius:6px;padding:1px 7px;vertical-align:2px}
   .uc-appdel{display:flex;align-items:center;gap:8px;margin:4px 0 2px;font-size:12px;color:var(--muted)}
   .uc-del{font:inherit;font-size:12px;color:var(--rose);background:transparent;border:1px solid rgba(251,113,133,.45);border-radius:8px;padding:2px 8px;cursor:pointer}
@@ -2577,8 +2578,13 @@ function upcomingPumpCheck(now){
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
     if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(allPumpsLabel(g,need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
-      out.set(g,{cls:'ok', html:sameOn?`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(allPumpsLabel(g,need))}</b>`
-                                     :`Pumps ready: <b>${esc(allPumpsLabel(g,need))}</b>`}); continue; }
+      if(sameOn){ out.set(g,{cls:'ok', html:`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(allPumpsLabel(g,need))}</b>`}); continue; }
+      // a timed request is checked with the pumps as they will be AT its time: say so, and what the ones that are
+      // not free yet are doing now (else "ready" next to "no free" chips reads as a contradiction)
+      const t=RT.get(g), later=state!==base, busy=later?res.map(r=>({r, n:base.find(x=>x.i===r.s.i)})).filter(o=>o.n&&!(o.n.st==='free'&&!o.n.noop)):[];
+      const doing=o=>o.n.st==='wash'?`washing → ${timeShort(o.n.until)}`:o.n.st==='on'&&o.n.pour?`on ${esc(site(o.n.pour))}`:o.n.st==='down'?'breakdown':o.n.noop?'no operator':'busy';
+      out.set(g,{cls:'ok', html:!busy.length?`Pumps free now: <b>${esc(allPumpsLabel(g,need))}</b>`
+        :`Pumps free by <b>${t.est?'≈':''}${timeShort(t.at)}</b> (its time): <b>${esc(allPumpsLabel(g,need))}</b><br><span class="uc-pnow">Now — not free yet: ${busy.map(o=>`<b>${o.r.len}</b> ${doing(o)}`).join(' · ')}</span>`}); continue; }
     const byLen={}; res.forEach(r=>{ (byLen[r.len]=byLen[r.len]||[]).push(r); });
     const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok'||r.kind==='same'||r.kind==='sent').length, miss=rs.filter(r=>r.kind!=='ok'&&r.kind!=='same'&&r.kind!=='sent');
       if(!miss.length) return `${L} ✓`;
@@ -3885,7 +3891,7 @@ function renderUpcoming(){
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
       const no=!on && !(freeNow[len]>0);
-      return `<button class="uc-snd${on?' on':''}${no?' no':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}"${no?' data-no="1"':''} title="${on?'Sent — tap to undo':no?`No ${len} pump available right now`:'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}${no?' <small>· no free</small>':''}</button>`; }).join('')}${sc}</div>`; };
+      return `<button class="uc-snd${on?' on':''}${no?' no':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}"${no?' data-no="1"':''} title="${on?'Sent — tap to undo':no?`No ${len} pump available right now`:'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}${no?' <small>· busy now</small>':''}</button>`; }).join('')}${sc}</div>`; };
   // chains (same client + element, poured one after the other) become ONE card; its place = its first request
   const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
   // carries on with the pumps of the pour before it (same element, or an "after" link asking for the same pumps)
