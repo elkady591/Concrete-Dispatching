@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261027-000007">
+<meta name="app-build" content="20261027-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3311,17 +3311,15 @@ function ruleMap(){ const R=stRules(), m=new Map(); if(!R.length) return m;
 function openRuleForm(plant, from){
   let o=el('ruleModal'); if(!o){ o=document.createElement('div'); o.id='ruleModal'; o.className='rq-back'; document.body.appendChild(o);
     o.addEventListener('click',e=>{ if(e.target===o||e.target.closest('.rl-x')) o.style.display='none'; }); }
-  const now=Date.now(), dk=d=>{ const x=new Date(d); return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}`; };
-  // the WORK day (8 AM to 8 AM) of the first truck and of now: a truck at 12:06 AM still belongs to yesterday's requests
-  const hm=cutDaily()||'08:00', days=new Set([dk(from||now), dk(now), dk(lastDailyCut(hm,from||now)), dk(lastDailyCut(hm,now))]);
-  // only requests WITHOUT an ES: one with an ES would have been written on the trucks (app ones without ES = 'APP-…')
+  // every request in the daily plan WITHOUT an ES, whatever its date / time: one with an ES would have been
+  // written on the trucks (app ones without ES = 'APP-…')
   const noEs=r=>{ const e=String(r.es||'').trim(); return !e||/^APP-/i.test(e); };
-  const reqs=(PLAN_ROWS||[]).filter(r=>noEs(r)&&(!r.date||days.has(r.date)||inDateFilter(r.date))).map(r=>({v:String(r.es||'').trim()||String(r.code||'').toUpperCase(), r,
+  const reqs=(PLAN_ROWS||[]).filter(noEs).map(r=>({v:String(r.es||'').trim()||String(r.code||'').toUpperCase(), r,
       pl:planPlants(plantKey((VD.summary||[]).find(g=>(r.es&&g.esId===String(r.es).trim())||(!r.es&&g.elem===r.code))||{key:''})).includes(plant)}))
     .filter((x,i,a)=>x.v&&a.findIndex(y=>y.v===x.v)===i).sort((a,b)=>(b.pl-a.pl)||((a.r.es?1:0)-(b.r.es?1:0)));
   o.innerHTML=`<form class="rq-box rl-box"><div class="rq-head"><b>📌 Station rule · ${esc(plant)}</b><button type="button" class="rq-x rl-x">✕</button></div>
     <div class="muted" style="font-size:13px">Every truck from <b>${esc(plant)}</b> with <b>no ES</b> goes to:</div>
-    <label class="rl-f">Request<select id="rlTo">${reqs.length?'':'<option value="">No request without ES on this work day</option>'}${reqs.map(x=>`<option value="${esc(x.v)}">${esc((x.r.client?x.r.client+' ':'')+x.r.code)} · ${fmt(x.r.req,0)} m³${x.r.es?(/^APP-/i.test(x.r.es)?' · app':' · ES '+esc(x.r.es)):' · no ES'}${x.pl?' · planned '+esc(plant):''}</option>`).join('')}</select></label>
+    <label class="rl-f">Request<select id="rlTo">${reqs.length?'':'<option value="">No request without ES in the daily plan</option>'}${reqs.map(x=>`<option value="${esc(x.v)}">${esc((x.r.client?x.r.client+' ':'')+x.r.code)} · ${fmt(x.r.req,0)} m³${x.r.es?(/^APP-/i.test(x.r.es)?' · app':' · ES '+esc(x.r.es)):' · no ES'}${x.pl?' · planned '+esc(plant):''}</option>`).join('')}</select></label>
     <div class="rl-f">From<div class="rl-opts"><label><input type="radio" name="rlFrom" value="first" checked> ${from?timeShort(from)+' (first no-ES truck)':'the first no-ES truck'}</label><label><input type="radio" name="rlFrom" value="now"> Now</label></div></div>
     <div class="rl-f">Stops by itself<div class="rl-opts"><label><input type="radio" name="rlStop" value="qty" checked> when its quantity is reached</label><label><input type="radio" name="rlStop" value="manual"> only when I stop it</label></div></div>
     <div class="rl-note">Trucks that have an ES are not touched, nor the ones you marked 🧪 Start mix. Every device follows the rule.</div>
