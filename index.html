@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261027-000004">
+<meta name="app-build" content="20261027-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -679,7 +679,6 @@
   .uc-k{font-family:var(--mono);font-weight:800;color:var(--cyan);width:24px}
   .uc-st{margin-inline-start:auto;font-family:var(--mono);font-weight:700;color:var(--ink)} .uc-st i{font-style:normal;color:var(--muted)}
   .uc-same{margin-top:6px;font-size:12px;color:var(--muted)}
-  .uc-old{font-family:inherit;font-size:11px;font-weight:800;color:#fff;background:#ea580c;border-radius:6px;padding:1px 7px;vertical-align:2px;white-space:nowrap}
   .uc-app{font-family:inherit;font-size:11px;font-weight:800;color:#0b1020;background:#fbbf24;border-radius:6px;padding:1px 7px;vertical-align:2px}
   .uc-appdel{display:flex;align-items:center;gap:8px;margin:4px 0 2px;font-size:12px;color:var(--muted)}
   .uc-del{font:inherit;font-size:12px;color:var(--rose);background:transparent;border:1px solid rgba(251,113,133,.45);border-radius:8px;padding:2px 8px;cursor:pointer}
@@ -1733,20 +1732,6 @@ function inDateFilter(d){
   if(to && d>to) return false;
   return true;
 }
-// Upcoming: the same, but while the filter reaches today a request dated BEFORE "From" that never started
-// stays too, until it is changed / deleted / closed (not poured = not finished; only finished pours are hidden)
-function upcomingInFilter(d){
-  if(inDateFilter(d)) return true;
-  const from=CFG.fromDate||'', to=CFG.toDate||'';
-  return !!(d && from && d<from && !(to && to<todayStr(0)));
-}
-// such a carried request is marked: "From yesterday" (the work day before), else its date ("From 24-OCT")
-function carriedLabel(g){
-  const d=g&&g.planDate, from=CFG.fromDate||''; if(!d || !from || d>=from) return '';
-  const y=new Date(from+'T00:00:00'); y.setDate(y.getDate()-1);
-  if(d===`${y.getFullYear()}-${pad(y.getMonth()+1)}-${pad(y.getDate())}`) return 'From yesterday';
-  const [,mo,dd]=d.split('-').map(Number); return `From ${dd}-${MON3[mo-1]}`;
-}
 function parseTime(s){
   s=String(s||'').trim(); if(!s)return null;
   const m=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM|am|pm)?/); if(!m)return null;
@@ -2211,7 +2196,7 @@ function render(res){
   const closed=started.filter(g=>g.status==='closed');                        // auto-closed (2h idle)
   // Upcoming = planned pours not started yet (0 trucks, has a target), excluding DONE,
   // and only those whose request date falls inside the current From/To date filter.
-  const upcoming=withElem.filter(g=>g.trucks===0 && g.planReq!=null && upcomingInFilter(g.planDate));
+  const upcoming=withElem.filter(g=>g.trucks===0 && g.planReq!=null && inDateFilter(g.planDate));
   // Closed Pours = the ones the user marked DONE (shown read-only below, with what they poured)
   const doneList=summary.filter(g=>hasElem(g) && g.trucks>0 && DONE[doneKey(g)]);
   VD={full,summary,started,open,completed,closed,upcoming,doneList};
@@ -3844,7 +3829,7 @@ function renderSumUp(){
     const late=t&&!t.est&&now>t.at&&!pumpSent(g).length?Math.round((now-t.at)/60000):0, pl=planPlants(plantKey(g));
     const meta=[late?`<span class="su-late">Late ${late>=60?Math.floor(late/60)+'h '+(late%60)+'m':late+' min'}</span>`:'',
       g.sc&&('Card '+esc(g.sc)), g.tem&&('TEM '+esc(String(g.tem).replace(/\s+/g,' '))), g.planRate&&(fmt(g.planRate,0)+' m³/h')].filter(Boolean).join(' · ');
-    return `<div class="su"><span class="su-t${late?' lt':''}">${t?esc(t.time):'—'}</span><span class="su-n">${g.client?esc(g.client)+' ':''}<span>${esc(g.elem||'—')}</span>${carriedLabel(g)?` <span class="uc-old">${carriedLabel(g)}</span>`:''}</span>
+    return `<div class="su"><span class="su-t${late?' lt':''}">${t?esc(t.time):'—'}</span><span class="su-n">${g.client?esc(g.client)+' ':''}<span>${esc(g.elem||'—')}</span></span>
       <span class="su-q">${g.planReq!=null?fmt(g.planReq,0):'—'}<small> m³</small></span><span class="su-m">${meta}</span><span class="su-p">${pl.map(x=>`<i>${esc(x)}</i>`).join('')}</span></div>`; }).join('')
     +(L.length>4?(sumUpAll?`<span class="cl-more" id="suLess">Show less ▴</span>`:`<span class="cl-more" id="suMore">Show all ${L.length} ▾</span>`):'');
   box.querySelectorAll('.su').forEach(r=>r.onclick=async()=>{ view='upcoming'; await saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); });
@@ -3910,7 +3895,7 @@ function renderUpcoming(){
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
     return `
     <div class="ucard${multi?' chain':''}">${timeLine(rt,late,sent.length,p)}
-      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}${u.some(g=>g.app)?' <span class="uc-app" title="Added in the app — not in the sheet">App</span>':''}${carriedLabel(p)?` <span class="uc-old" title="Requested on an earlier day, not started yet — stays until it is changed">${carriedLabel(p)}</span>`:''}</div>
+      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}${u.some(g=>g.app)?' <span class="uc-app" title="Added in the app — not in the sheet">App</span>':''}</div>
       ${u.filter(g=>g.app).map(g=>{ const m=APP_MAYBE.get(g.app);
         return (m?`<div class="uc-maybe">⚠ Same as sheet request? <b>${esc(m.client||'')} ${esc(m.code)}</b> · ${fmt(m.req,0)} m³ (here ${fmt(g.planReq,0)} m³)
           <div class="uc-mbtns"><button class="btn sm uc-merge" data-id="${g.app}" data-es="${esc(m.es||'')}" data-code="${esc(m.code)}">Merge</button><button class="btn sm alt uc-keep" data-id="${g.app}">Keep both</button></div></div>`:'')
@@ -5442,7 +5427,7 @@ async function planPhoto(){
       const saved=L.map((r,i)=>['q'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,5), JSON.stringify(r)]);
       for(const [k,val] of saved) PUMPNOTE[k]=val;
       stSet(KEY_PUMP,PUMPNOTE); close(); rerender(); renderUpcoming();
-      if(L.some(r=>!upcomingInFilter(r.date))) alert('Saved. Some are dated outside the From/To dates — change them to see those in Upcoming.');
+      if(L.some(r=>!inDateFilter(r.date))) alert('Saved. Some are dated outside the From/To dates — change them to see those in Upcoming.');
       for(const [k,val] of saved) await syncPush('pump',k,val);
       for(let i=0;i<saved.length;i++) await saveSite(saved[i][0].slice(1), L[i], rqTabs[i].rqSpW, rqTabs[i].rqSpS);
       if(forReq){ const [k0,v0]=saved[0], r0=JSON.parse(v0); await attachTo(r0.es?String(r0.es).trim():'APP-'+k0.slice(1)); }
@@ -5464,11 +5449,11 @@ async function planPhoto(){
       const nm=`${tw.client?tw.client+' ':''}${tw.code} · ${fmt(tw.req,0)} m³${tes?' · ES '+tes:''}`;
       const where=!p?'':DONE[doneKey(p)]?' It is already closed (Done).'
         :p.trucks>0?` It has started: ${fmt(p.delivered,0)} of ${fmt(p.required!=null?p.required:tw.req,0)} m³ — see All Pours.`
-        :upcomingInFilter(p.planDate)?' It is in Upcoming.':` It is dated ${tw.date||'—'} — outside the dates you are viewing.`;
+        :inDateFilter(p.planDate)?' It is in Upcoming.':` It is dated ${tw.date||'—'} — outside the dates you are viewing.`;
       el('reqMsg').innerHTML=`<b>Already in the plan sheet:</b> ${esc(nm)}.${esc(where)}${r.es&&tes===r.es?' Each request has its own ES — for a new pour use its new ES.':''}`;
       return; } }
     // outside the dates on screen: it is saved, but say why it does not show
-    const hidden=!upcomingInFilter(base.date);
+    const hidden=!inDateFilter(base.date);
     // ✎ Edit: replace the same app request (same id: its planned plants / pumps sent stay with it)
     if(editId){ const k='q'+editId; let old={}; try{ old=JSON.parse(PUMPNOTE[k]); }catch(e){}
       const r=Object.assign({},list[0],{by:old.by||base.by, at:old.at||base.at, keep:old.keep, editedBy:ME||'', editedAt:Date.now()}), val=JSON.stringify(r);
