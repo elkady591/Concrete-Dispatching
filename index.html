@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261027-000003">
+<meta name="app-build" content="20261027-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2201,6 +2201,7 @@ function render(res){
   if(pruneDone()) stSet(KEY_DONE,DONE);   // drop stale done-marks outside the current plan window
   // pour list from the plan (same-code same-day pours split by waterfall)
   const summary=buildPours(full);
+  reopenLoaded(summary);                  // closed, then a truck loaded after it (a top-up) = still going
   const hasElem=g=>{const e=String(g.elem||'').trim();return e && e!==NOEL;};
   const notDone=g=>!DONE[doneKey(g)];
   const withElem=summary.filter(g=>hasElem(g) && notDone(g));
@@ -4290,12 +4291,29 @@ function renderPlanCut(){ const box=el('planCut'); if(!box) return;
   const to=el('cutTmpOff'); if(to) to.addEventListener('click',()=>{ cutEditing=false; if(cutTemp()) push('hcut',''); else renderPlanCut(); });
 }
 let showHiddenClosed=false;
+// when a pour was closed: PUMPNOTE['zd<done key>'] = ms (shared). A truck LOADED after it = the pour goes on
+// (a top-up / كمالة) -> reopenLoaded() re-opens it by itself, and it shows again even past the 8 AM cut
+const closeAtKey=k=>'zd'+k;
 function toggleDone(k, on){
   if(on){ DONE[k]=true; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); DONE_ORDER.push(k); }
   else  { delete DONE[k]; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); }
-  stSet(KEY_DONE,DONE); stSet(KEY_DONE_ORDER,DONE_ORDER);
+  const zk=closeAtKey(k), zv=on?String(Date.now()):'';
+  if(zv) PUMPNOTE[zk]=zv; else delete PUMPNOTE[zk];
+  stSet(KEY_DONE,DONE); stSet(KEY_DONE_ORDER,DONE_ORDER); stSet(KEY_PUMP,PUMPNOTE);
   rerender();
   syncPush('done',k, on?1:'');
+  syncPush('pump',zk,zv);
+}
+// closed pours that got a truck loaded after they were closed -> re-open them (and drop a hand "hide")
+function reopenLoaded(summary){
+  const back=[];
+  for(const g of summary){ const k=doneKey(g), at=+PUMPNOTE[closeAtKey(k)]||0;
+    if(DONE[k] && at && (g.loads||[]).some(l=>!l.nt && l.t>at)) back.push(g); }
+  if(!back.length) return;
+  setTimeout(async()=>{ for(const g of back){ const k=doneKey(g), hk=hideKey(g);
+    if(!DONE[k]) continue;
+    toggleDone(k,false);
+    if(PUMPNOTE[hk]==='1'){ delete PUMPNOTE[hk]; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',hk,''); } } },0);
 }
 
 function normalizeTab(cols, matrix, plantName){
