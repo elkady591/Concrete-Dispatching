@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000004">
+<meta name="app-build" content="20261028-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2268,7 +2268,7 @@ function renderViewTabs(){
   let upWarn=''; try{ for(const v of upcomingPumpCheck().values()) if(v.cls!=='ok'){ upWarn='<span class="pm-alert" title="Pumps not ready for a request">⚠</span>'; break; } }catch(e){}
   box.innerHTML=mk('summary','📋 Summary',VD.open.length,'sum','Summary')+mk('pours','🏗️ All Pours'+chkWarn,VD.started.length,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
     // Trucks / Pumps: the number = what is AVAILABLE now (empty trucks · free pumps that have an operator)
-    +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks', (TRUCKS&&TRUCKS.ok)?TRUCKS.available.length:null,'trk','Trucks')
+    +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks'+(((TRUCKS&&TRUCKS.loaded)||[]).some(x=>outClass(x.elapsed)==='bad')?'<span class="pm-alert" title="CAUTION: a truck out for more than 3 h">⚠</span>':''),(TRUCKS&&TRUCKS.ok)?TRUCKS.available.length:null,'trk','Trucks')
     +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', (()=>{ try{ return pumpPlan(Date.now()).state.filter(s=>s.st==='free'&&!s.noop).length; }catch(e){ return null; } })(),'pmp','Pumps')
     +mk('production','📊 Production',null,'prd','Production');
   // the Admin entry is NOT a content tab — it lives up top next to the live pill (see #adminTabBtn)
@@ -2920,7 +2920,7 @@ function renderTrucks(){
           <div class="tc-truck">${esc(x.truck)}</div>
           <div class="tc-info">
             <div class="tc-top">${esc(siteT(x))}${x.plant?` <span class="tc-dim">· ${esc(x.plant)}</span>`:''}</div>
-            <div class="tc-meta">${x.q?fmt(x.q,0)+' m³':''}${x.elapsed?` · out <span class="tc-out ${outClass(x.elapsed)}">${esc(x.elapsed)}</span>`:''}${x.dep?` · ${esc(x.dep)}`:''}${x.action?` <span class="tc-flag">⚠ ${esc(x.action)}</span>`:''}</div>
+            <div class="tc-meta">${x.q?fmt(x.q,0)+' m³':''}${x.elapsed?` · out <span class="tc-out ${outClass(x.elapsed)}">${esc(x.elapsed)}</span>`:''}${x.dep?` · ${esc(x.dep)}`:''}${x.action?` <span class="tc-flag">⚠ ${esc(x.action)}</span>`:outClass(x.elapsed)==='bad'?` <span class="tc-flag">⚠ CAUTION</span>`:''}</div>
             ${x.flag?`<div class="tk-why">${x.flag==='down'?'⚠ Marked BREAKDOWN in the sheet':'⏸ Marked ON HOLD in the sheet'}${x.flagNote?' · '+esc(x.flagNote):''}</div>`:''}
           </div>
         </div>`).join('')}</div>`
@@ -3482,16 +3482,27 @@ function collectChecks(pours){
   for(const g of pours){ const es=String(g.elem||'').trim();
     if(!ES_MODE || g.esId || !/^\d{3,}$/.test(es) || planEs.has(es)) continue;
     const best=esGuess(g)[0], dk=g.dk||'', stn=[...new Set((g.loads||[]).map(l=>l.p).filter(Boolean))].join(', ');
-    const what=`ES ${esc(es)} · ${stn?esc(stn)+' · ':''}${g.trucks} truck${g.trucks>1?'s':''} · ${fmt(g.delivered,0)} m³ · from ${timeShort(g.depMin)}`;
+    // which trucks carry it (and when) — so the row can be found in the trucks sheet and corrected
+    const tkL=(g.loads||[]).filter(l=>l.k&&!l.prev).sort((a,b)=>(a.t||0)-(b.t||0)), tkTxt=tkL.map(l=>'TM '+esc(l.k)+(l.t!=null?' '+timeShort(l.t):''));
+    const what=`ES ${esc(es)} · ${stn?esc(stn)+' · ':''}${tkTxt.length&&tkTxt.length<=4?tkTxt.join(', '):g.trucks+' truck'+(g.trucks>1?'s':'')} · ${fmt(g.delivered,0)} m³ · from ${timeShort(g.depMin)}`;
     items.push({id:`wes|${es}|${dk}`, kind:'Wrong ES?', cls:'noes', k:g.key,
       txt: best ? `${what} — no request has it. Closest: <b>${esc(best.p.esId)}</b> ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)}${esSimilar(es,best.p.esId)===2?' (2 digits swapped)':' (1 digit different)'}`
                 : `${what} — no request has it and none is close`,
       fix: best ? {key:esFixKey(es,dk), to:best.p.esId} : null,
       req:{kind:'es', es, dk, key:esFixKey(es,dk), plant:stn, q:g.delivered, n:g.trucks, at:g.depMin},
       ui:{sev:'red', icon:'🔢', head:best?'ES not in the plan — typo?':'ES not in the plan', at:g.depMin,
-        tags:[CT('ES '+esc(es),'el'), ...(stn?[CT(esc(stn),'st')]:[]), CT(g.trucks+' truck'+(g.trucks>1?'s':''),'tk'), CT(fmt(g.delivered,0)+' m³')],
+        tags:[CT('ES '+esc(es),'el'), ...(stn?[CT(esc(stn),'st')]:[]), ...(tkTxt.length&&tkTxt.length<=6?tkTxt.map(s=>CT(s,'tk')):[CT(g.trucks+' truck'+(g.trucks>1?'s':''),'tk')]), CT(fmt(g.delivered,0)+' m³')],
         det: best ? `Closest request: <b>${esc(best.p.esId)}</b> · ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)} — ${esSimilar(es,best.p.esId)===2?'2 digits swapped':'1 digit different'}`
                   : 'No request has this ES and none is close — if it is a new request, give it its details here'} }); }
+  // a loaded truck out for more than 3 h (the red "out" time) — one card per truck and trip; goes once it is back
+  // (a truck with two requests in the drum is listed twice -> one card, its m³ added up)
+  const longT=new Map(); for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>outClass(x.elapsed)==='bad')){ const k=x.truck+'|'+x.dep, o=longT.get(k);
+    if(o){ o.q=num(o.q)+num(x.q); if(x.es&&!o.ess.includes(x.es)) o.ess.push(x.es); } else longT.set(k,{...x, ess:x.es?[x.es]:[]}); }
+  for(const x of longT.values()){ const st=esc(x.plant||''), site=[...new Set(x.ess.map(es=>{ const n=esName(es); return n&&n.k?(n.c?n.c+' ':'')+n.k:'ES '+es; }))].join(' + ');
+    items.push({id:`long|${x.truck}|${x.dep}`, kind:'Truck out long', cls:'gap',
+      txt:`TM ${esc(x.truck)} out for ${esc(x.elapsed)}${st?' · '+st:''}${x.dep?' · left '+esc(x.dep):''}${site?' · '+esc(site):''}`,
+      ui:{sev:'red', icon:'⚠️', head:`CAUTION — TM ${esc(x.truck)} out ${esc(x.elapsed)}`, tags:[CT('TM '+esc(x.truck),'tk'), ...(st?[CT(st,'st')]:[]), ...(x.q?[CT(fmt(x.q,0)+' m³')]:[]), ...(site?[CT(esc(site),'el')]:[])],
+        det:`More than 3 hours since it left${x.dep?' at '+esc(x.dep):''} — call the driver / the site`}}); }
   // a truck the user put ON HOLD (parked on purpose) or marked BREAKDOWN that has been loaded anyway
   rememberHolds();
   for(const x of Object.values(HOLDSEEN)){ const st=esc(x.plant||''), site=x.es?(()=>{ const n=esName(x.es); return n&&n.k?(n.c?n.c+' ':'')+n.k:'ES '+x.es; })():'';
