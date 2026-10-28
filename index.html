@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000001">
+<meta name="app-build" content="20261028-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1077,6 +1077,10 @@
   .trk-card.tk-hold,.tw-row.tk-hold{background:rgba(245,158,11,.18)!important;border-color:rgba(245,158,11,.7)!important}
   .tk-why{margin-top:4px;font-size:12px;font-weight:800;color:var(--rose)} .tk-hold .tk-why{color:var(--amber)}
   .tw-row.hd{border-inline-start-color:var(--amber)!important} .tw-ldx{color:var(--rose)}
+  .pr-sort{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:12.5px}
+  .pr-sb{font:inherit;font-weight:700;padding:5px 12px;border-radius:999px;border:1px solid var(--line,rgba(148,163,184,.35));background:transparent;color:inherit;cursor:pointer}
+  .pr-sb.on{background:var(--cyan);border-color:var(--cyan);color:#0b1020}
+  th.pr-on{color:var(--cyan)}
   .tw-sub{margin:12px 2px 4px;font-size:12px;font-weight:800;color:var(--amber)}
   .trk-kpi .l small{font-size:10px;color:var(--amber);font-weight:800}
   .trk-card .tc-info{min-width:0;flex:1} .trk-card .tc-top{overflow-wrap:anywhere}
@@ -2705,6 +2709,7 @@ let apOpen=new Set((()=>{ try{ return JSON.parse(localStorage.getItem('cmpour:ap
 function saveApOpen(){ try{ localStorage.setItem('cmpour:apopen',JSON.stringify([...apOpen])); }catch(e){} }
 let clAll=false;          // themes 2 / 3: Closed Pours shows the last 3 until 'Show all'
 let apHourly=new Set();  // Active Pours cards showing their Hourly rate instead of the overview
+let prodSort=(()=>{ try{ return localStorage.getItem('cmpour:prodsort')||'m3'; }catch(e){ return 'm3'; } })();   // Productivity table: 'm3' | 'trips' (this viewer)
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
 let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = every loaded truck
 // Productivity › "Trucks for today": how many to run and the trucks taken out by hand. Both STAY until the user changes
@@ -2825,14 +2830,19 @@ function renderTrucks(){
           <div class="tp-hl">${holdToday.length?holdToday.map(tk=>`<span class="tp-in" data-in="${esc(tk)}" title="Run it today anyway — it takes the place of the highest-m³ truck">${esc(tk)} <small>${fmt(qOf.get(tk)||0,0)}</small> ＋</span>`).join(''):'<span class="muted">—</span>'}</div></div>
           <button class="btn sm alt" id="tpSheet" type="button" title="Copy the note column (Q) for all ${ORD.length} trucks, in the sheet's order — click the note cell of the first truck (${esc(ORD[0].truck)}) and paste">📋 Copy for the sheet</button>
           <div class="muted" style="font-size:11.5px;margin-top:4px">Paste in column <b>Q</b> (the note) on the row of truck ${esc(ORD[0].truck)} — ${ORD.length} rows: empty for today's, HOLD for the rest, Breakdown keeps its note. The ✓ and the number fill by themselves.</div></div>`:''}</div>`;
-      const tbl=`<div class="muted" style="font-size:12px;margin-bottom:8px">${month} · month to date · ${rows.length} truck mixers</div>
+      // sorted by m³ (the sheet's first table) or by trips (its "Total Trips" table; else by the Trips column)
+      const byTr=prodSort==='trips', TO=p.tripOrder||[], tIdx=new Map(TO.map((o,i)=>[String(o.tm),i])), tOf=new Map(TO.map(o=>[String(o.tm),o.trips]));
+      const tripsOf=r=>tOf.has(String(r.tm))?tOf.get(String(r.tm)):r.trips;
+      const shownR=byTr?rows.slice().sort((a,b)=>(tIdx.has(String(a.tm))?tIdx.get(String(a.tm)):1e9)-(tIdx.has(String(b.tm))?tIdx.get(String(b.tm)):1e9)||tripsOf(b)-tripsOf(a)||b.q-a.q):rows;
+      const tbl=`<div class="pr-sort"><span class="muted">Sort by</span><button type="button" class="pr-sb${byTr?'':' on'}" data-ps="m3">m³ loaded</button><button type="button" class="pr-sb${byTr?' on':''}" data-ps="trips">Trips</button></div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">${month} · month to date · ${rows.length} truck mixers · most ${byTr?'trips':'m³'} first</div>
         <div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th>TM</th><th>Loaded (m³)</th><th>Trips</th><th>Not fully loaded</th>${p.plants.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map((r,i)=>`<tr>
+        <thead><tr><th>#</th><th>TM</th><th${byTr?'':' class="pr-on"'}>Loaded (m³)</th><th${byTr?' class="pr-on"':''}>Trips</th><th>Not fully loaded</th>${p.plants.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead>
+        <tbody>${shownR.map((r,i)=>`<tr>
           <td class="num muted">${i+1}</td>
           <td style="font-family:var(--mono);font-weight:800">${esc(r.tm)}</td>
-          <td class="num" style="font-weight:800">${fmt(r.q,0)}</td>
-          <td class="num">${fmt(r.trips,0)}</td>
+          <td class="num" style="font-weight:${byTr?500:800}">${fmt(r.q,0)}</td>
+          <td class="num" style="font-weight:${byTr?800:500}">${fmt(tripsOf(r),0)}</td>
           <td class="num" style="color:${r.partial>0?'var(--amber)':'var(--faint)'}">${fmt(r.partial,0)}</td>
           ${p.plants.map((n,j)=>`<td class="num muted">${r.byPlant&&r.byPlant[j]!=null?fmt(r.byPlant[j],0):'—'}</td>`).join('')}
         </tr>`).join('')}
@@ -2887,6 +2897,7 @@ function renderTrucks(){
          return `<div class="trk-why hold"><b>${esc(b.truck)}</b> — ${b.note?esc(b.note):'<span class="tc-dim">no reason written in the sheet</span>'}</div>`; })()}</div>`;
   }
   area.innerHTML=counts+tabs+body;
+  area.querySelectorAll('.pr-sb').forEach(b=>b.addEventListener('click',()=>{ prodSort=b.dataset.ps; try{ localStorage.setItem('cmpour:prodsort',prodSort); }catch(e){} renderTrucks(); }));
   { const ni=el('tpN'); if(ni) ni.addEventListener('change',async()=>{ planN=Math.max(1,parseInt(ni.value)||15);
       PUMPNOTE['TPN']=String(planN); stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPN',String(planN)); });
     const cb=el('tpCopy'); if(cb) cb.addEventListener('click',async()=>{ const txt='العربيات اللي شغالة النهاردة ان شاء الله\n'+TP_PICK.join('\n');
@@ -4808,7 +4819,10 @@ async function loadProductivity(){
     const rows=[];
     for(const row of r.matrix){ const k=tmNo(row[cTM]); if(!k) continue;
       rows.push({tm:k, q:num(row[cQ]), trips:cTr>=0?num(row[cTr]):0, partial:cPa>=0?num(row[cPa]):0, byPlant:byTm[k]||null}); }
-    if(rows.length){ rows.sort((a,b)=>b.q-a.q); TRUCK_PROD={rows,plants}; }   // keep the last good table on a bad pull
+    // the sheet's own trips table beside them ("TM | Total Trips", already sorted most trips first) -> its order
+    const cTT=L.findIndex(x=>/total\s*trips/.test(x)), tripOrder=[];
+    if(cTT>0) for(const row of r.matrix){ const k=tmNo(row[cTT-1]); if(k) tripOrder.push({tm:k, trips:num(row[cTT])}); }
+    if(rows.length){ rows.sort((a,b)=>b.q-a.q); TRUCK_PROD={rows,plants,tripOrder}; }   // keep the last good table on a bad pull
   }catch(e){}
 }
 
