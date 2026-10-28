@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000002">
+<meta name="app-build" content="20261028-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4093,8 +4093,26 @@ function syncCall(params){
     document.body.appendChild(s);
   });
 }
+// Changes this device sent that the sync script has not CONFIRMED yet (a dropped connection, a busy script, or a
+// pull that left before the change arrived): kept and put back over every state that comes in, and sent again on
+// each refresh, until the script's state has them. {'<type>|<key>': {type, key, value, at}}
+const KEY_PEND='cmpour:syncpend';
+let PEND=(()=>{ try{ const o=JSON.parse(localStorage.getItem(KEY_PEND)||'{}')||{}; for(const k in o) delete o[k].busy; return o; }catch(e){ return {}; } })();   // (a send cut off by closing the app is not "on its way")
+const savePend=()=>{ try{ localStorage.setItem(KEY_PEND,JSON.stringify(PEND)); }catch(e){} };
+const PEND_MAX=24*3600000;   // given up after a day
+const stMap=(st,type)=>type==='done'?(st.done||{}):type==='req'?(st.req||{}):type==='rate'?(st.rate||{}):(st.pump||null);
+const pendHas=(st,p)=>{ const m=stMap(st,p.type); if(!m) return true;   // older script without pump notes: nothing to wait for
+  const v=String(p.value==null?'':p.value);
+  return p.type==='done'?(!!m[p.key])===(v!==''):p.type==='pump'?String(m[p.key]==null?'':m[p.key])===v:(m[p.key]==null?'':String(Number(m[p.key])))===(v===''?'':String(Number(v))); };
+function applyPend(st){ let ch=false; const now=Date.now();
+  for(const id of Object.keys(PEND)){ const p=PEND[id];
+    if(pendHas(st,p) || now-p.at>PEND_MAX){ delete PEND[id]; ch=true; continue; }
+    const m=stMap(st,p.type), v=p.value==null?'':p.value;
+    if(v===''||v===null) delete m[p.key]; else m[p.key]=p.type==='done'?true:p.type==='pump'?String(v):Number(v); }
+  if(ch) savePend(); }
 function applyState(st){
   if(!st) return false;
+  applyPend(st);   // this device's unconfirmed changes win over the state that came back
   DONE=st.done||{}; REQ=st.req||{}; RATE=st.rate||{};
   stSet(KEY_DONE,DONE); stSet(KEY_REQ,REQ); stSet(KEY_RATE,RATE);   // keep a local cache for offline
   if(st.pump){ PUMPNOTE=st.pump; stSet(KEY_PUMP,PUMPNOTE); }        // older sync script: no pump notes -> keep local
@@ -4102,12 +4120,20 @@ function applyState(st){
   return true;
 }
 // Pull shared state. Only overwrites the local maps when the call SUCCEEDS (offline -> keep local).
-async function syncPull(){ const r=await syncCall({action:'get'}); return r ? applyState(r.state) : false; }
+async function syncPull(){ const r=await syncCall({action:'get'}); const ok=r ? applyState(r.state) : false;
+  // send again what the script has not confirmed (older than 20 s = not just on its way)
+  if(ok) for(const p of Object.values(PEND)) if(Date.now()-p.at>20000 && !p.busy) syncPush(p.type,p.key,p.value,true);
+  return ok; }
 // Push one change. The script returns the authoritative state, so re-render with it.
-async function syncPush(type,key,value){
+async function syncPush(type,key,value,again){
+  const id=type+'|'+key, v=(value==null?'':value);
+  if(syncBase() && ['done','req','rate','pump'].includes(type)){
+    if(!again || !PEND[id]) PEND[id]={type,key,value:v,at:Date.now()};
+    PEND[id].busy=1; savePend(); }
   // `by` is what the admin's edit log records against this change
-  const r=await syncCall({action:'set', type, key, value:(value==null?'':value), by:ME});
-  if(r&&r.state && applyState(r.state)) rerender();
+  const r=await syncCall({action:'set', type, key, value:v, by:ME});
+  if(PEND[id]) delete PEND[id].busy;
+  if(r&&r.state && applyState(r.state)) rerender(); else savePend();
   return r;
 }
 /* ---------- live presence: how many people have the dashboard open ----------
@@ -4313,18 +4339,21 @@ const closeAtKey=k=>'zd'+k;
 function toggleDone(k, on){
   if(on){ DONE[k]=true; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); DONE_ORDER.push(k); }
   else  { delete DONE[k]; DONE_ORDER=DONE_ORDER.filter(x=>x!==k); }
-  const zk=closeAtKey(k), zv=on?String(Date.now()):'';
+  const g0=on?(VD.summary||[]).find(g=>doneKey(g)===k):null;
+  const zk=closeAtKey(k), zv=on?String(Date.now())+(g0?'|'+g0.trucks:''):'';   // when + how many trucks it had
   if(zv) PUMPNOTE[zk]=zv; else delete PUMPNOTE[zk];
   stSet(KEY_DONE,DONE); stSet(KEY_DONE_ORDER,DONE_ORDER); stSet(KEY_PUMP,PUMPNOTE);
   rerender();
   syncPush('done',k, on?1:'');
   syncPush('pump',zk,zv);
 }
-// closed pours that got a truck loaded after they were closed -> re-open them (and drop a hand "hide")
+// closed pours that got a NEW truck loaded 10+ min after they were closed -> re-open them (and drop a hand "hide").
+// (a truck already on it when it was closed, or one typed with a time a few minutes off the phone's clock, is not one)
+const REOPEN_AFTER=10*60000;
 function reopenLoaded(summary){
   const back=[];
-  for(const g of summary){ const k=doneKey(g), at=+PUMPNOTE[closeAtKey(k)]||0;
-    if(DONE[k] && at && (g.loads||[]).some(l=>!l.nt && l.t>at)) back.push(g); }
+  for(const g of summary){ const k=doneKey(g), [a0,n0]=String(PUMPNOTE[closeAtKey(k)]||'').split('|'), at=+a0||0;
+    if(DONE[k] && at && (n0==null||g.trucks>+n0) && (g.loads||[]).some(l=>!l.nt && l.t>at+REOPEN_AFTER)) back.push(g); }
   if(!back.length) return;
   setTimeout(async()=>{ for(const g of back){ const k=doneKey(g), hk=hideKey(g);
     if(!DONE[k]) continue;
