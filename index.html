@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000004">
+<meta name="app-build" content="20261028-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3437,14 +3437,16 @@ function collectChecks(pours){
   for(const g of pours){ const es=String(g.elem||'').trim();
     if(!ES_MODE || g.esId || !/^\d{3,}$/.test(es) || planEs.has(es)) continue;
     const best=esGuess(g)[0], dk=g.dk||'', stn=[...new Set((g.loads||[]).map(l=>l.p).filter(Boolean))].join(', ');
-    const what=`ES ${esc(es)} · ${stn?esc(stn)+' · ':''}${g.trucks} truck${g.trucks>1?'s':''} · ${fmt(g.delivered,0)} m³ · from ${timeShort(g.depMin)}`;
+    // which trucks carry it (and when) — so the row can be found in the trucks sheet and corrected
+    const tkL=(g.loads||[]).filter(l=>l.k&&!l.prev).sort((a,b)=>(a.t||0)-(b.t||0)), tkTxt=tkL.map(l=>'TM '+esc(l.k)+(l.t!=null?' '+timeShort(l.t):''));
+    const what=`ES ${esc(es)} · ${stn?esc(stn)+' · ':''}${tkTxt.length&&tkTxt.length<=4?tkTxt.join(', '):g.trucks+' truck'+(g.trucks>1?'s':'')} · ${fmt(g.delivered,0)} m³ · from ${timeShort(g.depMin)}`;
     items.push({id:`wes|${es}|${dk}`, kind:'Wrong ES?', cls:'noes', k:g.key,
       txt: best ? `${what} — no request has it. Closest: <b>${esc(best.p.esId)}</b> ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)}${esSimilar(es,best.p.esId)===2?' (2 digits swapped)':' (1 digit different)'}`
                 : `${what} — no request has it and none is close`,
       fix: best ? {key:esFixKey(es,dk), to:best.p.esId} : null,
       req:{kind:'es', es, dk, key:esFixKey(es,dk), plant:stn, q:g.delivered, n:g.trucks, at:g.depMin},
       ui:{sev:'red', icon:'🔢', head:best?'ES not in the plan — typo?':'ES not in the plan', at:g.depMin,
-        tags:[CT('ES '+esc(es),'el'), ...(stn?[CT(esc(stn),'st')]:[]), CT(g.trucks+' truck'+(g.trucks>1?'s':''),'tk'), CT(fmt(g.delivered,0)+' m³')],
+        tags:[CT('ES '+esc(es),'el'), ...(stn?[CT(esc(stn),'st')]:[]), ...(tkTxt.length&&tkTxt.length<=6?tkTxt.map(s=>CT(s,'tk')):[CT(g.trucks+' truck'+(g.trucks>1?'s':''),'tk')]), CT(fmt(g.delivered,0)+' m³')],
         det: best ? `Closest request: <b>${esc(best.p.esId)}</b> · ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)} — ${esSimilar(es,best.p.esId)===2?'2 digits swapped':'1 digit different'}`
                   : 'No request has this ES and none is close — if it is a new request, give it its details here'} }); }
   // a loaded truck out for more than 3 h (the red "out" time) — one card per truck and trip; goes once it is back
