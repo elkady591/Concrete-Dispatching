@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000010">
+<meta name="app-build" content="20261028-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2470,15 +2470,23 @@ function pumpPlan(now){
     }
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
   }
+  // looking AHEAD (a request's time later on): a pour still running frees its pumps at its expected end + the
+  // washing (as the timeline draws it) — not "busy until it really ends". Right now nothing changes.
+  const ahead=now>Date.now()+60000;
+  const freeOf=b=>{ if(b.free!=null||!ahead||b.end!=null||b.p.setup) return b.free;
+    const g=b.p.g, e=g.finishAvg!=null?g.finishAvg:g.finishTgt; return e!=null?Math.max(e,Date.now())+WASH:null; };
   const state=PUMPS.map((len,i)=>{
     const pn=pumpNote(i), note=pn.text||(pn.code?'Breakdown':''), code=pn.code;
-    const live=busy[i].filter(b=>b.start<=now && (b.free==null || now<b.free));
+    const live=busy[i].map(b=>{ const f=freeOf(b); return f===b.free?b:Object.assign({},b,{free:f, end:f-WASH}); })
+      .filter(b=>b.start<=now && (b.free==null || now<b.free));
     // a pour actually pouring wins over a sibling still setting up, which wins over a washing one
     const cur=live.find(b=>b.end==null&&b.free==null&&!b.p.setup) || live.find(b=>b.end==null&&b.free==null) || live[live.length-1];
     let st='free', pour=null, until=null, setup=false, next=null;
     if(cur){ pour=cur.p.g; setup=!!cur.p.setup;
       if(cur.hold && cur.free==null){ st='on'; next=cur.hold; }                  // done, waiting on site for the next of its chain
-      else if(cur.end==null&&cur.free==null) st='on'; else { st='wash'; until=cur.free; } }
+      else if(cur.end==null&&cur.free==null) st='on';
+      else if(ahead&&cur.end!=null&&now<cur.end){ st='on'; until=cur.free; }   // still pouring then (expected end later)
+      else { st='wash'; until=cur.free; } }
     if(note && st==='free') st='down';
     return {i,len,st,pour,until,note,code,setup,next};
   });
@@ -2647,7 +2655,7 @@ function upcomingPumpCheck(now){
       if(!miss.length) return `${L} ✓`;
       const why=miss.map(r=> r.kind==='taken' ? `taken by ${esc(site(r.by))}${(RT.get(r.by)||{}).time?' ('+RT.get(r.by).time+')':''}`
                             : r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
-                            : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}`
+                            : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}${r.s.until?' · free ≈'+timeShort(r.s.until):''}`
                             : r.kind==='down' ? 'Breakdown' : r.kind==='noop' ? 'free but no operator' : 'no pump');
       const uniq=[...new Set(why)].join(' · ');
       return rs.length>1 ? `${L}: ${okN} of ${rs.length} free · ${uniq}` : `${L} ${uniq}`; });
