@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000003">
+<meta name="app-build" content="20261028-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1081,6 +1081,44 @@
   .pr-sb{font:inherit;font-weight:700;padding:5px 12px;border-radius:999px;border:1px solid var(--line,rgba(148,163,184,.35));background:transparent;color:inherit;cursor:pointer}
   .pr-sb.on{background:var(--cyan);border-color:var(--cyan);color:#0b1020}
   th.pr-on{color:var(--cyan)}
+  .ptl-card{margin-top:14px}
+  .ptl-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.ptl-head .muted{font-size:12px}
+  .ptl-wins{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+  .ptl-w{font:inherit;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+  .ptl-w.on{background:var(--cyan);border-color:var(--cyan);color:#0b1020}
+  .ptl-w select{font:inherit;background:transparent;color:inherit;border:0;padding:0 2px;margin:0;height:auto;min-height:0;width:auto;box-shadow:none;border-radius:0;-webkit-appearance:auto;appearance:auto}
+  .ptl-w select option{color:#0b1020}
+  .ptl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--line);padding-bottom:4px}
+  .ptl-in{position:relative}
+  .ptl-axis{position:relative;margin-left:56px;height:22px;font:11px var(--mono);color:var(--faint);cursor:pointer}
+  .ptl-axis span{position:absolute;top:4px;padding-left:3px;border-left:1px solid var(--line2);height:18px;white-space:nowrap}
+  .ptl-row{position:relative;display:flex;height:40px;border-top:1px solid var(--line)}
+  .ptl-lab{position:sticky;left:0;flex:none;width:56px;box-sizing:border-box;display:flex;align-items:center;font:800 13px var(--mono);background:var(--panel2);z-index:4;padding-left:4px}
+  .ptl-track{position:relative;flex:none;height:40px;cursor:pointer;background-image:repeating-linear-gradient(90deg,transparent 0 63px,var(--line) 63px 64px)}
+  .ptl-bar{box-sizing:border-box;position:absolute;top:6px;height:28px;border-radius:7px;font-size:11px;font-weight:700;padding:0 6px;display:flex;align-items:center;white-space:nowrap;overflow:clip;cursor:pointer;z-index:1}
+  .ptl-bar span,.ptl-free span{position:sticky;left:62px;overflow:hidden;text-overflow:ellipsis}   /* the label follows the screen's left edge while its bar is on screen */
+  .ptl-bar.run{background:rgba(34,211,238,.45);color:#0b1020}
+  .ptl-bar.run .ptl-done{position:absolute;left:0;top:0;bottom:0;background:var(--cyan)}
+  .ptl-bar.run span{color:#0b1020}
+  .ptl-bar.done,.ptl-bar.stop{background:rgba(148,163,184,.28);color:var(--ink,inherit)}
+  .ptl-bar.plan{background:repeating-linear-gradient(45deg,rgba(167,139,250,.32) 0 6px,rgba(167,139,250,.14) 6px 12px);border:1.5px dashed var(--violet)}
+  .ptl-bar.plan.late{background:repeating-linear-gradient(45deg,rgba(251,191,36,.35) 0 6px,rgba(251,191,36,.14) 6px 12px);border-color:var(--amber)}
+  .ptl-bar.clash{box-shadow:0 0 0 2px var(--rose) inset}
+  .ptl-free{position:absolute;top:6px;height:28px;box-sizing:border-box;border:1.5px dotted rgba(52,211,153,.7);border-radius:7px;color:var(--green);font-size:11px;font-weight:700;padding:0 6px;display:flex;align-items:center;white-space:nowrap;overflow:clip}
+  .ptl-now{position:absolute;top:0;bottom:0;width:2px;background:var(--rose);z-index:3;pointer-events:none}
+  .ptl-now b{position:absolute;top:2px;left:3px;font-size:10px;color:var(--rose)}
+  .ptl-cur{position:absolute;top:0;bottom:0;width:2px;background:var(--amber);z-index:3;pointer-events:none}
+  .ptl-leg{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11px;color:var(--faint)}
+  .ptl-leg .lg{display:inline-block;width:16px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+  .lg.run{background:var(--cyan)}.lg.est{background:rgba(34,211,238,.45)}.lg.done{background:rgba(148,163,184,.4)}.lg.plan{border:1.5px dashed var(--violet)}.lg.late{border:1.5px dashed var(--amber)}.lg.free{border:1.5px dotted var(--green)}.lg.clash{box-shadow:0 0 0 2px var(--rose) inset}
+  .ptl-warn{margin-top:8px;font-size:12.5px;color:var(--rose)}
+  .ptl-np{margin-top:8px;font-size:12px;color:var(--amber)}
+  .ptl-at{margin-top:10px;border:1px solid var(--amber);border-radius:12px;padding:10px}
+  .ptl-at-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}.ptl-at-h .ok,.ptl-at .ok{color:var(--green)}
+  .ptl-x{margin-left:auto;font:inherit;background:transparent;border:0;color:inherit;cursor:pointer;font-size:15px}
+  .ptl-at-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-top:8px}
+  .ptl-at-c{border:1px solid var(--line2);border-radius:10px;padding:7px;font-size:12px}.ptl-at-c b{font-family:var(--mono)}
+  .ptl-at-c.busy{border-color:var(--cyan)}.ptl-at-c.fr{border-color:var(--green)}.ptl-at-c .plan{color:var(--violet)}.ptl-at-c small{display:block}
   .tw-sub{margin:12px 2px 4px;font-size:12px;font-weight:800;color:var(--amber)}
   .trk-kpi .l small{font-size:10px;color:var(--amber);font-weight:800}
   .trk-card .tc-info{min-width:0;flex:1} .trk-card .tc-top{overflow-wrap:anywhere}
@@ -1328,6 +1366,7 @@
     <div id="plantTabs" class="ptabs"></div>
     <div class="section-title" id="tblTitle">All Pours</div>
     <div id="tableArea"></div>
+    <div id="plantTimeline"></div>
   </section>
 
   <!-- UPCOMING VIEW -->
@@ -2210,6 +2249,7 @@ function render(res){
   renderSummary();
   renderAllPours();
   renderUpcoming();
+  try{ renderPlantTimeline(); }catch(e){ try{console.log('timeline',e);}catch(_){} }
   applyView();
 }
 
@@ -3621,6 +3661,107 @@ function renderCheckList(cb, items){
 }
 
 /* ---------- all pours view ---------- */
+/* ---------- Plants timeline (All Pours, at the bottom) ----------
+   One row per plant across the hours: what it is pouring (and its expected end), the requests planned on it
+   (its 🏭 plants, from its time — or "after …", or now when it has none), the free gaps and the clashes.
+   Default window = the work day of the WhatsApp photo: from the same cut (8:00 AM) for 24 h — a pour still
+   going from before it stays (drawn from the window's edge). Tap a bar = that pour; tap anywhere else = every
+   plant at that moment. The window choice is this viewer's own. */
+const KEY_TLWIN='cmpour:tlwin';
+let tlWin=(()=>{ try{ return localStorage.getItem(KEY_TLWIN)||'day'; }catch(e){ return 'day'; } })();   // 'day' | 'now' | 'HH:MM'
+let tlAt=null;           // the moment tapped on the timeline (ms) — the "at this time" panel
+let tlScroll=null;       // keep the sideways scroll across refreshes
+const TL_PXH=64;         // px per hour
+const TL_FREE_MIN=30*60000;   // gaps shorter than this are not labelled "free"
+function tlWindow(now){
+  const hm=cutDaily()||'08:00';
+  if(tlWin==='now'){ const s=now-3600000; return {s, e:s+13*3600000, lab:'From now · 12 h'}; }
+  if(/^\d{1,2}:\d{2}$/.test(tlWin)){ const s=lastDailyCut(tlWin,now); return {s, e:s+24*3600000, lab:`From ${timeShort(s)} · 24 h`}; }
+  const c=planCutAt(), s=c!=null?c:lastDailyCut(hm,now); return {s, e:s+24*3600000, lab:`Work day · from ${cutLabel(s)}`};
+}
+function plantTimeline(now){
+  now=now||Date.now();
+  const W=tlWindow(now), RT=requestTimes(), plants=PLANT_LIST(), rows=new Map(plants.map(p=>[p,[]])), nameOf=g=>(g.client?g.client+' ':'')+(g.elem||'');
+  const dur=g=>{ const q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate; return q>0&&r>0?q/r*3600000:null; };
+  const add=(p,it)=>{ if(!rows.has(p)) rows.set(p,[]); rows.get(p).push(it); };
+  // 1) started pours: per plant, from its first truck there to its last one — or, still loading there, to the expected end
+  for(const g of (VD.summary||[])){ if(!(g.trucks>0) || closedHidden(g)) continue;
+    const fin=pourDone(g), end=g.finishAvg!=null?g.finishAvg:g.finishTgt;
+    const byP=new Map(); (g.loads||[]).forEach(l=>{ if(l.p&&l.t!=null){ const a=byP.get(l.p)||[]; a.push(l.t); byP.set(l.p,a); } });
+    for(const [p,ts] of byP){ const s=Math.min(...ts), last=Math.max(...ts), live=!fin && now-last<ACTIVE_WINDOW;
+      const e=live?Math.max(now,end!=null?end:now):last+15*60000;
+      if(e<W.s || s>W.e) continue;
+      add(p,{g, s, e, now:live?now:null, kind:fin?'done':live?'run':'stop', est:live&&end!=null,
+        txt:`${nameOf(g)}${g.required!=null?` · ${fmt(g.delivered,0)}/${fmt(g.required,0)} m³`:''}${live&&end!=null?` · ≈${timeShort(end)}`:fin?' · done':''}`}); } }
+  // 2) not started: on the plants chosen for it (🏭), from its time ("after …" = its estimate; none / passed = now)
+  const noPlant=[];
+  for(const g of (VD.upcoming||[])){ const t=RT.get(g), d=dur(g), s=t?Math.max(t.at,now):now, e=s+(d||3600000);
+    const ps=planPlants(plantKey(g));
+    const it={g, s, e, kind:'plan', late:!!(t&&!t.est&&t.at<now), noTime:!t, noRate:!d,
+      txt:`${t?(t.est?'after '+esc(t.after?nameOf(t.after):'…')+' · ':'⏰ '+timeShort(t.at)+' · '):'no time · '}${nameOf(g)} · ${fmt(g.planReq,0)} m³${d?` · ≈${timeShort(e)}`:' · no rate'}`};
+    if(!ps.length){ noPlant.push(it); continue; }
+    ps.forEach(p=>add(p,Object.assign({},it))); }
+  // 3) clashes (a planned request on a plant still busy then) + free gaps from now on
+  const clashes=[];
+  for(const [p,list] of rows){ list.sort((a,b)=>a.s-b.s);
+    for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i], b=list[j];
+      if(a.kind!=='plan'&&b.kind!=='plan') continue; if(a.kind==='done'||b.kind==='done'||a.kind==='stop'||b.kind==='stop') continue;
+      const ov=Math.min(a.e,b.e)-Math.max(a.s,b.s); if(ov<5*60000) continue;
+      a.clash=b.clash=true; clashes.push({p, a, b, ov}); }
+    const busy=list.filter(x=>x.kind==='run'||x.kind==='plan').map(x=>[x.s,x.e]).sort((x,y)=>x[0]-y[0]);
+    let cur=Math.max(now,W.s); const free=[];
+    for(const [s,e] of busy){ if(e<=cur) continue; if(s-cur>=TL_FREE_MIN) free.push([cur,s]); cur=Math.max(cur,e); }
+    if(W.e-cur>=TL_FREE_MIN) free.push([cur,W.e]);
+    list.free=free; }
+  return {W, rows, noPlant, clashes, now};
+}
+// every plant at one moment (the tapped time)
+function tlAtMoment(T,at){
+  return [...T.rows.entries()].map(([p,list])=>{
+    const on=list.filter(x=>(x.kind==='run'||x.kind==='plan')&&x.s<=at&&x.e>at), next=list.filter(x=>(x.kind==='run'||x.kind==='plan')&&x.s>at).sort((a,b)=>a.s-b.s)[0];
+    return {p, on, next}; }); }
+function renderPlantTimeline(){
+  const box=el('plantTimeline'); if(!box) return;
+  const sc=box.querySelector('.ptl-scroll'); if(sc) tlScroll=sc.scrollLeft;
+  const T=plantTimeline(), {W,now}=T, X=t=>Math.round((Math.max(W.s,Math.min(W.e,t))-W.s)/3600000*TL_PXH);
+  const hours=Math.ceil((W.e-W.s)/3600000), width=hours*TL_PXH;
+  const h0=new Date(W.s); h0.setMinutes(0,0,0); const ticks=[]; for(let t=h0.getTime(); t<=W.e; t+=3600000) if(t>=W.s) ticks.push(t);
+  const bar=x=>{ const l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s;
+    const done=x.now!=null?Math.max(0,Math.min(100,Math.round((X(x.now)-l)/w*100))):null;
+    const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind;
+    return `<div class="ptl-bar ${cls}${x.clash?' clash':''}" style="left:${l}px;width:${w}px" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${x.txt}</span></div>`; };
+  const freeB=([s,e])=>`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
+  const row=(p,list)=>`<div class="ptl-row"><div class="ptl-lab">${esc(p)}</div><div class="ptl-track" style="width:${width}px">${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`;
+  const nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
+  const winChips=[['day','Work day 8→8'],['now','From now · 12 h']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
+    +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select id="ptlFrom"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
+  const AT=tlAt!=null?tlAtMoment(T,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length).map(o=>o.p):[];
+  const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:' · no plant free'}<button type="button" class="ptl-x" id="ptlAtX">✕</button></div>
+      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.on.length?o.on.map(x=>`<div class="${x.kind}">${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):'<div class="ok">Free</div>'}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))}</small>`:''}</div>`).join('')}</div></div>`:'';
+  const warn=T.clashes.length?`<div class="ptl-warn">${T.clashes.map(c=>{ const pl=c.a.kind==='plan'&&c.b.kind!=='plan'?c.a:c.b.kind==='plan'?c.b:c.a, o=pl===c.a?c.b:c.a;
+      return `⚠ <b>${esc(c.p)}</b>: ${esc((pl.g.client?pl.g.client+' ':'')+pl.g.elem)} from ${timeShort(pl.s)} — ${esc((o.g.client?o.g.client+' ':'')+o.g.elem)} keeps it till ≈${timeShort(o.e)} (${Math.round(c.ov/60000)} min)`; }).join('<br>')}</div>`:'';
+  const np=T.noPlant.length?`<div class="ptl-np">🏭 No plant chosen yet: ${T.noPlant.map(x=>`<span>${esc((x.g.client?x.g.client+' ':'')+x.g.elem)}${x.noTime?'':' · '+timeShort(x.s)}</span>`).join(' · ')}</div>`:'';
+  box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">🏭 Plants timeline</h3><span class="muted">${esc(W.lab)}</span></div>
+    <div class="ptl-wins">${winChips}</div>
+    <div class="ptl-scroll"><div class="ptl-in" style="width:${width+56}px">
+      <div class="ptl-axis" style="width:${width}px">${ticks.map(t=>`<span style="left:${X(t)}px">${timeShort(t).replace(':00','')}</span>`).join('')}</div>
+      ${[...T.rows.entries()].map(([p,l])=>row(p,l)).join('')}
+      ${nowX!=null?`<div class="ptl-now" style="left:${56+nowX}px"><b>now</b></div>`:''}${atX!=null?`<div class="ptl-cur" style="left:${56+atX}px"></div>`:''}
+    </div></div>
+    <div class="ptl-leg"><span><i class="lg run"></i>pouring</span><span><i class="lg est"></i>expected till</span><span><i class="lg done"></i>finished</span><span><i class="lg plan"></i>planned 🏭</span><span><i class="lg late"></i>late start</span><span><i class="lg free"></i>free</span><span><i class="lg clash"></i>clash</span></div>
+    ${warn}${np}${atPanel}<div class="muted" style="font-size:11.5px;margin-top:6px">Tap a bar = that pour · tap an empty place = every plant at that time</div></div>`;
+  const s2=box.querySelector('.ptl-scroll');
+  if(s2){ s2.scrollLeft=tlScroll!=null?tlScroll:Math.max(0,(nowX||0)-TL_PXH*1.5);
+    s2.addEventListener('click',ev=>{ const b=ev.target.closest('.ptl-bar');
+      if(b){ const k=decodeURIComponent(b.dataset.k);
+        if(b.dataset.kind==='plan'){ view='upcoming'; saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); return; }
+        logKey=k; renderAllPours(); const t=el('truckLog'); if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+      const tr=ev.target.closest('.ptl-track,.ptl-axis'); if(!tr) return;
+      const x=ev.clientX-tr.getBoundingClientRect().left; tlAt=W.s+Math.round(x/TL_PXH*60)*60000; renderPlantTimeline(); }); }
+  box.querySelectorAll('.ptl-w[data-w]').forEach(b=>b.addEventListener('click',()=>{ tlWin=b.dataset.w; tlScroll=null; try{ localStorage.setItem(KEY_TLWIN,tlWin); }catch(e){} renderPlantTimeline(); }));
+  const fs=el('ptlFrom'); if(fs) fs.addEventListener('change',()=>{ if(!fs.value) return; tlWin=fs.value; tlScroll=null; try{ localStorage.setItem(KEY_TLWIN,tlWin); }catch(e){} renderPlantTimeline(); });
+  const ax=el('ptlAtX'); if(ax) ax.addEventListener('click',()=>{ tlAt=null; renderPlantTimeline(); });
+}
 function renderAllPours(){
   // use the plan-driven pour list (same-name pours split & numbered), started ones only
   // pours marked DONE are left out here, so the tab counts match the rows actually listed
