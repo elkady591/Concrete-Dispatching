@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000007">
+<meta name="app-build" content="20261028-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1121,7 +1121,7 @@
   .ptl-x{margin-left:auto;font:inherit;background:transparent;border:0;color:inherit;cursor:pointer;font-size:15px}
   .ptl-at-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-top:8px}
   .ptl-at-c{border:1px solid var(--line2);border-radius:10px;padding:7px;font-size:12px}.ptl-at-c b{font-family:var(--mono)}
-  .ptl-at-c.busy{border-color:var(--cyan)}.ptl-at-c.fr{border-color:var(--green)}.ptl-at-c .plan{color:var(--violet)}.ptl-at-c small{display:block}
+  .ptl-at-c.busy{border-color:var(--cyan)}.ptl-at-c.fr{border-color:var(--green)}.ptl-at-c .plan{color:var(--violet)}.ptl-at-c .wash{color:#fb923c}.ptl-at-c small{display:block}
   .tw-sub{margin:12px 2px 4px;font-size:12px;font-weight:800;color:var(--amber)}
   .trk-kpi .l small{font-size:10px;color:var(--amber);font-weight:800}
   .trk-card .tc-info{min-width:0;flex:1} .trk-card .tc-top{overflow-wrap:anywhere}
@@ -1425,6 +1425,7 @@
   <section id="pumpsView">
     <div class="section-title">Pumps</div>
     <div id="pumpsArea"></div>
+    <div id="pumpTimeline"></div>
   </section>
 
   <!-- PRODUCTION VIEW: the sheet's own two daily tables (8 AM : 8 AM and 12 AM : 12 AM) -->
@@ -3685,8 +3686,9 @@ function renderCheckList(cb, items){
    plant at that moment. The window choice is this viewer's own. */
 const KEY_TLWIN='cmpour:tlwin2';
 let tlWin=(()=>{ try{ return localStorage.getItem(KEY_TLWIN)||'now12'; }catch(e){ return 'now12'; } })();   // 'now12' | 'now24' | 'day' | 'HH:MM'
-let tlAt=null;           // the moment tapped on the timeline (ms) — the "at this time" panel
-let tlScroll=null;       // keep the sideways scroll across refreshes
+// per timeline (plants on All Pours, pumps on the Pumps page): the moment tapped (ms, the "at this time" panel)
+// and the sideways scroll kept across refreshes
+const TLS={plants:{at:null,scroll:null}, pumps:{at:null,scroll:null}};
 const TL_PXH=64;         // px per hour
 const TL_FREE_MIN=30*60000;   // gaps shorter than this are not labelled "free"
 function tlWindow(now){
@@ -3757,14 +3759,16 @@ function plantTimeline(now){
     list.free=free; }
   return {W, rows, pumps, noPlant, clashes, now};
 }
-// every plant at one moment (the tapped time)
-function tlAtMoment(T,at){
-  return [...T.rows.entries()].map(([p,list])=>{
-    const on=list.filter(x=>(x.kind==='run'||x.kind==='plan')&&x.s<=at&&x.e>at), next=list.filter(x=>(x.kind==='run'||x.kind==='plan')&&x.s>at).sort((a,b)=>a.s-b.s)[0];
+// every plant (or pump) at one moment (the tapped time) -> [{p, on, next}]
+function tlAtMoment(entries,at){
+  return entries.map(([p,list])=>{
+    const busy=x=>x.kind==='run'||x.kind==='plan'||x.kind==='wash'||x.kind==='stop';   // washing / waiting = not free either
+    const on=list.filter(x=>busy(x)&&x.s<=at&&x.e>at), next=list.filter(x=>(x.kind==='run'||x.kind==='plan')&&x.s>at).sort((a,b)=>a.s-b.s)[0];
     return {p, on, next}; }); }
-function renderPlantTimeline(){
-  const box=el('plantTimeline'); if(!box) return;
-  const sc=box.querySelector('.ptl-scroll'); if(sc) tlScroll=sc.scrollLeft;
+function renderPlantTimeline(kind){
+  if(!kind){ renderPlantTimeline('plants'); renderPlantTimeline('pumps'); return; }
+  const PU=kind==='pumps', box=el(PU?'pumpTimeline':'plantTimeline'), S=TLS[kind]; if(!box) return;
+  const sc=box.querySelector('.ptl-scroll'); if(sc) S.scroll=sc.scrollLeft;
   const T=plantTimeline(), {W,now}=T, X=t=>Math.round((Math.max(W.s,Math.min(W.e,t))-W.s)/3600000*TL_PXH);
   const hours=Math.ceil((W.e-W.s)/3600000), width=hours*TL_PXH;
   const h0=new Date(W.s); h0.setMinutes(0,0,0); const ticks=[]; for(let t=h0.getTime(); t<=W.e; t+=3600000) if(t>=W.s) ticks.push(t);
@@ -3778,36 +3782,39 @@ function renderPlantTimeline(){
     list.slice().sort((a,b)=>a.s-b.s).forEach(x=>{ const l=X(x.s); let k=ends.findIndex(e=>e<=l+1); if(k<0){ k=ends.length; ends.push(0); } x.lane=k; ends[k]=Math.max(l+6,X(x.e)); });
     const h=40+Math.max(0,ends.length-1)*LANE;
     return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab">${esc(p)}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
-  const nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
+  const tlAt=S.at, nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
+  const entries=PU?[...T.pumps.values()].map(l=>[l.lab,l]):[...T.rows.entries()];
   const winChips=[['now12','Next 12 h'],['now24','Next 24 h'],['day','Work day 8→8']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
-    +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select id="ptlFrom"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
-  const AT=tlAt!=null?tlAtMoment(T,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length).map(o=>o.p):[];
-  const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:' · no plant free'}<button type="button" class="ptl-x" id="ptlAtX">✕</button></div>
-      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.on.length?o.on.map(x=>`<div class="${x.kind}">${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):'<div class="ok">Free</div>'}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))}</small>`:''}</div>`).join('')}</div></div>`:'';
-  const warn=T.clashes.length?`<div class="ptl-warn">${T.clashes.map(c=>{ const pl=c.a.kind==='plan'&&c.b.kind!=='plan'?c.a:c.b.kind==='plan'?c.b:c.a, o=pl===c.a?c.b:c.a;
+    +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select class="ptl-from"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
+  const AT=tlAt!=null?tlAtMoment(entries,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length).map(o=>o.p):[];
+  const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:(PU?' · no pump free':' · no plant free')}<button type="button" class="ptl-x">✕</button></div>
+      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.on.length?o.on.map(x=>`<div class="${x.kind}">${x.kind==='wash'?'washing':x.kind==='stop'?'waiting':''}${x.kind==='wash'||x.kind==='stop'?' <small>after</small> ':''}${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):'<div class="ok">Free</div>'}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))}</small>`:''}</div>`).join('')}</div></div>`:'';
+  const CL=T.clashes.filter(c=>/^Pump /.test(c.p)===PU);
+  const warn=CL.length?`<div class="ptl-warn">${CL.map(c=>{ const pl=c.a.kind==='plan'&&c.b.kind!=='plan'?c.a:c.b.kind==='plan'?c.b:c.a, o=pl===c.a?c.b:c.a;
       return `⚠ <b>${esc(c.p)}</b>: ${esc((pl.g.client?pl.g.client+' ':'')+pl.g.elem)} from ${timeShort(pl.s)} — ${esc((o.g.client?o.g.client+' ':'')+o.g.elem)} keeps it till ≈${timeShort(o.e)} (${Math.round(c.ov/60000)} min)`; }).join('<br>')}</div>`:'';
-  const np=T.noPlant.length?`<div class="ptl-np">🏭 No plant chosen yet: ${T.noPlant.map(x=>`<span>${esc((x.g.client?x.g.client+' ':'')+x.g.elem)}${x.noTime?'':' · '+timeShort(x.s)}</span>`).join(' · ')}</div>`:'';
-  box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">🏭 Plants timeline</h3><span class="muted">${esc(W.lab)}</span></div>
+  const np=!PU&&T.noPlant.length?`<div class="ptl-np">🏭 No plant chosen yet: ${T.noPlant.map(x=>`<span>${esc((x.g.client?x.g.client+' ':'')+x.g.elem)}${x.noTime?'':' · '+timeShort(x.s)}</span>`).join(' · ')}</div>`:'';
+  box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
     <div class="ptl-scroll"><div class="ptl-in" style="width:${width+56}px">
       <div class="ptl-axis" style="width:${width}px">${ticks.map(t=>`<span style="left:${X(t)}px">${timeShort(t).replace(':00','')}</span>`).join('')}</div>
-      ${[...T.rows.entries()].map(([p,l])=>row(p,l)).join('')}
-      ${T.pumps&&T.pumps.size?`<div class="ptl-row ptl-sep"><div class="ptl-lab">PUMPS</div></div>${[...T.pumps.values()].map(l=>row(l.lab,l)).join('')}`:''}
+      ${entries.length?entries.map(([p,l])=>row(p,l)).join(''):`<div class="muted" style="padding:10px 4px;font-size:12.5px">${PU?'No working pump (the ones with a breakdown are left out)':'No plant'}</div>`}
       ${nowX!=null?`<div class="ptl-now" style="left:${56+nowX}px"><b>now</b></div>`:''}${atX!=null?`<div class="ptl-cur" style="left:${56+atX}px"></div>`:''}
     </div></div>
-    <div class="ptl-leg"><span><i class="lg run"></i>pouring</span><span><i class="lg est"></i>expected till</span><span><i class="lg done"></i>finished</span><span><i class="lg plan"></i>planned 🏭</span><span><i class="lg late"></i>late start</span><span><i class="lg free"></i>free</span><span><i class="lg wash"></i>washing</span><span><i class="lg clash"></i>clash</span></div>
-    ${warn}${np}${atPanel}<div class="muted" style="font-size:11.5px;margin-top:6px">Tap a bar = that pour · tap an empty place = every plant at that time</div></div>`;
+    <div class="ptl-leg"><span><i class="lg run"></i>pouring</span><span><i class="lg est"></i>expected till</span><span><i class="lg done"></i>finished</span><span><i class="lg plan"></i>planned${PU?'':' 🏭'}</span><span><i class="lg late"></i>late start</span><span><i class="lg free"></i>free</span>${PU?'<span><i class="lg wash"></i>washing</span>':''}<span><i class="lg clash"></i>clash</span></div>
+    ${warn}${np}${atPanel}<div class="muted" style="font-size:11.5px;margin-top:6px">Tap a bar = that pour · tap an empty place = every ${PU?'pump':'plant'} at that time${PU?' · pumps with a breakdown are not shown':''}</div></div>`;
   const s2=box.querySelector('.ptl-scroll');
-  if(s2){ s2.scrollLeft=tlScroll!=null?tlScroll:Math.max(0,(nowX||0)-TL_PXH*1.5);
+  if(s2){ s2.scrollLeft=S.scroll!=null?S.scroll:Math.max(0,(nowX||0)-TL_PXH*1.5);
     s2.addEventListener('click',ev=>{ const b=ev.target.closest('.ptl-bar');
       if(b){ const k=decodeURIComponent(b.dataset.k);
         if(b.dataset.kind==='plan'){ view='upcoming'; saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); return; }
-        logKey=k; renderAllPours(); const t=el('truckLog'); if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+        logKey=k; if(PU){ view='pours'; saveCfg(); renderViewTabs(); applyView(); } renderAllPours(); const t=el('truckLog'); if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'start'}); return; }
       const tr=ev.target.closest('.ptl-track,.ptl-axis'); if(!tr) return;
-      const x=ev.clientX-tr.getBoundingClientRect().left; tlAt=W.s+Math.round(x/TL_PXH*60)*60000; renderPlantTimeline(); }); }
-  box.querySelectorAll('.ptl-w[data-w]').forEach(b=>b.addEventListener('click',()=>{ tlWin=b.dataset.w; tlScroll=null; try{ localStorage.setItem(KEY_TLWIN,tlWin); }catch(e){} renderPlantTimeline(); }));
-  const fs=el('ptlFrom'); if(fs) fs.addEventListener('change',()=>{ if(!fs.value) return; tlWin=fs.value; tlScroll=null; try{ localStorage.setItem(KEY_TLWIN,tlWin); }catch(e){} renderPlantTimeline(); });
-  const ax=el('ptlAtX'); if(ax) ax.addEventListener('click',()=>{ tlAt=null; renderPlantTimeline(); });
+      const x=ev.clientX-tr.getBoundingClientRect().left; S.at=W.s+Math.round(x/TL_PXH*60)*60000; renderPlantTimeline(kind); }); }
+  // the window is one choice for both timelines
+  const setWin=v=>{ tlWin=v; TLS.plants.scroll=TLS.pumps.scroll=null; try{ localStorage.setItem(KEY_TLWIN,tlWin); }catch(e){} renderPlantTimeline(); };
+  box.querySelectorAll('.ptl-w[data-w]').forEach(b=>b.addEventListener('click',()=>setWin(b.dataset.w)));
+  const fs=box.querySelector('.ptl-from'); if(fs) fs.addEventListener('change',()=>{ if(fs.value) setWin(fs.value); });
+  const ax=box.querySelector('.ptl-x'); if(ax) ax.addEventListener('click',()=>{ S.at=null; renderPlantTimeline(kind); });
 }
 function renderAllPours(){
   // use the plan-driven pour list (same-name pours split & numbered), started ones only
