@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000009">
+<meta name="app-build" content="20261028-000010">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1118,6 +1118,10 @@
   .ptl-np{margin-top:8px;font-size:12px;color:var(--amber)}
   .ptl-at{margin-top:10px;border:1px solid var(--amber);border-radius:12px;padding:10px}
   .ptl-at-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}.ptl-at-h .ok,.ptl-at .ok{color:var(--green)}
+  .tl-st{display:inline-block;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;margin-bottom:10px;border:1px solid var(--line2)}
+  .tl-st.run{color:#0b1020;background:var(--cyan);border-color:var(--cyan)}.tl-st.plan{color:var(--violet);border-color:var(--violet)}
+  .tl-st.wash{color:#fb923c;border-color:#fb923c}.tl-st.late{color:var(--amber);border-color:var(--amber)}
+  .tl-kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:13.5px;margin-bottom:10px}.tl-kv span{color:var(--muted)}
   .ptl-x{margin-left:auto;font:inherit;background:transparent;border:0;color:inherit;cursor:pointer;font-size:15px}
   .ptl-at-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-top:8px}
   .ptl-at-c{border:1px solid var(--line2);border-radius:10px;padding:7px;font-size:12px}.ptl-at-c b{font-family:var(--mono)}
@@ -3771,6 +3775,43 @@ function tlAtMoment(entries,at){
     const busy=x=>x.kind==='run'||x.kind==='plan'||x.kind==='wash'||x.kind==='stop';   // washing / waiting = not free either
     const on=list.filter(x=>busy(x)&&x.s<=at&&x.e>at), next=list.filter(x=>(x.kind==='run'||x.kind==='plan')&&x.s>at).sort((a,b)=>a.s-b.s)[0];
     return {p, on, next}; }); }
+// a bar's details in a box over the page (the timeline stays where it is); buttons go on to its trucks / its card
+function tlDetail(x,PU,clashes){
+  let o=el('tlModal'); if(!o){ o=document.createElement('div'); o.id='tlModal'; o.className='rq-back'; document.body.appendChild(o);
+    o.addEventListener('click',e=>{ if(e.target===o||e.target.closest('.rq-x')) o.style.display='none'; }); }
+  const g=x.g, now=Date.now(), RT=requestTimes(), t=RT.get(g), nm=(g.client?g.client+' ':'')+(g.elem||'');
+  const started=g.trucks>0, need=pumpReq(g.pumps), sent=pumpSent(g);
+  const ts=(g.loads||[]).map(l=>l.t).filter(v=>v!=null), last=ts.length?Math.max(...ts):null;
+  const used=[...new Set((g.loads||[]).map(l=>l.p).filter(Boolean))], planned=planPlants(plantKey(g));
+  const end=started?(g.finishAvg!=null?g.finishAvg:g.finishTgt):(x.kind==='plan'&&!PU?x.e:null);
+  const state={run:'● Pouring now', plan:x.setup?'Pumps sent — setting up':(started?'Pouring':'Not started yet'), wash:'Pump washing after it', done:'Finished', stop:'Waiting for the next request'}[x.kind]||'';
+  const rate=g.rateManual!=null?g.rateManual:g.planRate;
+  const L=[];   // [label, value]
+  L.push([PU?'Pump':'Plant', `<b>${esc(x.row||'')}</b> · ${timeShort(x.s)} → ${x.e>=now&&x.kind!=='done'?'≈':''}${timeShort(x.e)}`]);
+  if(started) L.push(['Poured', `<b>${fmt(g.delivered,0)}</b>${g.required!=null?` / ${fmt(g.required,0)} m³ · ${fmt(Math.max(0,g.remaining||0),0)} m³ left`:' m³'}`]);
+  else L.push(['Quantity', `<b>${fmt(g.planReq,0)} m³</b>`]);
+  if(rate) L.push(['Rate', `${fmt(rate,0)} m³/h`]);
+  if(!started){
+    if(!t) L.push(['Time', 'no time written — counted from now']);
+    else if(t.est) L.push(['Time', `after <b>${esc(t.after?(t.after.client?t.after.client+' ':'')+t.after.elem:'…')}</b> · ≈${timeShort(pourStartAt(g,t))}`]);
+    else if(pourStartAt(g,t)!==t.at) L.push(['Time', `⏰ <b>${timeShort(t.at)}</b> pumps go · pour ≈<b>${timeShort(pourStartAt(g,t))}</b>`]);
+    else L.push(['Time', `⏰ <b>${timeShort(t.at)}</b>`]); }
+  if(started&&last!=null) L.push(['Trucks', `${g.trucks} · last ${timeShort(last)}`]);
+  if(end!=null) L.push(['Ends', `≈<b>${timeShort(end)}</b>`]);
+  L.push(['Plants', started?(used.map(esc).join(', ')||'—'):(planned.length?planned.map(esc).join(', '):'<span style="color:var(--amber)">none chosen yet</span>')]);
+  if(need.length) L.push(['Pumps', `${esc(allPumpsLabel(g,need))}${sent.length?` · sent: ${sent.map(v=>v.len).join(', ')}`:started?'':' · not sent yet'}`]);
+  if(g.esId) L.push(['ES', esc(g.esId)]);
+  [['Card',g.sc],['Temp.',g.tem],['Mix',g.mix]].forEach(([k,v])=>{ if(v) L.push([k,esc(String(v))]); });
+  const cl=(clashes||[]).filter(c=>c.a===x||c.b===x).map(c=>{ const o2=c.a===x?c.b:c.a; return `⚠ ${esc(c.p)}: with ${esc((o2.g.client?o2.g.client+' ':'')+o2.g.elem)} (${Math.round(c.ov/60000)} min)`; });
+  o.innerHTML=`<div class="rq-box tl-box"><div class="rq-head"><b>${esc(nm)}</b><button type="button" class="rq-x">✕</button></div>
+    <div class="tl-st ${x.kind}${x.late?' late':''}">${state}${x.late?' · late':''}</div>
+    <div class="tl-kv">${L.map(([k,v])=>`<span>${k}</span><div>${v}</div>`).join('')}</div>
+    ${cl.length?`<div class="ptl-warn">${cl.join('<br>')}</div>`:''}
+    <div class="rq-foot">${started?`<button type="button" class="btn alt" id="tlGoT">🚚 Its trucks</button>`:`<button type="button" class="btn alt" id="tlGoU">Its Upcoming card</button>`}<button type="button" class="btn rq-x" style="color:inherit">Close</button></div></div>`;
+  o.style.display='flex';
+  const gt=el('tlGoT'); if(gt) gt.onclick=()=>{ o.style.display='none'; logKey=g.key; view='pours'; saveCfg(); renderViewTabs(); applyView(); renderAllPours(); const tl=el('truckLog'); if(tl&&tl.scrollIntoView) tl.scrollIntoView({behavior:'smooth',block:'start'}); };
+  const gu=el('tlGoU'); if(gu) gu.onclick=()=>{ o.style.display='none'; view='upcoming'; saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); };
+}
 function renderPlantTimeline(kind){
   if(!kind){ renderPlantTimeline('plants'); renderPlantTimeline('pumps'); return; }
   const PU=kind==='pumps', box=el(PU?'pumpTimeline':'plantTimeline'), S=TLS[kind]; if(!box) return;
@@ -3778,13 +3819,13 @@ function renderPlantTimeline(kind){
   const T=plantTimeline(), {W,now}=T, X=t=>Math.round((Math.max(W.s,Math.min(W.e,t))-W.s)/3600000*TL_PXH);
   const hours=Math.ceil((W.e-W.s)/3600000), width=hours*TL_PXH;
   const h0=new Date(W.s); h0.setMinutes(0,0,0); const ticks=[]; for(let t=h0.getTime(); t<=W.e; t+=3600000) if(t>=W.s) ticks.push(t);
-  const LANE=32;
-  const bar=x=>{ const l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.lane||0)*LANE;
+  const LANE=32, ITEMS=[];   // the bars drawn, by index (tap = its details)
+  const bar=x=>{ const ix=ITEMS.push(x)-1, l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.lane||0)*LANE;
     const done=x.now!=null?Math.max(0,Math.min(100,Math.round((X(x.now)-l)/w*100))):null;
     const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind;
-    return `<div class="ptl-bar ${cls}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${x.txt}</span></div>`; };
+    return `<div class="ptl-bar ${cls}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px" data-i="${ix}" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${x.txt}</span></div>`; };
   const freeB=([s,e])=>`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
-  const row=(p,list)=>{ const ends=[];   // first line whose last bar ended before this one starts (in px, so touching bars share a line)
+  const row=(p,list)=>{ const ends=[]; list.forEach(x=>{ x.row=p; });   // first line whose last bar ended before this one starts (in px, so touching bars share a line)
     list.slice().sort((a,b)=>a.s-b.s).forEach(x=>{ const l=X(x.s); let k=ends.findIndex(e=>e<=l+1); if(k<0){ k=ends.length; ends.push(0); } x.lane=k; ends[k]=Math.max(l+6,X(x.e)); });
     const h=40+Math.max(0,ends.length-1)*LANE;
     return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab">${esc(p)}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
@@ -3811,9 +3852,7 @@ function renderPlantTimeline(kind){
   const s2=box.querySelector('.ptl-scroll');
   if(s2){ s2.scrollLeft=S.scroll!=null?S.scroll:Math.max(0,(nowX||0)-TL_PXH*1.5);
     s2.addEventListener('click',ev=>{ const b=ev.target.closest('.ptl-bar');
-      if(b){ const k=decodeURIComponent(b.dataset.k);
-        if(b.dataset.kind==='plan'){ view='upcoming'; saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); return; }
-        logKey=k; if(PU){ view='pours'; saveCfg(); renderViewTabs(); applyView(); } renderAllPours(); const t=el('truckLog'); if(t&&t.scrollIntoView) t.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+      if(b){ const x=ITEMS[+b.dataset.i]; if(x) tlDetail(x,PU,T.clashes); return; }   // its details, right here (no page change)
       const tr=ev.target.closest('.ptl-track,.ptl-axis'); if(!tr) return;
       const x=ev.clientX-tr.getBoundingClientRect().left; S.at=W.s+Math.round(x/TL_PXH*60)*60000; renderPlantTimeline(kind); }); }
   // the window is one choice for both timelines
