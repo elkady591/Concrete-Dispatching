@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000008">
+<meta name="app-build" content="20261028-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2490,6 +2490,9 @@ const LATE_START=30*60000;       // not started this long after its planned time
 // a request WITH pumps: its planned time = the time to send the pumps; not marked sent 30 min later -> alert;
 // the first truck is due about 1½ h after the planned time -> no "not loaded" alert before that
 const PUMP_SEND_LATE=30*60000, PUMP_LOAD_AFTER=90*60000;
+// when a not-started request's POUR (first truck) begins, from its time t (requestTimes): with pumps and its own time
+// = t + 1½ h (the time is for sending the pumps); "after …" estimates and requests without pumps = t itself
+const pourStartAt=(g,t)=>t?t.at+(!t.est&&pumpReq(g.pumps).length?PUMP_LOAD_AFTER:0):null;
 // plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
 function planRowsOf(){
   const out=new Map(), used=new Set();
@@ -2559,7 +2562,7 @@ function requestTimes(){
     if(g.trucks>0){ if(g.finishAvg!=null) return g.finishAvg; if(g.finishTgt!=null) return g.finishTgt;
       const a=(g.loads||[]).map(l=>l.t).filter(t=>t!=null), d=dur(g); return a.length&&d?Math.min(...a)+d:null; }
     // not started yet: from its time — or from NOW once that time has passed (it can only start from now on)
-    const s=out.get(g), d=dur(g); return s&&d?Math.max(s.at,Date.now())+d:null; };
+    const s=out.get(g), d=dur(g); return s&&d?Math.max(pourStartAt(g,s),Date.now())+d:null; };
   const LK=pourLinks(PRm);
   const waits=g=>{ const ch=CH.get(g); return !!(ch && ch.prev && g.trucks===0) || (g.trucks===0 && LK.has(g)); };
   for(const g of (VD.summary||[])){                          // 1) own times (not for the ones waiting behind a sibling)
@@ -3714,10 +3717,13 @@ function plantTimeline(now){
         txt:`${nameOf(g)}${g.required!=null?` · ${fmt(g.delivered,0)}/${fmt(g.required,0)} m³`:''}${live&&end!=null?` · ≈${timeShort(end)}`:fin?' · done':''}`}); } }
   // 2) not started: on the plants chosen for it (🏭), from its time ("after …" = its estimate; none / passed = now)
   const noPlant=[];
-  for(const g of (VD.upcoming||[])){ const t=RT.get(g), d=dur(g), s=t?Math.max(t.at,now):now, e=s+(d||3600000);
+  // (a request with pumps: its time is for sending the pumps — the plants start about 1½ h later)
+  const whenTxt=(g,t)=>t?(t.est?'after '+esc(t.after?nameOf(t.after):'…')+' · ':pourStartAt(g,t)!==t.at?`⏰ ${timeShort(t.at)} pumps · pour ≈${timeShort(pourStartAt(g,t))} · `:'⏰ '+timeShort(t.at)+' · '):'no time · ';
+  const lateOf=(g,t)=>!!(t&&!t.est&&(pourStartAt(g,t)!==t.at?(now>=pourStartAt(g,t)||(!pumpSent(g).length&&now-t.at>=PUMP_SEND_LATE)):t.at<now));
+  for(const g of (VD.upcoming||[])){ const t=RT.get(g), d=dur(g), s=t?Math.max(pourStartAt(g,t),now):now, e=s+(d||3600000);
     const ps=planPlants(plantKey(g));
-    const it={g, s, e, kind:'plan', late:!!(t&&!t.est&&t.at<now), noTime:!t, noRate:!d,
-      txt:`${t?(t.est?'after '+esc(t.after?nameOf(t.after):'…')+' · ':'⏰ '+timeShort(t.at)+' · '):'no time · '}${nameOf(g)} · ${fmt(g.planReq,0)} m³${d?` · ≈${timeShort(e)}`:' · no rate'}`};
+    const it={g, s, e, kind:'plan', late:lateOf(g,t), noTime:!t, noRate:!d,
+      txt:`${whenTxt(g,t)}${nameOf(g)} · ${fmt(g.planReq,0)} m³${d?` · ≈${timeShort(e)}`:' · no rate'}`};
     if(!ps.length){ noPlant.push(it); continue; }
     ps.forEach(p=>add(p,Object.assign({},it))); }
   // 3) pumps: what each one is on (to the expected end), its washing after it, the requests it is planned for.
@@ -3735,10 +3741,10 @@ function plantTimeline(now){
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
     for(const g of (VD.upcoming||[])){ const ix=UP.get(g); if(!ix||!ix.length) continue;
-      const t=RT.get(g), d=dur(g), s0=t?Math.max(t.at,now):now, e0=s0+(d||3600000);
+      const t=RT.get(g), d=dur(g), s0=t?Math.max(t.at,now):now, e0=(t?Math.max(pourStartAt(g,t),now):now)+(d||3600000);   // pumps: from sending to the pour's end
       ix.forEach(i=>{ const l=pumps.get(i); if(!l) return;
         const su=l.find(x=>x.g===g&&x.setup); if(su){ su.e=Math.max(su.e,e0); su.txt=`setting up · ${t&&!t.est?'⏰ '+timeShort(t.at)+' · ':''}${nameOf(g)}`; return; }
-        l.push({g, s:s0, e:e0, kind:'plan', late:!!(t&&!t.est&&t.at<now), txt:`${t?(t.est?'after '+esc(t.after?nameOf(t.after):'…')+' · ':'⏰ '+timeShort(t.at)+' · '):'no time · '}${nameOf(g)}`}); }); }
+        l.push({g, s:s0, e:e0, kind:'plan', late:lateOf(g,t), txt:`${whenTxt(g,t)}${nameOf(g)}`}); }); }
     for(const [i,l] of pumps){ const keep=l.filter(x=>x.e>=W.s&&x.s<=W.e); keep.lab=l.lab; pumps.set(i,keep); }
   }catch(e){}
   // "from now" views: what already ended before now (finished pours, a plant that stopped) is left out — only stubs there
