@@ -24,7 +24,7 @@ const MAX_SEPARATE = 4;            // more new checks than this in one run -> on
 const TITLES = { 'No ES': 'Truck without ES', 'Rejected': 'Rejected truck', 'Late trucks': 'Late trucks',
                  'Gaps': 'Long gap between trucks', 'Overdue now': 'No truck — overdue now',
                  'Request due': 'Request time — start now', 'Late start': 'Request not started yet',
-                 'Wrong ES?': 'Truck ES not in the plan — typo?', 'Hold truck loaded': 'ON HOLD truck was loaded',
+                 'Wrong ES?': 'Truck ES not in the plan — typo?', 'Hold truck loaded': 'ON HOLD truck was loaded', 'Breakdown truck loaded': 'BREAKDOWN truck was loaded',
                  'Unknown truck': 'Truck number not in the fleet',
                  'One truck, two requests': 'One truck carrying two requests',
                  'Truck twice': 'Same truck written twice — wrong number?',
