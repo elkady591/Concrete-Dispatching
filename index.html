@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261028-000006">
+<meta name="app-build" content="20261028-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1090,7 +1090,7 @@
   .ptl-w select option{color:#0b1020}
   .ptl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--line);padding-bottom:4px}
   .ptl-in{position:relative}
-  .ptl-axis{position:relative;margin-left:56px;height:22px;font:11px var(--mono);color:var(--faint);cursor:pointer}
+  .ptl-axis{position:relative;margin-left:56px;height:22px;z-index:2;font:11px var(--mono);color:var(--faint);cursor:pointer}
   .ptl-axis span{position:absolute;top:4px;padding-left:3px;border-left:1px solid var(--line2);height:18px;white-space:nowrap}
   .ptl-row{position:relative;display:flex;height:40px;border-top:1px solid var(--line)}
   .ptl-lab{position:sticky;left:0;flex:none;width:56px;box-sizing:border-box;display:flex;align-items:center;font:800 13px var(--mono);background:var(--panel2);z-index:4;padding-left:4px}
@@ -1109,7 +1109,7 @@
   .lg.wash{border:1.5px solid #fb923c}
   .ptl-free{position:absolute;top:6px;height:28px;box-sizing:border-box;border:1.5px dotted rgba(52,211,153,.7);border-radius:7px;color:var(--green);font-size:11px;font-weight:700;padding:0 6px;display:flex;align-items:center;white-space:nowrap;overflow:clip}
   .ptl-now{position:absolute;top:0;bottom:0;width:2px;background:var(--rose);z-index:3;pointer-events:none}
-  .ptl-now b{position:absolute;top:2px;left:3px;font-size:10px;color:var(--rose)}
+  .ptl-now b{position:absolute;top:3px;left:-15px;font-size:10px;line-height:14px;padding:0 4px;border-radius:4px;background:var(--rose);color:#fff}
   .ptl-cur{position:absolute;top:0;bottom:0;width:2px;background:var(--amber);z-index:3;pointer-events:none}
   .ptl-leg{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11px;color:var(--faint)}
   .ptl-leg .lg{display:inline-block;width:16px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
@@ -3683,15 +3683,16 @@ function renderCheckList(cb, items){
    Default window = the work day of the WhatsApp photo: from the same cut (8:00 AM) for 24 h — a pour still
    going from before it stays (drawn from the window's edge). Tap a bar = that pour; tap anywhere else = every
    plant at that moment. The window choice is this viewer's own. */
-const KEY_TLWIN='cmpour:tlwin';
-let tlWin=(()=>{ try{ return localStorage.getItem(KEY_TLWIN)||'day'; }catch(e){ return 'day'; } })();   // 'day' | 'now' | 'HH:MM'
+const KEY_TLWIN='cmpour:tlwin2';
+let tlWin=(()=>{ try{ return localStorage.getItem(KEY_TLWIN)||'now12'; }catch(e){ return 'now12'; } })();   // 'now12' | 'now24' | 'day' | 'HH:MM'
 let tlAt=null;           // the moment tapped on the timeline (ms) — the "at this time" panel
 let tlScroll=null;       // keep the sideways scroll across refreshes
 const TL_PXH=64;         // px per hour
 const TL_FREE_MIN=30*60000;   // gaps shorter than this are not labelled "free"
 function tlWindow(now){
   const hm=cutDaily()||'08:00';
-  if(tlWin==='now'){ const s=now-3600000; return {s, e:s+13*3600000, lab:'From now · 12 h'}; }
+  if(tlWin==='now12'||tlWin==='now24'||tlWin==='now'){ const h=tlWin==='now24'?24:12, s=Math.floor((now-20*60000)/300000)*300000;   // a little before now, so "now" is not on the edge
+    return {s, e:now+h*3600000, lab:`From now · next ${h} h`}; }
   if(/^\d{1,2}:\d{2}$/.test(tlWin)){ const s=lastDailyCut(tlWin,now); return {s, e:s+24*3600000, lab:`From ${timeShort(s)} · 24 h`}; }
   const c=planCutAt(), s=c!=null?c:lastDailyCut(hm,now); return {s, e:s+24*3600000, lab:`Work day · from ${cutLabel(s)}`};
 }
@@ -3725,20 +3726,27 @@ function plantTimeline(now){
       const list=[]; pumps.set(i,list); list.lab=code;
       for(const b of (PP.busy[i]||[])){ const g=b.p.g, ex=g.finishAvg!=null?g.finishAvg:g.finishTgt;
         const runE=b.end!=null?b.end:Math.max(now,ex!=null?ex:now), live=b.end==null&&!b.p.setup;
-        if(b.p.setup) list.push({g, s:b.start, e:Math.max(now,b.start+15*60000), kind:'plan', txt:`setting up · ${nameOf(g)}`});
+        if(b.p.setup) list.push({g, s:b.start, e:Math.max(now,b.start+15*60000), kind:'plan', setup:true, txt:`setting up · ${nameOf(g)}`});
+        if(b.p.setup) continue;   // sent, not started: no washing after it yet
         else list.push({g, s:b.start, e:runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
         if(b.hold){ list.push({g:b.hold, s:runE, e:Math.max(now,runE+15*60000), kind:'stop', txt:`waiting · next ${nameOf(b.hold)}`}); continue; }
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
     for(const g of (VD.upcoming||[])){ const ix=UP.get(g); if(!ix||!ix.length) continue;
       const t=RT.get(g), d=dur(g), s0=t?Math.max(t.at,now):now, e0=s0+(d||3600000);
-      ix.forEach(i=>{ const l=pumps.get(i); if(l) l.push({g, s:s0, e:e0, kind:'plan', late:!!(t&&!t.est&&t.at<now), txt:`${t?(t.est?'after '+esc(t.after?nameOf(t.after):'…')+' · ':'⏰ '+timeShort(t.at)+' · '):'no time · '}${nameOf(g)}`}); }); }
+      ix.forEach(i=>{ const l=pumps.get(i); if(!l) return;
+        const su=l.find(x=>x.g===g&&x.setup); if(su){ su.e=Math.max(su.e,e0); su.txt=`setting up · ${t&&!t.est?'⏰ '+timeShort(t.at)+' · ':''}${nameOf(g)}`; return; }
+        l.push({g, s:s0, e:e0, kind:'plan', late:!!(t&&!t.est&&t.at<now), txt:`${t?(t.est?'after '+esc(t.after?nameOf(t.after):'…')+' · ':'⏰ '+timeShort(t.at)+' · '):'no time · '}${nameOf(g)}`}); }); }
     for(const [i,l] of pumps){ const keep=l.filter(x=>x.e>=W.s&&x.s<=W.e); keep.lab=l.lab; pumps.set(i,keep); }
   }catch(e){}
+  // "from now" views: what already ended before now (finished pours, a plant that stopped) is left out — only stubs there
+  if(/^now/.test(tlWin)) for(const list of [...rows.values(),...pumps.values()]) for(let i=list.length-1;i>=0;i--){ const x=list[i];
+    if(x.kind==='done'||x.kind==='stop'&&x.e<=now||x.kind==='wash'&&x.e<=now) list.splice(i,1); }   // a finished pour: gone
   // 4) clashes (a planned request on a plant still busy then) + free gaps from now on
   const clashes=[];
   for(const [p,list] of [...rows,...[...pumps].map(([i,l])=>['P'+i,l])]){ list.sort((a,b)=>a.s-b.s);
     for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i], b=list[j];
+      if(a.g===b.g) continue;
       if(a.kind!=='plan'&&b.kind!=='plan') continue; if(a.kind==='done'||b.kind==='done'||a.kind==='stop'||b.kind==='stop') continue;
       const ov=Math.min(a.e,b.e)-Math.max(a.s,b.s); if(ov<5*60000) continue;
       a.clash=b.clash=true; clashes.push({p:/^P\d+$/.test(p)?'Pump '+list.lab:p, a, b, ov}); }
@@ -3760,14 +3768,18 @@ function renderPlantTimeline(){
   const T=plantTimeline(), {W,now}=T, X=t=>Math.round((Math.max(W.s,Math.min(W.e,t))-W.s)/3600000*TL_PXH);
   const hours=Math.ceil((W.e-W.s)/3600000), width=hours*TL_PXH;
   const h0=new Date(W.s); h0.setMinutes(0,0,0); const ticks=[]; for(let t=h0.getTime(); t<=W.e; t+=3600000) if(t>=W.s) ticks.push(t);
-  const bar=x=>{ const l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s;
+  const LANE=32;
+  const bar=x=>{ const l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.lane||0)*LANE;
     const done=x.now!=null?Math.max(0,Math.min(100,Math.round((X(x.now)-l)/w*100))):null;
     const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind;
-    return `<div class="ptl-bar ${cls}${x.clash?' clash':''}" style="left:${l}px;width:${w}px" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${x.txt}</span></div>`; };
+    return `<div class="ptl-bar ${cls}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${x.txt}</span></div>`; };
   const freeB=([s,e])=>`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
-  const row=(p,list)=>`<div class="ptl-row"><div class="ptl-lab">${esc(p)}</div><div class="ptl-track" style="width:${width}px">${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`;
+  const row=(p,list)=>{ const ends=[];   // first line whose last bar ended before this one starts (in px, so touching bars share a line)
+    list.slice().sort((a,b)=>a.s-b.s).forEach(x=>{ const l=X(x.s); let k=ends.findIndex(e=>e<=l+1); if(k<0){ k=ends.length; ends.push(0); } x.lane=k; ends[k]=Math.max(l+6,X(x.e)); });
+    const h=40+Math.max(0,ends.length-1)*LANE;
+    return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab">${esc(p)}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
   const nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
-  const winChips=[['day','Work day 8→8'],['now','From now · 12 h']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
+  const winChips=[['now12','Next 12 h'],['now24','Next 24 h'],['day','Work day 8→8']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
     +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select id="ptlFrom"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
   const AT=tlAt!=null?tlAtMoment(T,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length).map(o=>o.p):[];
   const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:' · no plant free'}<button type="button" class="ptl-x" id="ptlAtX">✕</button></div>
