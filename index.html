@@ -1104,6 +1104,9 @@
   .ptl-bar.plan{background:repeating-linear-gradient(45deg,rgba(167,139,250,.32) 0 6px,rgba(167,139,250,.14) 6px 12px);border:1.5px dashed var(--violet)}
   .ptl-bar.plan.late{background:repeating-linear-gradient(45deg,rgba(251,191,36,.35) 0 6px,rgba(251,191,36,.14) 6px 12px);border-color:var(--amber)}
   .ptl-bar.clash{box-shadow:0 0 0 2px var(--rose) inset}
+  .ptl-bar.wash{background:repeating-linear-gradient(45deg,rgba(251,146,60,.32) 0 6px,rgba(251,146,60,.12) 6px 12px);border:1.5px solid #fb923c;color:#fdba74}
+  .ptl-sep{height:24px;border-top:2px solid var(--line2)}.ptl-sep .ptl-lab{font-size:10px;color:var(--faint);letter-spacing:.08em}
+  .lg.wash{border:1.5px solid #fb923c}
   .ptl-free{position:absolute;top:6px;height:28px;box-sizing:border-box;border:1.5px dotted rgba(52,211,153,.7);border-radius:7px;color:var(--green);font-size:11px;font-weight:700;padding:0 6px;display:flex;align-items:center;white-space:nowrap;overflow:clip}
   .ptl-now{position:absolute;top:0;bottom:0;width:2px;background:var(--rose);z-index:3;pointer-events:none}
   .ptl-now b{position:absolute;top:2px;left:3px;font-size:10px;color:var(--rose)}
@@ -2478,7 +2481,7 @@ function pumpPlan(now){
   // the rest have none
   let opsLeft=opsCount()-state.filter(s=>s.st==='on'||s.st==='wash').length;
   state.filter(s=>s.st==='free').sort((a,b)=>(b.len-a.len)||(a.i-b.i)).forEach(s=>{ if(opsLeft>0) opsLeft--; else s.noop=true; });
-  return {byPour,state};
+  return {byPour,state,busy};
 }
 // Planned time of each pour (plan "TIME" column + its DATE, today when the date is empty)
 // -> Map(pour -> {time:'HH:MM', at:ms}) — only pours that have a time
@@ -2582,6 +2585,7 @@ function requestTimes(){
 function upcomingPumpCheck(now){
   now=now||Date.now();
   const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
+  const picks=new Map(); out.picks=picks;   // request -> the pump indexes it gets (for the timeline)
   const claimedBy=new Map();   // pump -> the (earlier) request that took it
   const RT=requestTimes(), stAt={}, SF=pumpShareFam();
   const stateFor=g=>{ const t=RT.get(g); if(!t||t.at<=now) return base;      // timed request: the pumps as they will be then
@@ -2619,6 +2623,7 @@ function upcomingPumpCheck(now){
       res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
+    picks.set(g,res.filter(r=>r.s&&r.kind!=='taken'&&r.kind!=='none'&&r.kind!=='down').map(r=>r.s.i));
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
     if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(allPumpsLabel(g,need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
@@ -3701,19 +3706,37 @@ function plantTimeline(now){
       txt:`${t?(t.est?'after '+esc(t.after?nameOf(t.after):'…')+' · ':'⏰ '+timeShort(t.at)+' · '):'no time · '}${nameOf(g)} · ${fmt(g.planReq,0)} m³${d?` · ≈${timeShort(e)}`:' · no rate'}`};
     if(!ps.length){ noPlant.push(it); continue; }
     ps.forEach(p=>add(p,Object.assign({},it))); }
-  // 3) clashes (a planned request on a plant still busy then) + free gaps from now on
+  // 3) pumps: what each one is on (to the expected end), its washing after it, the requests it is planned for.
+  //    A pump with a breakdown written is left out (user's choice).
+  const pumps=new Map(), WASH=washHours()*3600000;
+  try{ const PP=pumpPlan(now), UP=upcomingPumpCheck(now).picks||new Map();
+    PUMPS.forEach((len,i)=>{ if(pumpBroken(i)) return; const code=`${len}${PUMPS.filter(L=>L===len).length>1?' #'+PUMPS.slice(0,i+1).filter(L=>L===len).length:''}`;   // by length (the app tracks pumps by length)
+      const list=[]; pumps.set(i,list); list.lab=code;
+      for(const b of (PP.busy[i]||[])){ const g=b.p.g, ex=g.finishAvg!=null?g.finishAvg:g.finishTgt;
+        const runE=b.end!=null?b.end:Math.max(now,ex!=null?ex:now), live=b.end==null&&!b.p.setup;
+        if(b.p.setup) list.push({g, s:b.start, e:Math.max(now,b.start+15*60000), kind:'plan', txt:`setting up · ${nameOf(g)}`});
+        else list.push({g, s:b.start, e:runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
+        if(b.hold){ list.push({g:b.hold, s:runE, e:Math.max(now,runE+15*60000), kind:'stop', txt:`waiting · next ${nameOf(b.hold)}`}); continue; }
+        const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
+    });
+    for(const g of (VD.upcoming||[])){ const ix=UP.get(g); if(!ix||!ix.length) continue;
+      const t=RT.get(g), d=dur(g), s0=t?Math.max(t.at,now):now, e0=s0+(d||3600000);
+      ix.forEach(i=>{ const l=pumps.get(i); if(l) l.push({g, s:s0, e:e0, kind:'plan', late:!!(t&&!t.est&&t.at<now), txt:`${t?(t.est?'after '+esc(t.after?nameOf(t.after):'…')+' · ':'⏰ '+timeShort(t.at)+' · '):'no time · '}${nameOf(g)}`}); }); }
+    for(const [i,l] of pumps){ const keep=l.filter(x=>x.e>=W.s&&x.s<=W.e); keep.lab=l.lab; pumps.set(i,keep); }
+  }catch(e){}
+  // 4) clashes (a planned request on a plant still busy then) + free gaps from now on
   const clashes=[];
-  for(const [p,list] of rows){ list.sort((a,b)=>a.s-b.s);
+  for(const [p,list] of [...rows,...[...pumps].map(([i,l])=>['P'+i,l])]){ list.sort((a,b)=>a.s-b.s);
     for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i], b=list[j];
       if(a.kind!=='plan'&&b.kind!=='plan') continue; if(a.kind==='done'||b.kind==='done'||a.kind==='stop'||b.kind==='stop') continue;
       const ov=Math.min(a.e,b.e)-Math.max(a.s,b.s); if(ov<5*60000) continue;
-      a.clash=b.clash=true; clashes.push({p, a, b, ov}); }
-    const busy=list.filter(x=>x.kind==='run'||x.kind==='plan').map(x=>[x.s,x.e]).sort((x,y)=>x[0]-y[0]);
+      a.clash=b.clash=true; clashes.push({p:/^P\d+$/.test(p)?'Pump '+list.lab:p, a, b, ov}); }
+    const busy=list.filter(x=>x.kind==='run'||x.kind==='plan'||x.kind==='wash'||x.kind==='stop').map(x=>[x.s,x.e]).sort((x,y)=>x[0]-y[0]);
     let cur=Math.max(now,W.s); const free=[];
     for(const [s,e] of busy){ if(e<=cur) continue; if(s-cur>=TL_FREE_MIN) free.push([cur,s]); cur=Math.max(cur,e); }
     if(W.e-cur>=TL_FREE_MIN) free.push([cur,W.e]);
     list.free=free; }
-  return {W, rows, noPlant, clashes, now};
+  return {W, rows, pumps, noPlant, clashes, now};
 }
 // every plant at one moment (the tapped time)
 function tlAtMoment(T,at){
@@ -3746,9 +3769,10 @@ function renderPlantTimeline(){
     <div class="ptl-scroll"><div class="ptl-in" style="width:${width+56}px">
       <div class="ptl-axis" style="width:${width}px">${ticks.map(t=>`<span style="left:${X(t)}px">${timeShort(t).replace(':00','')}</span>`).join('')}</div>
       ${[...T.rows.entries()].map(([p,l])=>row(p,l)).join('')}
+      ${T.pumps&&T.pumps.size?`<div class="ptl-row ptl-sep"><div class="ptl-lab">PUMPS</div></div>${[...T.pumps.values()].map(l=>row(l.lab,l)).join('')}`:''}
       ${nowX!=null?`<div class="ptl-now" style="left:${56+nowX}px"><b>now</b></div>`:''}${atX!=null?`<div class="ptl-cur" style="left:${56+atX}px"></div>`:''}
     </div></div>
-    <div class="ptl-leg"><span><i class="lg run"></i>pouring</span><span><i class="lg est"></i>expected till</span><span><i class="lg done"></i>finished</span><span><i class="lg plan"></i>planned 🏭</span><span><i class="lg late"></i>late start</span><span><i class="lg free"></i>free</span><span><i class="lg clash"></i>clash</span></div>
+    <div class="ptl-leg"><span><i class="lg run"></i>pouring</span><span><i class="lg est"></i>expected till</span><span><i class="lg done"></i>finished</span><span><i class="lg plan"></i>planned 🏭</span><span><i class="lg late"></i>late start</span><span><i class="lg free"></i>free</span><span><i class="lg wash"></i>washing</span><span><i class="lg clash"></i>clash</span></div>
     ${warn}${np}${atPanel}<div class="muted" style="font-size:11.5px;margin-top:6px">Tap a bar = that pour · tap an empty place = every plant at that time</div></div>`;
   const s2=box.querySelector('.ptl-scroll');
   if(s2){ s2.scrollLeft=tlScroll!=null?tlScroll:Math.max(0,(nowX||0)-TL_PXH*1.5);
