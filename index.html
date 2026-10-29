@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000008">
+<meta name="app-build" content="20261029-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2638,6 +2638,13 @@ function upcomingPumpCheck(now){
   const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
   const picks=new Map(); out.picks=picks;   // request -> the pump indexes it gets (for the timeline)
   const claimedBy=new Map();   // pump -> the (earlier) request that took it
+  // …until when: that request's pour end + the washing — a later request may have the pump after it (no rate = all day)
+  const claimedTill=new Map(), WASHc=washHours()*3600000;
+  const qd=g=>{ const q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate; return q>0&&r>0?q/r*3600000:null; };
+  const tillOf=g=>{ const t=RT.get(g), d=qd(g); if(!d) return Infinity; const sn=pumpSent(g);
+    const ps=sn.length?sentPour(g,Math.min(...sn.map(x=>x.t)),now).ps:Math.max(now,t?pourStartAt(g,t):now); return ps+d+WASHc; };
+  const needAt=g=>{ const t=RT.get(g); return t&&t.at>now?t.at:now; };   // when a request needs its pumps (its time)
+  const held=(i,g)=>claimed.has(i) && (claimedTill.get(i)||Infinity)>needAt(g);   // still with an earlier request then
   const RT=requestTimes(), stAt={}, SF=pumpShareFam();
   const stateFor=g=>{ const t=RT.get(g); if(!t||t.at<=now) return base;      // timed request: the pumps as they will be then
     return stAt[t.at]||(stAt[t.at]=pumpPlan(t.at).state); };
@@ -2653,7 +2660,7 @@ function upcomingPumpCheck(now){
     const fam=SF(g), got=new Set(), res=[], state=stateFor(g);   // per requested pump: {len, kind, s}
     for(const len of need){
       // (a pump already SENT to another request — setting up there — is that request's; not up for grabs)
-      const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!claimed.has(s.i) || claimed.get(s.i)===fam)
+      const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!held(s.i,g) || claimed.get(s.i)===fam)
         && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam));
       // a pump on / washing after the same client + element = this request just carries on with it
       const own=s=>s.pour===g;                       // already sent to this request
@@ -2667,10 +2674,10 @@ function upcomingPumpCheck(now){
       const same=pick && (sib(pick) || (claimed.get(pick.i)===fam && pick.st!=='down'));   // sibling running / ahead in the plan
       // nothing usable left because an EARLIER request took that length -> say so (not "Breakdown")
       // (name the one that took a FREE pump first; pumps already sent somewhere are that request's anyway)
-      const tk=(!pick||pick.note)&&state.filter(s=>s.len===len && !s.note && claimed.has(s.i) && claimed.get(s.i)!==fam && claimedBy.has(s.i))
+      const tk=(!pick||pick.note)&&state.filter(s=>s.len===len && !s.note && held(s.i,g) && claimed.get(s.i)!==fam && claimedBy.has(s.i))
         .sort((a,b)=>(a.setup?1:0)-(b.setup?1:0))[0];
-      if(tk){ res.push({len, kind:'taken', s:tk, by:claimedBy.get(tk.i)}); continue; }
-      if(pick){ claimed.set(pick.i,fam); claimedBy.set(pick.i,g); got.add(pick.i); }
+      if(tk){ res.push({len, kind:'taken', s:tk, by:claimedBy.get(tk.i), till:claimedTill.get(tk.i)}); continue; }
+      if(pick){ claimed.set(pick.i,fam); claimedBy.set(pick.i,g); claimedTill.set(pick.i,tillOf(g)); got.add(pick.i); }
       res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
@@ -2688,7 +2695,7 @@ function upcomingPumpCheck(now){
     const byLen={}; res.forEach(r=>{ (byLen[r.len]=byLen[r.len]||[]).push(r); });
     const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok'||r.kind==='same'||r.kind==='sent').length, miss=rs.filter(r=>r.kind!=='ok'&&r.kind!=='same'&&r.kind!=='sent');
       if(!miss.length) return `${L} ✓`;
-      const why=miss.map(r=> r.kind==='taken' ? `taken by ${esc(site(r.by))}${(RT.get(r.by)||{}).time?' ('+RT.get(r.by).time+')':''}`
+      const why=miss.map(r=> r.kind==='taken' ? `taken by ${esc(site(r.by))}${(RT.get(r.by)||{}).time?' ('+RT.get(r.by).time+')':''}${r.till&&isFinite(r.till)?' · back ≈'+timeShort(r.till):' · it has no rate, so all day'}`
                             : r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
                             : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}${r.s.until?' · free ≈'+timeShort(r.s.until):''}`
                             : r.kind==='down' ? 'Breakdown' : r.kind==='noop' ? 'free but no operator' : 'no pump');
