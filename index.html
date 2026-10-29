@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000011">
+<meta name="app-build" content="20261029-000012">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4923,7 +4923,7 @@ const dpKey=c=>String(c||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
 function dpParse(txt){ const out={}; let cur=null;
   for(const raw of String(txt||'').split(/\r?\n/)){ const s=raw.replace(/\*/g,'').trim(); if(!s) continue;
     // station line: "V.4", "L2", or the plant's make "Vurmak.#3" / "Liebherr 2" (V = Vurmak, L = Liebherr)
-    const h=s.match(/^(L|V|liebherr|vurmak)\s*[.#:\-]*\s*#?\s*(\d)\s*\.?$/i); if(h){ cur=(h[1][0]+h[2]).toUpperCase(); out[cur]=out[cur]||{codes:{},start:0,total:null,lines:[]}; continue; }
+    const h=s.match(/^(L|V|liebherr|vurmak)\s*[.#:\-]*\s*#?\s*(\d)\s*\.?$/i); if(h){ cur=(h[1][0]+h[2]).toUpperCase(); out[cur]=out[cur]||{codes:{},start:0,noes:0,other:[],total:null,lines:[]}; continue; }
     if(!cur) continue;
     const tot=s.match(/^total\b[^\d]*([\d,.]+)/i); if(tot){ out[cur].total=num(tot[1]); continue; }
     const parts=s.split(/\s*\.\s+|\s+\.\s*/).map(x=>x.trim()).filter(Boolean); if(parts.length<2) continue;
@@ -4931,8 +4931,10 @@ function dpParse(txt){ const out={}; let cur=null;
     const code=dpKey((parts.find(p=>/^\d{2}[A-Z]{2,4}\d*$/i.test(p.replace(/[\s.]+/g,'')))||'')
       ||((parts.slice(0,-1).join(' ').toUpperCase().match(/(?:^|[^0-9A-Z])(\d{2}\s?[A-Z]{2,4}\d*)(?![0-9A-Z])/)||[])[1]||''));
     const sm=parts.some(p=>/start[\s.]*mix/i.test(p));   // "Startmix", "start mix", "start.mix"
-    out[cur].lines.push({raw:s,code,q,sm});
-    if(sm) out[cur].start+=q; else if(code) out[cur].codes[code]=(out[cur].codes[code]||0)+q; }
+    const ne=!sm&&!code&&parts.some(p=>/^no\s*es$/i.test(p.replace(/[^a-z ]/gi,'').trim()));   // "No ES . 10m³"
+    out[cur].lines.push({raw:s,code,q,sm,ne});
+    if(sm) out[cur].start+=q; else if(ne) out[cur].noes+=q; else if(code) out[cur].codes[code]=(out[cur].codes[code]||0)+q;
+    else out[cur].other.push({label:parts.slice(0,-1).join(' . '), q}); }   // a line with no element code ("HAC . Retaining wall")
   return out; }
 // one station's check: the message's lines grouped by element (as the station wrote them) next to what the sheet has.
 // ESs the app has no name for are matched to a message element by quantity (1–3 of them adding up to the missing m³).
@@ -4960,6 +4962,7 @@ function dpCompare(s,m){
   // same element twice in the sheet (not in the message) -> one line each is fine
   return {rows, extra, start:{mq:m.start, sq:s.start}, total:{mq:m.total, sq:s.total}};
 }
+const fq=v=>fmt(v,Math.abs(v-Math.round(v))>=0.05?1:0);   // 35.5 stays 35.5, 36 stays 36
 function dpHtml(){
   if(!RAWTABS.length) return '<div class="muted" style="font-size:13px;padding:10px 2px">Pulling the station tabs…</div>';
   const start=dpStart!=null?dpStart:dpDefaultStart(), sts=dpBuild(start), msg=dpParse(dpMsg);
@@ -4967,7 +4970,7 @@ function dpHtml(){
   const isYest=start===dpDefaultStart();
   const sheetTbl=tok=>{ const t=isYest?PROD8.yesterday:null; const r=t&&t.rows.find(x=>String(x.p).toUpperCase()===String(tok).toUpperCase()); return r?r.q:null; };
   const okq=(a,b)=>a!=null&&b!=null&&Math.abs(a-b)<0.5;
-  const mark=(a,b)=>okq(a,b)?'<span class="dq ok">✓</span>':(!a||!b?'<span class="dq no">✗</span>':`<span class="dq df">${b-a>0?'+':''}${fmt(b-a,0)}</span>`);
+  const mark=(a,b)=>okq(a,b)?'<span class="dq ok">✓</span>':(!a||!b?'<span class="dq no">✗</span>':`<span class="dq df">${b-a>0?'+':''}${fq(b-a)}</span>`);
   const byTok=new Map(sts.map(s=>[s.tok.toUpperCase(),s]));
   const copyBtn=tok=>`<button class="dc-copy" data-tok="${esc(String(tok).toUpperCase())}" title="Copy this station only, in the message format">📋 Copy</button>`;
   const msgSt=Object.keys(msg).filter(k=>msg[k].lines.length||msg[k].total!=null);
@@ -4978,24 +4981,24 @@ function dpHtml(){
       const mq=m.total!=null?m.total:m.lines.reduce((a,l)=>a+l.q,0); return {k, mq, sq:s?s.total:0, tb:sheetTbl(k)}; });
     const missing=sts.filter(s=>!msgSt.includes(s.tok.toUpperCase()));
     const T={mq:rowsT.reduce((a,r)=>a+r.mq,0), sq:rowsT.reduce((a,r)=>a+r.sq,0)}, tbAll=rowsT.every(r=>r.tb!=null)?rowsT.reduce((a,r)=>a+r.tb,0):null;
-    const d=(a,b)=>okq(a,b)?'<span class="dq ok">✓</span>':`<span class="dq df">${b-a>0?'+':''}${fmt(b-a,0)}</span>`;
+    const d=(a,b)=>okq(a,b)?'<span class="dq ok">✓</span>':`<span class="dq df">${b-a>0?'+':''}${fq(b-a)}</span>`;
     // the difference in words, so it is clear WHERE it is and WHICH side has more
     const diffTag=(mq,sq)=>okq(mq,sq)?'<span class="dd-tag ok">✓ Same</span>'
       :(!mq?'<span class="dd-tag nom">Not in the message</span>':(!sq?'<span class="dd-tag nos">Not in the sheet</span>'
-      :`<span class="dd-tag df">${sq>mq?`Sheet has ${fmt(sq-mq,0)} more`:`Message has ${fmt(mq-sq,0)} more`}</span>`));
+      :`<span class="dd-tag df">${sq>mq?`Sheet has ${fq(sq-mq)} more`:`Message has ${fq(mq-sq)} more`}</span>`));
     const allSheet=sts.reduce((a,s)=>a+s.total,0);
     sumHtml=`<div class="dc dc-all"><div class="dc-h"><b>All stations</b>
-        <span class="dc-st ${okq(T.mq,T.sq)&&!missing.length?'ok':'bad'}">${okq(T.mq,T.sq)&&!missing.length?'✓ All match':(okq(T.mq,T.sq)?`${missing.length} station${missing.length>1?'s':''} without a message`:(T.sq>T.mq?`Sheet has ${fmt(T.sq-T.mq,0)} more`:`Message has ${fmt(T.mq-T.sq,0)} more`))}</span></div>
+        <span class="dc-st ${okq(T.mq,T.sq)&&!missing.length?'ok':'bad'}">${okq(T.mq,T.sq)&&!missing.length?'✓ All match':(okq(T.mq,T.sq)?`${missing.length} station${missing.length>1?'s':''} without a message`:(T.sq>T.mq?`Sheet has ${fq(T.sq-T.mq)} more`:`Message has ${fq(T.mq-T.sq)} more`))}</span></div>
       <table class="dc-t"><thead><tr><th>Station</th><th>Message</th><th>Sheet</th><th></th></tr></thead><tbody>
-        ${rowsT.map(r=>`<tr><td class="dc-k">${esc(stName(r.k))}</td><td class="n">${fmt(r.mq,0)}</td><td class="n">${fmt(r.sq,0)}</td><td>${diffTag(r.mq,r.sq)}</td></tr>`).join('')}
-        ${missing.map(s=>`<tr><td class="dc-k">${esc(s.name)}</td><td class="n">—</td><td class="n">${fmt(s.total,0)}</td><td><span class="dd-tag none">No message pasted</span></td></tr>`).join('')}
-        <tr class="dc-tot"><td>Total</td><td class="n">${fmt(T.mq,0)}</td><td class="n">${fmt(missing.length?allSheet:T.sq,0)}</td><td>${missing.length?'':diffTag(T.mq,T.sq)}</td></tr>
+        ${rowsT.map(r=>`<tr><td class="dc-k">${esc(stName(r.k))}</td><td class="n">${fq(r.mq)}</td><td class="n">${fq(r.sq)}</td><td>${diffTag(r.mq,r.sq)}</td></tr>`).join('')}
+        ${missing.map(s=>`<tr><td class="dc-k">${esc(s.name)}</td><td class="n">—</td><td class="n">${fq(s.total)}</td><td><span class="dd-tag none">No message pasted</span></td></tr>`).join('')}
+        <tr class="dc-tot"><td>Total</td><td class="n">${fq(T.mq)}</td><td class="n">${fq(missing.length?allSheet:T.sq)}</td><td>${missing.length?'':diffTag(T.mq,T.sq)}</td></tr>
       </tbody></table></div>`;
     // ---- one card per pasted station: only the differences, each said in words; the matching lines folded ----
     body=msgSt.map(k=>{ const m=msg[k], s=byTok.get(k)||{tok:k,name:stName(k),list:[],start:0,noes:[],rej:[],total:0};
       const c=dpCompare(s,m), tt=c.total, ok=okq(tt.mq,tt.sq), D=[], same=[];
       const nm=(cl,code)=>`${cl?`<span class="dd-c">${esc(cl)}</span> `:''}<b>${esc(code)}</b>`;
-      const trk=x=>`TM ${esc(x.tk||'—')} · ${fmt(x.q,0)} m³ · ${timeShort(x.t)}`;
+      const trk=x=>`TM ${esc(x.tk||'—')} · ${fq(x.q)} m³ · ${timeShort(x.t)}`;
       // 1–2 trucks whose m³ add up to `need` (the truck that makes the difference)
       const pickT=(arr,need)=>{ for(let a=0;a<arr.length;a++){ if(Math.abs(arr[a].q-need)<0.5) return [arr[a]];
         for(let b=a+1;b<arr.length;b++) if(Math.abs(arr[a].q+arr[b].q-need)<0.5) return [arr[a],arr[b]]; } return null; };
@@ -5006,39 +5009,44 @@ function dpHtml(){
         if(okq(r.mq,r.sq)) same.push({lab,q:r.mq});
         else if(!r.sq) msgOnly.push({lab, code:r.code, q:r.mq});
         else { const df=r.sq-r.mq, why=df>0?pickT(r.trucks,df):null;
-          D.push({lab, size:Math.abs(df), mq:r.mq, sq:r.sq, txt:`Message <b>${fmt(r.mq,0)}</b> · Sheet <b>${fmt(r.sq,0)}</b>`, tag:diffTag(r.mq,r.sq),
-            hint:df>0?(why?`The sheet has <b>${why.map(trk).join(' + ')}</b> that the message did not count`:`The sheet has ${fmt(df,0)} m³ more — a truck the message did not count`)
-              :`The sheet is missing ${fmt(-df,0)} m³ — a truck not typed in the sheet, or typed with another ES / no ES`}); } });
+          D.push({lab, size:Math.abs(df), mq:r.mq, sq:r.sq, txt:`Message <b>${fq(r.mq)}</b> · Sheet <b>${fq(r.sq)}</b>`, tag:diffTag(r.mq,r.sq),
+            hint:df>0?(why?`The sheet has <b>${why.map(trk).join(' + ')}</b> that the message did not count`:`The sheet has ${fq(df)} m³ more — a truck the message did not count`)
+              :`The sheet is missing ${fq(-df)} m³ — a truck not typed in the sheet, or typed with another ES / no ES`}); } });
       if(c.start.mq||c.start.sq){ const lab='<b class="dc-sm">Start mix</b>';
         if(okq(c.start.mq,c.start.sq)) same.push({lab,q:c.start.mq});
-        else D.push({lab, size:Math.abs((c.start.sq||0)-(c.start.mq||0)), mq:c.start.mq||0, sq:c.start.sq||0, txt:`Message <b>${c.start.mq?fmt(c.start.mq,0):'—'}</b> · Sheet <b>${c.start.sq?fmt(c.start.sq,0):'—'}</b>`, tag:diffTag(c.start.mq,c.start.sq)}); }
-      c.extra.forEach(L=>sheetOnly.push({lab:L.code?nm(L.client,L.code):`<b>ES ${esc(L.es)}</b>`, code:L.code, q:L.q, txt:`Sheet <b>${fmt(L.q,0)}</b> m³ · ${L.n} truck${L.n>1?'s':''}`, trucks:L.trucks||[]}));
-      s.noes.forEach(x=>sheetOnly.push({lab:`<b>No ES</b>`, code:'', q:x.q, txt:`Sheet <b>${fmt(x.q,0)}</b> m³ · ${trk(x)}`, trucks:[x]}));
+        else D.push({lab, size:Math.abs((c.start.sq||0)-(c.start.mq||0)), mq:c.start.mq||0, sq:c.start.sq||0, txt:`Message <b>${c.start.mq?fq(c.start.mq):'—'}</b> · Sheet <b>${c.start.sq?fq(c.start.sq):'—'}</b>`, tag:diffTag(c.start.mq,c.start.sq)}); }
+      c.extra.forEach(L=>sheetOnly.push({lab:L.code?nm(L.client,L.code):`<b>ES ${esc(L.es)}</b>`, code:L.code, q:L.q, txt:`Sheet <b>${fq(L.q)}</b> m³ · ${L.n} truck${L.n>1?'s':''}`, trucks:L.trucks||[]}));
+      { const nq=s.noes.reduce((a,x)=>a+x.q,0), mn=m.noes||0, lab='<b>No ES</b>';
+        if(nq||mn){ if(Math.abs(nq-mn)<0.05) same.push({lab,q:mn});
+          else D.push({lab, size:Math.abs(nq-mn), mq:mn, sq:nq, txt:'', tag:diffTag(mn,nq),
+            hint:nq>mn?`Trucks with no ES in the sheet: ${s.noes.map(trk).join(' · ')} — give them their request in Data checks`:`The message has ${fq(mn-nq)} m³ more with no ES — a truck the sheet does not have`}); } }
+      // a message line with no element code: matched below to a sheet line of the same m³, else shown as it is
+      (m.other||[]).forEach(o=>msgOnly.push({lab:`${esc(o.label)} <small>(no code)</small>`, code:'', q:o.q}));
       // a line only in the message + a line only in the sheet with the same m³ = the same pour under a wrong code
       msgOnly.forEach(mo=>{ const cand=sheetOnly.filter(so=>!so.used&&Math.abs(so.q-mo.q)<0.5).sort((a,b)=>(near(b.code,mo.code)?1:0)-(near(a.code,mo.code)?1:0))[0];
         if(cand){ cand.used=true;
-          D.push({lab:`⚠ <b>Wrong code?</b>`, size:mo.q, pair:true, mq:mo.q, sq:cand.q, hint:`Message says ${mo.lab}, the sheet has the same ${fmt(mo.q,0)} m³ as ${cand.lab} — one of them has the wrong code`, txt:`Message ${mo.lab} ↔ Sheet ${cand.lab} · <b>${fmt(mo.q,0)}</b> m³`, tag:`<span class="dd-tag pair">${near(cand.code,mo.code)?'Same pour, code typo':'Same m³'}</span>`}); }
-        else D.push({lab:mo.lab, size:mo.q, mq:mo.q, sq:0, txt:`Message <b>${fmt(mo.q,0)}</b> · Sheet <b>—</b>`, tag:diffTag(mo.q,0), hint:'In the message only — its trucks are not in the sheet, or typed with another ES / no ES'}); });
-      sheetOnly.filter(so=>!so.used).forEach(so=>D.push({lab:so.lab, size:so.q, mq:0, sq:so.q, txt:so.txt, tag:diffTag(0,so.q), hint:so.code?`In the sheet only (${so.txt.replace(/<[^>]+>/g,'')}) — the message did not write it, or wrote it under another name`:'A truck with no ES in the sheet — give it its request in Data checks'}));
+          D.push({lab:`⚠ <b>Wrong code?</b>`, size:mo.q, pair:true, mq:mo.q, sq:cand.q, hint:mo.code?`Message says ${mo.lab}, the sheet has the same ${fq(mo.q)} m³ as ${cand.lab} — one of them has the wrong code`:`The message wrote it with no code — the sheet has the same ${fq(mo.q)} m³ as ${cand.lab}: probably the same pour`, txt:`Message ${mo.lab} ↔ Sheet ${cand.lab} · <b>${fq(mo.q)}</b> m³`, tag:`<span class="dd-tag pair">${near(cand.code,mo.code)?'Same pour, code typo':'Same m³'}</span>`}); }
+        else D.push({lab:mo.lab, size:mo.q, mq:mo.q, sq:0, txt:`Message <b>${fq(mo.q)}</b> · Sheet <b>—</b>`, tag:diffTag(mo.q,0), hint:'In the message only — its trucks are not in the sheet, or typed with another ES / no ES'}); });
+      sheetOnly.filter(so=>!so.used).forEach(so=>D.push({lab:so.lab, size:so.q, mq:0, sq:so.q, txt:so.txt, tag:diffTag(0,so.q), hint:so.code?`In the sheet only (${so.txt.replace(/<[^>]+>/g,'')}) — the message did not write it, or wrote it under another name`:`The app has no name for this ES (not in the plan) — the message may have it under another name`}));
       D.sort((a,b)=>(b.pair?1:0)-(a.pair?1:0)||b.size-a.size);   // likely typos first, then the biggest differences
-      const verdict=ok&&!D.length?'✓ Matches':(ok?`Same total · ${D.length} line${D.length>1?'s':''} differ`:(tt.sq>(tt.mq||0)?`Sheet has ${fmt(tt.sq-(tt.mq||0),0)} m³ more`:`Message has ${fmt((tt.mq||0)-tt.sq,0)} m³ more`));
-      const dlt=(mq,sq)=>{ const d=(sq||0)-(mq||0); return Math.abs(d)<0.5?'<span class="dq ok">✓</span>':`<span class="dq df">${d>0?'+':'−'}${fmt(Math.abs(d),0)}</span>`; };
+      const verdict=ok&&!D.length?'✓ Matches':(ok?`Same total · ${D.length} line${D.length>1?'s':''} differ`:(tt.sq>(tt.mq||0)?`Sheet has ${fq(tt.sq-(tt.mq||0))} m³ more`:`Message has ${fq((tt.mq||0)-tt.sq)} m³ more`));
+      const dlt=(mq,sq)=>{ const d=(sq||0)-(mq||0); return Math.abs(d)<0.05?'<span class="dq ok">✓</span>':`<span class="dq df">${d>0?'+':'−'}${fq(Math.abs(d))}</span>`; };
       return `<div class="dc">
         <div class="dc-h"><b>${esc(stName(k))}</b>
-          <span class="dc-sum">Message <b>${tt.mq!=null?fmt(tt.mq,0):'—'}</b> · Sheet <b>${fmt(tt.sq,0)}</b></span>${byTok.has(k)?copyBtn(k):''}</div>
+          <span class="dc-sum">Message <b>${tt.mq!=null?fq(tt.mq):'—'}</b> · Sheet <b>${fq(tt.sq)}</b></span>${byTok.has(k)?copyBtn(k):''}</div>
         <div class="dd-verdict ${ok&&!D.length?'ok':'bad'}">${verdict}</div>
         <table class="dc-t dd-t"><thead><tr><th>Element</th><th class="n">Message</th><th class="n">Sheet</th><th class="n">Sheet −<br>message</th></tr></thead><tbody>
-          ${D.map(d=>`<tr class="bad${d.pair?' pair':''}"><td>${d.lab}</td><td class="n">${d.mq?fmt(d.mq,0):'—'}</td><td class="n">${d.sq?fmt(d.sq,0):'—'}</td><td class="n">${d.pair?'<span class="dq df">?</span>':dlt(d.mq,d.sq)}</td></tr>${d.hint?`<tr class="dd-hrow"><td colspan="4">→ ${d.hint}</td></tr>`:''}`).join('')}
-          ${same.map(x=>`<tr class="okr"><td>${x.lab}</td><td class="n">${fmt(x.q,0)}</td><td class="n">${fmt(x.q,0)}</td><td class="n"><span class="dq ok">✓</span></td></tr>`).join('')}
-          <tr class="dc-tot"><td>Total</td><td class="n">${tt.mq!=null?fmt(tt.mq,0):'—'}</td><td class="n">${fmt(tt.sq,0)}</td><td class="n">${tt.mq!=null?dlt(tt.mq,tt.sq):''}</td></tr>
+          ${D.map(d=>`<tr class="bad${d.pair?' pair':''}"><td>${d.lab}</td><td class="n">${d.mq?fq(d.mq):'—'}</td><td class="n">${d.sq?fq(d.sq):'—'}</td><td class="n">${d.pair?'<span class="dq df">?</span>':dlt(d.mq,d.sq)}</td></tr>${d.hint?`<tr class="dd-hrow"><td colspan="4">→ ${d.hint}</td></tr>`:''}`).join('')}
+          ${same.map(x=>`<tr class="okr"><td>${x.lab}</td><td class="n">${fq(x.q)}</td><td class="n">${fq(x.q)}</td><td class="n"><span class="dq ok">✓</span></td></tr>`).join('')}
+          <tr class="dc-tot"><td>Total</td><td class="n">${tt.mq!=null?fq(tt.mq):'—'}</td><td class="n">${fq(tt.sq)}</td><td class="n">${tt.mq!=null?dlt(tt.mq,tt.sq):''}</td></tr>
         </tbody></table></div>`; }).join('');
   } else {
     // ---- no message yet: the sheet's own day, written like the message ----
     body=sts.length?sts.map(s=>{ const tbl=sheetTbl(s.tok);
-      return `<div class="dc"><div class="dc-h"><b>${esc(s.name)}</b><span class="dc-sum">Sheet <b>${fmt(s.total,0)}</b> m³${tbl!=null&&!okq(tbl,s.total)?` <small>(sheet table ${fmt(tbl,0)})</small>`:''}</span>${copyBtn(s.tok)}</div>
-        ${s.list.map(L=>`<div class="dc-l"><span>${L.code?esc(L.client||''):''}</span><b>${L.code?esc(L.code):'ES '+esc(L.es)}</b><span class="n">${fmt(L.q,0)} m³</span></div>`).join('')}
-        ${s.start?`<div class="dc-l"><span class="dc-sm">Start mix</span><b></b><span class="n">${fmt(s.start,0)} m³</span></div>`:''}
-        ${s.noes.map(x=>`<div class="dc-l"><span class="dc-ne">No ES · TM ${esc(x.tk||'—')}</span><b></b><span class="n">${fmt(x.q,0)} m³</span></div>`).join('')}</div>`; }).join('')
+      return `<div class="dc"><div class="dc-h"><b>${esc(s.name)}</b><span class="dc-sum">Sheet <b>${fq(s.total)}</b> m³${tbl!=null&&!okq(tbl,s.total)?` <small>(sheet table ${fq(tbl)})</small>`:''}</span>${copyBtn(s.tok)}</div>
+        ${s.list.map(L=>`<div class="dc-l"><span>${L.code?esc(L.client||''):''}</span><b>${L.code?esc(L.code):'ES '+esc(L.es)}</b><span class="n">${fq(L.q)} m³</span></div>`).join('')}
+        ${s.start?`<div class="dc-l"><span class="dc-sm">Start mix</span><b></b><span class="n">${fq(s.start)} m³</span></div>`:''}
+        ${s.noes.map(x=>`<div class="dc-l"><span class="dc-ne">No ES · TM ${esc(x.tk||'—')}</span><b></b><span class="n">${fq(x.q)} m³</span></div>`).join('')}</div>`; }).join('')
       :'<div class="muted" style="font-size:13px;padding:8px 2px">No trucks in this window — the station tabs only show the days their filter lets through.</div>';
   }
   return `<div class="dp-wrap">
