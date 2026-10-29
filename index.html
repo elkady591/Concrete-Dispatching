@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000004">
+<meta name="app-build" content="20261029-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1119,6 +1119,10 @@
   .ptl-leg .lg{display:inline-block;width:16px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
   .lg.run{background:var(--cyan)}.lg.est{background:rgba(34,211,238,.45)}.lg.done{background:rgba(148,163,184,.4)}.lg.plan{border:1.5px dashed var(--violet)}.lg.late{border:1.5px dashed var(--amber)}.lg.free{border:1.5px dotted var(--green)}.lg.clash{box-shadow:0 0 0 2px var(--rose) inset}
   .ptl-warn{margin-top:8px;font-size:12.5px;color:var(--rose)}
+  .ptl-np .np-r{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;color:var(--ink,inherit)} .ptl-np .np-r small{color:var(--faint)}
+  .np-sug{font:700 12px var(--mono);padding:4px 10px;border-radius:999px;border:1px solid var(--green);background:rgba(52,211,153,.12);color:var(--green);cursor:pointer}
+  .np-none{color:var(--rose)!important}
+  .uc-plsug{font-size:12px;color:var(--green);margin:4px 0 2px}
   .ph-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;align-items:center;font-size:12px}.ph-hint{font-size:11px}
   .ph-c{font:700 12px var(--mono);padding:5px 10px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:inherit;cursor:pointer}
   .ph-c.hd{background:rgba(148,163,184,.22);border-color:#94a3b8;color:#e2e8f0}
@@ -3821,6 +3825,9 @@ function plantTimeline(now){
     for(const [s,e] of busy){ if(e<=cur) continue; if(s-cur>=TL_FREE_MIN) free.push([cur,s]); cur=Math.max(cur,e); }
     if(W.e-cur>=TL_FREE_MIN) free.push([cur,W.e]);
     list.free=list.hold?[]:free; }   // a plant on hold is never "free"
+  // requests with no plant chosen yet: the plants free for their whole pour (not on hold) = the suggestion
+  const busyAny=(list,s0,e0)=>list.some(y=>(y.kind==='run'||y.kind==='plan'||y.kind==='wash'||y.kind==='stop')&&y.s<e0&&y.e>s0);
+  noPlant.forEach(it=>{ it.sug=[...rows].filter(([p,l])=>!l.hold&&!plantHeld(p)&&!busyAny(l,it.s,it.e)).map(([p])=>p); });
   return {W, rows, pumps, noPlant, clashes, now};
 }
 // every plant (or pump) at one moment (the tapped time) -> [{p, on, next}]
@@ -3913,7 +3920,7 @@ function renderPlantTimeline(kind){
         <div>• <b>${nmOf(o)}</b> — ${doing(o)}</div>
         <div>• <b>${nmOf(pl)}</b> — ${doing(pl)}</div>
         <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(o.e)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}</div></div>`; }).join('')}</div>`:'';
-  const np=!PU&&T.noPlant.length?`<div class="ptl-np">🏭 No plant chosen yet: ${T.noPlant.map(x=>`<span>${esc((x.g.client?x.g.client+' ':'')+x.g.elem)}${x.noTime?'':' · '+timeShort(x.s)}</span>`).join(' · ')}</div>`:'';
+  const np=!PU&&T.noPlant.length?`<div class="ptl-np"><div>🏭 <b>No plant chosen yet</b> — free for the whole pour (tap = choose it):</div>${T.noPlant.map(x=>`<div class="np-r"><span>${nmOf(x)} <small>${timeShort(x.s)} → ≈${timeShort(x.e)}</small></span>${x.sug.length?x.sug.map(p=>`<button type="button" class="np-sug" data-k="${encodeURIComponent(plantKey(x.g))}" data-p="${esc(p)}">${esc(p)}</button>`).join(''):'<small class="np-none">no plant free for its whole pour</small>'}</div>`).join('')}</div>`:'';
   box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
     ${PU?'':`<div class="ph-chips"><span class="muted">🏭 Plant hold</span>${PLANT_LIST().map(p=>`<button type="button" class="ph-c${plantHeld(p)?' hd':''}" data-ph="${esc(p)}">${esc(p)}${plantHeld(p)?' ⏸ HOLD':''}</button>`).join('')}<span class="muted ph-hint">tap = hold / take back · every device</span></div>`}
@@ -3935,6 +3942,10 @@ function renderPlantTimeline(kind){
   box.querySelectorAll('.ptl-w[data-w]').forEach(b=>b.addEventListener('click',()=>setWin(b.dataset.w)));
   const fs=box.querySelector('.ptl-from'); if(fs) fs.addEventListener('change',()=>{ if(fs.value) setWin(fs.value); });
   const ax=box.querySelector('.ptl-x'); if(ax) ax.addEventListener('click',()=>{ S.at=null; renderPlantTimeline(kind); });
+  // a suggested plant: add it to the request's planned plants (every device)
+  box.querySelectorAll('.np-sug').forEach(b=>b.addEventListener('click',async()=>{ const k=decodeURIComponent(b.dataset.k), p=b.dataset.p;
+    if(plantHeld(p)) return; const cur=planPlants(k), val=PLANT_LIST().filter(x=>x===p||cur.includes(x)).join(',');
+    PUMPNOTE[k]=val; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,val); }));
   box.querySelectorAll('.ph-c').forEach(b=>b.addEventListener('click',()=>{ const p=b.dataset.ph, on=!plantHeld(p);
     if(!confirm(on?`Put ${p} on HOLD?\nIt can't be chosen for a request until you take it back (every device).`:`Take ${p} back from HOLD?`)) return;
     setPlantHold(p,on); }));
@@ -4203,11 +4214,13 @@ function renderUpcoming(){
   // one small chip per requested pump inside the pump box: tap = "sent to site" (tap again = undo)
   // 🏭 one chip per plant; lit = planned for this card's requests
   // + a warning for each chosen plant still busy on another open pour at this request's time (now if it has none)
+  const SUG=(()=>{ try{ return new Map(plantTimeline().noPlant.map(x=>[x.g,x.sug])); }catch(e){ return new Map(); } })();   // no plant yet -> the free ones
   const plantChips=u=>{ const keys=u.map(g=>plantKey(g)), on=planPlants(keys[0]), t=RT.get(u[0]), at=t&&t.at>now?t.at:now;
     const pred=plantPred(u[0]), same=PUMPNOTE[keys[0]]===SAME_PL;
     const warns=on.filter(plantHeld).map(st=>`⏸ <b>${esc(st)}</b> is on HOLD — choose another plant`).concat(on.filter(st=>!plantHeld(st)).map(st=>{ const b=plantBusy(st,at); return b&&!u.includes(b.g)&&b.g!==pred?`⚠ <b>${esc(st)}</b> busy on ${esc((b.g.client?b.g.client+' ':'')+b.g.elem)}${b.till?` till ≈${timeShort(b.till)}`:''}`:''; })).filter(Boolean);
     const sameBtn=pred?`<button class="uc-pl uc-plsame${same?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-same="1" title="Use the plants ${esc(site(pred))} is working with — follows them by itself">${same?'✓ ':''}Same working plants</button>`:'';
-    return `<div class="uc-plants">🏭 ${sameBtn}${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}${plantHeld(st)?' hd':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="${plantHeld(st)?'On HOLD — take it back on the Plants timeline (All Pours) first':'Planned plant'}">${esc(st)}${plantHeld(st)?' ⏸':''}</button>`).join('')}</div>${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
+    const sg=!on.length&&SUG.get(u[0]), sugL=sg&&sg.length?`<div class="uc-plsug">💡 Free for its whole pour: ${sg.map(p=>`<b>${esc(p)}</b>`).join(', ')} — tap one above</div>`:(sg?'<div class="uc-plsug">💡 No plant is free for its whole pour</div>':'');
+    return `<div class="uc-plants">🏭 ${sameBtn}${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}${plantHeld(st)?' hd':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="${plantHeld(st)?'On HOLD — take it back on the Plants timeline (All Pours) first':'Planned plant'}">${esc(st)}${plantHeld(st)?' ⏸':''}</button>`).join('')}</div>${sugL}${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
   // + right after our pumps: the site's stationary (🏗 S.P 3.7) and spider (🕷) pumps — tap when ready (-> WhatsApp photo)
   const siteChips=p=>{ const sp=sitePumps(p); if(!sp) return '';
     const ch=(t,spare)=>siteItems(t).filter(x=>siteKind(x)!=='mob').map(x=>{ const kd=siteKind(x), on=!!sp.r[x];
