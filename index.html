@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000003">
+<meta name="app-build" content="20261029-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1119,6 +1119,14 @@
   .ptl-leg .lg{display:inline-block;width:16px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
   .lg.run{background:var(--cyan)}.lg.est{background:rgba(34,211,238,.45)}.lg.done{background:rgba(148,163,184,.4)}.lg.plan{border:1.5px dashed var(--violet)}.lg.late{border:1.5px dashed var(--amber)}.lg.free{border:1.5px dotted var(--green)}.lg.clash{box-shadow:0 0 0 2px var(--rose) inset}
   .ptl-warn{margin-top:8px;font-size:12.5px;color:var(--rose)}
+  .ph-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;align-items:center;font-size:12px}.ph-hint{font-size:11px}
+  .ph-c{font:700 12px var(--mono);padding:5px 10px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:inherit;cursor:pointer}
+  .ph-c.hd{background:rgba(148,163,184,.22);border-color:#94a3b8;color:#e2e8f0}
+  .ptl-hold{position:absolute;top:0;bottom:0;box-sizing:border-box;background:repeating-linear-gradient(135deg,rgba(148,163,184,.30) 0 8px,rgba(148,163,184,.10) 8px 16px);border-left:2px solid #94a3b8;z-index:0;padding:1px 6px;font-size:10px;line-height:13px;font-weight:800;color:#cbd5e1;overflow:clip;white-space:nowrap}
+  .ptl-hold span{position:sticky;left:62px}
+  .ptl-lab.hd{color:#94a3b8;flex-direction:column;align-items:flex-start;justify-content:center}.ptl-lab.hd small{font:800 9px var(--sans);color:var(--amber)}
+  .ptl-at-c.hdc{border-color:#94a3b8}.ptl-at-c .hd{color:#94a3b8;font-weight:700}
+  .uc-pl.hd{opacity:.55;text-decoration:line-through;border-style:dashed}
   .ptl-cl{border:1px solid rgba(251,113,133,.45);background:rgba(251,113,133,.07);border-radius:10px;padding:8px 10px;margin-top:6px;color:var(--ink,inherit);line-height:1.5}
   .ptl-cl-h{color:var(--rose);margin-bottom:2px} .ptl-cl-do{color:var(--amber);margin-top:2px}
   .ptl-np{margin-top:8px;font-size:12px;color:var(--amber)}
@@ -2395,8 +2403,14 @@ async function siteReady(k,item){ let v={}; try{ v=JSON.parse(PUMPNOTE[k]||'{}')
 // planned plants of a request; '=same' = "Same working plants": whatever the request it follows (same client +
 // element before it, or its "after" link) is ACTUALLY loading from now — follows it by itself as that changes
 const SAME_PL='=same';
+// a plant put on HOLD (every device) until it is taken back by hand: PUMPNOTE['PH|<plant>'] = '<ms since>|<by>'.
+// It cannot be chosen for a request; "Same working plants" leaves it out; the timeline draws it on hold.
+const phKey=p=>'PH|'+p;
+const plantHeld=p=>!!PUMPNOTE[phKey(p)];
+async function setPlantHold(p,on){ const k=phKey(p), v=on?`${Date.now()}|${String(ME||'').replace(/\|/g,' ')}`:'';
+  if(v) PUMPNOTE[k]=v; else delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,v); }
 function planPlants(k,d){ const v=String(PUMPNOTE[k]||'');
-  if(v===SAME_PL){ const g=(VD.summary||[]).find(x=>plantKey(x)===k); return g?samePlants(g,(d||0)+1):[]; }
+  if(v===SAME_PL){ const g=(VD.summary||[]).find(x=>plantKey(x)===k); return g?samePlants(g,(d||0)+1).filter(p=>!plantHeld(p)):[]; }
   return v.split(',').map(s=>s.trim()).filter(Boolean); }
 function plantPred(g){ const c=pourChains().get(g); if(c&&c.prev) return c.prev; return pourLinks().get(g)||null; }
 function samePlants(g,d){ const p=plantPred(g); if(!p||(d||0)>6) return [];
@@ -3790,8 +3804,12 @@ function plantTimeline(now){
   // "from now" views: what already ended before now (finished pours, a plant that stopped) is left out — only stubs there
   if(/^now/.test(tlWin)) for(const list of [...rows.values(),...pumps.values()]) for(let i=list.length-1;i>=0;i--){ const x=list[i];
     if(x.kind==='done'||x.kind==='stop'&&x.e<=now||x.kind==='wash'&&x.e<=now) list.splice(i,1); }   // a finished pour: gone
+  // a plant on HOLD: held from its "since" to the end of the window; whatever is planned on it then is a clash
+  for(const [p,list] of rows){ const v=PUMPNOTE[phKey(p)]; if(v) list.hold={since:+String(v).split('|')[0]||now, by:String(v).split('|')[1]||''}; }
   // 4) clashes (a planned request on a plant still busy then) + free gaps from now on
   const clashes=[];
+  for(const [p,list] of rows){ if(!list.hold) continue; const hs=Math.max(list.hold.since,W.s);
+    list.filter(x=>x.kind==='plan'&&x.e>hs).forEach(x=>{ x.clash=true; clashes.push({p, a:x, b:null, hold:true, ov:x.e-Math.max(x.s,hs)}); }); }
   for(const [p,list] of [...rows,...[...pumps].map(([i,l])=>['P'+i,l])]){ list.sort((a,b)=>a.s-b.s);
     for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i], b=list[j];
       if(a.g===b.g) continue;
@@ -3802,7 +3820,7 @@ function plantTimeline(now){
     let cur=Math.max(now,W.s); const free=[];
     for(const [s,e] of busy){ if(e<=cur) continue; if(s-cur>=TL_FREE_MIN) free.push([cur,s]); cur=Math.max(cur,e); }
     if(W.e-cur>=TL_FREE_MIN) free.push([cur,W.e]);
-    list.free=free; }
+    list.free=list.hold?[]:free; }   // a plant on hold is never "free"
   return {W, rows, pumps, noPlant, clashes, now};
 }
 // every plant (or pump) at one moment (the tapped time) -> [{p, on, next}]
@@ -3810,7 +3828,7 @@ function tlAtMoment(entries,at){
   return entries.map(([p,list])=>{
     const busy=x=>x.kind==='run'||x.kind==='plan'||x.kind==='wash'||x.kind==='stop';   // washing / waiting = not free either
     const on=list.filter(x=>busy(x)&&x.s<=at&&x.e>at), next=list.filter(x=>(x.kind==='run'||x.kind==='plan')&&x.s>at).sort((a,b)=>a.s-b.s)[0];
-    return {p, on, next}; }); }
+    return {p, on, next, held:!!list.hold}; }); }
 // a bar's details in a box over the page (the timeline stays where it is); buttons go on to its trucks / its card
 function tlDetail(x,PU,clashes){
   let o=el('tlModal'); if(!o){ o=document.createElement('div'); o.id='tlModal'; o.className='rq-back'; document.body.appendChild(o);
@@ -3838,7 +3856,7 @@ function tlDetail(x,PU,clashes){
   if(need.length) L.push(['Pumps', `${esc(allPumpsLabel(g,need))}${sent.length?` · sent: ${sent.map(v=>v.len).join(', ')}`:started?'':' · not sent yet'}`]);
   if(g.esId) L.push(['ES', esc(g.esId)]);
   [['Card',g.sc],['Temp.',g.tem],['Mix',g.mix]].forEach(([k,v])=>{ if(v) L.push([k,esc(String(v))]); });
-  const cl=(clashes||[]).filter(c=>c.a===x||c.b===x).map(c=>{ const o2=c.a===x?c.b:c.a; return `⚠ ${esc(c.p)}: with ${esc((o2.g.client?o2.g.client+' ':'')+o2.g.elem)} (${Math.round(c.ov/60000)} min)`; });
+  const cl=(clashes||[]).filter(c=>c.a===x||c.b===x).map(c=>{ if(c.hold) return `⏸ ${esc(c.p)} is on HOLD — choose another plant for it`; const o2=c.a===x?c.b:c.a; return `⚠ ${esc(c.p)}: with ${esc((o2.g.client?o2.g.client+' ':'')+o2.g.elem)} (${Math.round(c.ov/60000)} min)`; });
   o.innerHTML=`<div class="rq-box tl-box"><div class="rq-head"><b>${esc(nm)}</b><button type="button" class="rq-x">✕</button></div>
     <div class="tl-st ${x.kind}${x.late?' late':''}">${state}${x.late?' · late':''}</div>
     <div class="tl-kv">${L.map(([k,v])=>`<span>${k}</span><div>${v}</div>`).join('')}</div>
@@ -3856,22 +3874,23 @@ function renderPlantTimeline(kind){
   const hours=Math.ceil((W.e-W.s)/3600000), width=hours*TL_PXH;
   const h0=new Date(W.s); h0.setMinutes(0,0,0); const ticks=[]; for(let t=h0.getTime(); t<=W.e; t+=3600000) if(t>=W.s) ticks.push(t);
   const LANE=32, ITEMS=[];   // the bars drawn, by index (tap = its details)
-  const bar=x=>{ const ix=ITEMS.push(x)-1, l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.lane||0)*LANE;
+  const bar=x=>{ const ix=ITEMS.push(x)-1, l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.off||0)+(x.lane||0)*LANE;
     const done=x.now!=null?Math.max(0,Math.min(100,Math.round((X(x.now)-l)/w*100))):null;
     const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind;
     return `<div class="ptl-bar ${cls}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px" data-i="${ix}" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${x.txt}</span></div>`; };
   const freeB=([s,e])=>`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
-  const row=(p,list)=>{ const ends=[]; list.forEach(x=>{ x.row=p; });   // first line whose last bar ended before this one starts (in px, so touching bars share a line)
+  const row=(p,list)=>{ const ends=[], off=list.hold?14:0; list.forEach(x=>{ x.row=p; x.off=off; });   // on hold: the HOLD label gets its own line on top   // first line whose last bar ended before this one starts (in px, so touching bars share a line)
     list.slice().sort((a,b)=>a.s-b.s).forEach(x=>{ const l=X(x.s); let k=ends.findIndex(e=>e<=l+1); if(k<0){ k=ends.length; ends.push(0); } x.lane=k; ends[k]=Math.max(l+6,X(x.e)); });
-    const h=40+Math.max(0,ends.length-1)*LANE;
-    return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab">${esc(p)}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
+    const h=40+off+Math.max(0,ends.length-1)*LANE;
+    const hb=list.hold?`<div class="ptl-hold" style="left:${X(Math.max(list.hold.since,W.s))}px;width:${X(W.e)-X(Math.max(list.hold.since,W.s))}px"><span>⏸ HOLD${list.hold.by?' · '+esc(list.hold.by):''}</span></div>`:'';
+    return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab${list.hold?' hd':''}">${esc(p)}${list.hold?'<small>⏸ HOLD</small>':''}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${hb}${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
   const tlAt=S.at, nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
   const entries=PU?[...T.pumps.values()].map(l=>[l.lab,l]):[...T.rows.entries()];
   const winChips=[['now12','Next 12 h'],['now24','Next 24 h'],['day','Work day 8→8']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
     +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select class="ptl-from"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
-  const AT=tlAt!=null?tlAtMoment(entries,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length).map(o=>o.p):[];
+  const AT=tlAt!=null?tlAtMoment(entries,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length&&!o.held).map(o=>o.p):[];
   const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:(PU?' · no pump free':' · no plant free')}<button type="button" class="ptl-x">✕</button></div>
-      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.on.length?o.on.map(x=>`<div class="${x.kind}">${x.kind==='wash'?'washing':x.kind==='stop'?'waiting':''}${x.kind==='wash'||x.kind==='stop'?' <small>after</small> ':''}${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):'<div class="ok">Free</div>'}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))}</small>`:''}</div>`).join('')}</div></div>`:'';
+      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.held?' hdc':o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.held?'<div class="hd">⏸ On hold</div>':''}${o.on.length?o.on.map(x=>`<div class="${x.kind}">${x.kind==='wash'?'washing':x.kind==='stop'?'waiting':''}${x.kind==='wash'||x.kind==='stop'?' <small>after</small> ':''}${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):(o.held?'':'<div class="ok">Free</div>')}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))}</small>`:''}</div>`).join('')}</div></div>`:'';
   const CL=T.clashes.filter(c=>/^Pump /.test(c.p)===PU);
   // each clash in full: where, when the two overlap, what each one is doing, and what can be done about it
   const nmOf=x=>esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''));
@@ -3881,8 +3900,12 @@ function renderPlantTimeline(kind){
     :`planned ${timeShort(x.s)} → ≈${timeShort(x.e)}${x.late?' (late)':''}`;
   const busyIn=(list,s0,e0)=>list.some(y=>(y.kind==='run'||y.kind==='plan'||y.kind==='wash'||y.kind==='stop')&&y.s<e0&&y.e>s0);
   const freeFor=(c,pl)=>{ const len=PU?String(c.p).replace(/^Pump\s+/,'').split(' ')[0]:null;
-    return entries.filter(([lab,l])=>(PU?'Pump '+lab:lab)!==c.p && (!PU||String(lab).split(' ')[0]===len) && !busyIn(l,pl.s,pl.e)).map(([lab])=>esc(lab)); };
+    return entries.filter(([lab,l])=>(PU?'Pump '+lab:lab)!==c.p && !l.hold && (!PU||String(lab).split(' ')[0]===len) && !busyIn(l,pl.s,pl.e)).map(([lab])=>esc(lab)); };
   const warn=CL.length?`<div class="ptl-warn">${CL.map(c=>{
+      if(c.hold){ const x=c.a, alt=entries.filter(([lab,l])=>lab!==c.p&&!l.hold&&!busyIn(l,x.s,x.e)).map(([lab])=>esc(lab));
+        return `<div class="ptl-cl"><div class="ptl-cl-h">⏸ <b>${esc(c.p)}</b> is on HOLD — but a request is planned on it</div>
+          <div>• <b>${nmOf(x)}</b> — ${doing(x)}</div>
+          <div class="ptl-cl-do">→ ${alt.length?`choose <b>${alt.join(', ')}</b> for it (free then)`:'no other plant is free then'} · or take ${esc(c.p)} back from hold</div></div>`; }
       // the one to move = the planned one (two planned: the later one)
       const pl=c.a.kind==='plan'&&c.b.kind!=='plan'?c.a:c.b.kind==='plan'&&c.a.kind!=='plan'?c.b:(c.a.s>=c.b.s?c.a:c.b), o=pl===c.a?c.b:c.a;
       const s0=Math.max(c.a.s,c.b.s), e0=Math.min(c.a.e,c.b.e), alt=freeFor(c,pl);
@@ -3893,6 +3916,7 @@ function renderPlantTimeline(kind){
   const np=!PU&&T.noPlant.length?`<div class="ptl-np">🏭 No plant chosen yet: ${T.noPlant.map(x=>`<span>${esc((x.g.client?x.g.client+' ':'')+x.g.elem)}${x.noTime?'':' · '+timeShort(x.s)}</span>`).join(' · ')}</div>`:'';
   box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
+    ${PU?'':`<div class="ph-chips"><span class="muted">🏭 Plant hold</span>${PLANT_LIST().map(p=>`<button type="button" class="ph-c${plantHeld(p)?' hd':''}" data-ph="${esc(p)}">${esc(p)}${plantHeld(p)?' ⏸ HOLD':''}</button>`).join('')}<span class="muted ph-hint">tap = hold / take back · every device</span></div>`}
     <div class="ptl-scroll"><div class="ptl-in" style="width:${width+56}px">
       <div class="ptl-axis" style="width:${width}px">${ticks.map(t=>`<span style="left:${X(t)}px">${timeShort(t).replace(':00','')}</span>`).join('')}</div>
       ${entries.length?entries.map(([p,l])=>row(p,l)).join(''):`<div class="muted" style="padding:10px 4px;font-size:12.5px">${PU?'No working pump (the ones with a breakdown are left out)':'No plant'}</div>`}
@@ -3911,6 +3935,9 @@ function renderPlantTimeline(kind){
   box.querySelectorAll('.ptl-w[data-w]').forEach(b=>b.addEventListener('click',()=>setWin(b.dataset.w)));
   const fs=box.querySelector('.ptl-from'); if(fs) fs.addEventListener('change',()=>{ if(fs.value) setWin(fs.value); });
   const ax=box.querySelector('.ptl-x'); if(ax) ax.addEventListener('click',()=>{ S.at=null; renderPlantTimeline(kind); });
+  box.querySelectorAll('.ph-c').forEach(b=>b.addEventListener('click',()=>{ const p=b.dataset.ph, on=!plantHeld(p);
+    if(!confirm(on?`Put ${p} on HOLD?\nIt can't be chosen for a request until you take it back (every device).`:`Take ${p} back from HOLD?`)) return;
+    setPlantHold(p,on); }));
 }
 function renderAllPours(){
   // use the plan-driven pour list (same-name pours split & numbered), started ones only
@@ -4178,9 +4205,9 @@ function renderUpcoming(){
   // + a warning for each chosen plant still busy on another open pour at this request's time (now if it has none)
   const plantChips=u=>{ const keys=u.map(g=>plantKey(g)), on=planPlants(keys[0]), t=RT.get(u[0]), at=t&&t.at>now?t.at:now;
     const pred=plantPred(u[0]), same=PUMPNOTE[keys[0]]===SAME_PL;
-    const warns=on.map(st=>{ const b=plantBusy(st,at); return b&&!u.includes(b.g)&&b.g!==pred?`⚠ <b>${esc(st)}</b> busy on ${esc((b.g.client?b.g.client+' ':'')+b.g.elem)}${b.till?` till ≈${timeShort(b.till)}`:''}`:''; }).filter(Boolean);
+    const warns=on.filter(plantHeld).map(st=>`⏸ <b>${esc(st)}</b> is on HOLD — choose another plant`).concat(on.filter(st=>!plantHeld(st)).map(st=>{ const b=plantBusy(st,at); return b&&!u.includes(b.g)&&b.g!==pred?`⚠ <b>${esc(st)}</b> busy on ${esc((b.g.client?b.g.client+' ':'')+b.g.elem)}${b.till?` till ≈${timeShort(b.till)}`:''}`:''; })).filter(Boolean);
     const sameBtn=pred?`<button class="uc-pl uc-plsame${same?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-same="1" title="Use the plants ${esc(site(pred))} is working with — follows them by itself">${same?'✓ ':''}Same working plants</button>`:'';
-    return `<div class="uc-plants">🏭 ${sameBtn}${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="Planned plant">${esc(st)}</button>`).join('')}</div>${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
+    return `<div class="uc-plants">🏭 ${sameBtn}${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}${plantHeld(st)?' hd':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="${plantHeld(st)?'On HOLD — take it back on the Plants timeline (All Pours) first':'Planned plant'}">${esc(st)}${plantHeld(st)?' ⏸':''}</button>`).join('')}</div>${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
   // + right after our pumps: the site's stationary (🏗 S.P 3.7) and spider (🕷) pumps — tap when ready (-> WhatsApp photo)
   const siteChips=p=>{ const sp=sitePumps(p); if(!sp) return '';
     const ch=(t,spare)=>siteItems(t).filter(x=>siteKind(x)!=='mob').map(x=>{ const kd=siteKind(x), on=!!sp.r[x];
@@ -4260,6 +4287,7 @@ function renderUpcoming(){
   // 🏭 planned plants: tap a plant to add / remove it — the same choice goes to every request of the card
   el('upcomingArea').querySelectorAll('.uc-pl').forEach(b=>b.addEventListener('click',async()=>{
     const keys=decodeURIComponent(b.dataset.k).split('\n'), st=b.dataset.p;
+    if(st && plantHeld(st) && !planPlants(keys[0]).includes(st)){ alert(`${st} is on HOLD.\nTake it back first: All Pours → Plants timeline → 🏭 Plant hold.`); return; }   // (one chosen before the hold can still be taken off)
     let val;
     if(b.dataset.same) val=PUMPNOTE[keys[0]]===SAME_PL?'':SAME_PL;   // "Same working plants" on / off
     else { // a plant tapped while following: carry on from what it shows now, by hand
