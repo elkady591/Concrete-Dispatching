@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000002">
+<meta name="app-build" content="20261029-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1119,6 +1119,8 @@
   .ptl-leg .lg{display:inline-block;width:16px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
   .lg.run{background:var(--cyan)}.lg.est{background:rgba(34,211,238,.45)}.lg.done{background:rgba(148,163,184,.4)}.lg.plan{border:1.5px dashed var(--violet)}.lg.late{border:1.5px dashed var(--amber)}.lg.free{border:1.5px dotted var(--green)}.lg.clash{box-shadow:0 0 0 2px var(--rose) inset}
   .ptl-warn{margin-top:8px;font-size:12.5px;color:var(--rose)}
+  .ptl-cl{border:1px solid rgba(251,113,133,.45);background:rgba(251,113,133,.07);border-radius:10px;padding:8px 10px;margin-top:6px;color:var(--ink,inherit);line-height:1.5}
+  .ptl-cl-h{color:var(--rose);margin-bottom:2px} .ptl-cl-do{color:var(--amber);margin-top:2px}
   .ptl-np{margin-top:8px;font-size:12px;color:var(--amber)}
   .ptl-at{margin-top:10px;border:1px solid var(--amber);border-radius:12px;padding:10px}
   .ptl-at-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}.ptl-at-h .ok,.ptl-at .ok{color:var(--green)}
@@ -3871,8 +3873,23 @@ function renderPlantTimeline(kind){
   const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:(PU?' · no pump free':' · no plant free')}<button type="button" class="ptl-x">✕</button></div>
       <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.on.length?o.on.map(x=>`<div class="${x.kind}">${x.kind==='wash'?'washing':x.kind==='stop'?'waiting':''}${x.kind==='wash'||x.kind==='stop'?' <small>after</small> ':''}${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):'<div class="ok">Free</div>'}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))}</small>`:''}</div>`).join('')}</div></div>`:'';
   const CL=T.clashes.filter(c=>/^Pump /.test(c.p)===PU);
-  const warn=CL.length?`<div class="ptl-warn">${CL.map(c=>{ const pl=c.a.kind==='plan'&&c.b.kind!=='plan'?c.a:c.b.kind==='plan'?c.b:c.a, o=pl===c.a?c.b:c.a;
-      return `⚠ <b>${esc(c.p)}</b>: ${esc((pl.g.client?pl.g.client+' ':'')+pl.g.elem)} from ${timeShort(pl.s)} — ${esc((o.g.client?o.g.client+' ':'')+o.g.elem)} keeps it till ≈${timeShort(o.e)} (${Math.round(c.ov/60000)} min)`; }).join('<br>')}</div>`:'';
+  // each clash in full: where, when the two overlap, what each one is doing, and what can be done about it
+  const nmOf=x=>esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''));
+  const doing=x=>x.kind==='run'?`pouring now${x.g.remaining>0?` · ${fmt(x.g.remaining,0)} m³ left`:''} · ends ≈${timeShort(x.e)}`
+    :x.kind==='wash'?`its pump washing till ${timeShort(x.e)}`:x.kind==='stop'?`kept on site till ≈${timeShort(x.e)}`
+    :x.setup?`pumps sent · pour till ≈${timeShort(x.e)}`
+    :`planned ${timeShort(x.s)} → ≈${timeShort(x.e)}${x.late?' (late)':''}`;
+  const busyIn=(list,s0,e0)=>list.some(y=>(y.kind==='run'||y.kind==='plan'||y.kind==='wash'||y.kind==='stop')&&y.s<e0&&y.e>s0);
+  const freeFor=(c,pl)=>{ const len=PU?String(c.p).replace(/^Pump\s+/,'').split(' ')[0]:null;
+    return entries.filter(([lab,l])=>(PU?'Pump '+lab:lab)!==c.p && (!PU||String(lab).split(' ')[0]===len) && !busyIn(l,pl.s,pl.e)).map(([lab])=>esc(lab)); };
+  const warn=CL.length?`<div class="ptl-warn">${CL.map(c=>{
+      // the one to move = the planned one (two planned: the later one)
+      const pl=c.a.kind==='plan'&&c.b.kind!=='plan'?c.a:c.b.kind==='plan'&&c.a.kind!=='plan'?c.b:(c.a.s>=c.b.s?c.a:c.b), o=pl===c.a?c.b:c.a;
+      const s0=Math.max(c.a.s,c.b.s), e0=Math.min(c.a.e,c.b.e), alt=freeFor(c,pl);
+      return `<div class="ptl-cl"><div class="ptl-cl-h">⚠ <b>${esc(c.p)}</b> is needed twice <b>${timeShort(s0)} → ${timeShort(e0)}</b> (${Math.round(c.ov/60000)} min)</div>
+        <div>• <b>${nmOf(o)}</b> — ${doing(o)}</div>
+        <div>• <b>${nmOf(pl)}</b> — ${doing(pl)}</div>
+        <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(o.e)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}</div></div>`; }).join('')}</div>`:'';
   const np=!PU&&T.noPlant.length?`<div class="ptl-np">🏭 No plant chosen yet: ${T.noPlant.map(x=>`<span>${esc((x.g.client?x.g.client+' ':'')+x.g.elem)}${x.noTime?'':' · '+timeShort(x.s)}</span>`).join(' · ')}</div>`:'';
   box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
