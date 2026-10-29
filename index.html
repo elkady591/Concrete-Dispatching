@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000006">
+<meta name="app-build" content="20261029-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3815,7 +3815,8 @@ function plantTimeline(now){
   for(const [p,list] of rows){ if(!list.hold) continue; const hs=Math.max(list.hold.since,W.s);
     list.filter(x=>x.kind==='plan'&&x.e>hs).forEach(x=>{ x.clash=true; clashes.push({p, a:x, b:null, hold:true, ov:x.e-Math.max(x.s,hs)}); }); }
   for(const [p,list] of [...rows,...[...pumps].map(([i,l])=>['P'+i,l])]){ list.sort((a,b)=>a.s-b.s);
-    for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i], b=list[j];
+    // a PLANT on two requests at once is on purpose (user's rule): no clash — only a pump can't be in two places
+    if(/^P\d+$/.test(p)) for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i], b=list[j];
       if(a.g===b.g) continue;
       if(a.kind!=='plan'&&b.kind!=='plan') continue; if(a.kind==='done'||b.kind==='done'||a.kind==='stop'||b.kind==='stop') continue;
       const ov=Math.min(a.e,b.e)-Math.max(a.s,b.s); if(ov<5*60000) continue;
@@ -4217,7 +4218,8 @@ function renderUpcoming(){
   const SUG=(()=>{ try{ return new Map(plantTimeline().noPlant.map(x=>[x.g,x.sug])); }catch(e){ return new Map(); } })();   // no plant yet -> the free ones
   const plantChips=u=>{ const keys=u.map(g=>plantKey(g)), on=planPlants(keys[0]), t=RT.get(u[0]), at=t&&t.at>now?t.at:now;
     const pred=plantPred(u[0]), same=PUMPNOTE[keys[0]]===SAME_PL;
-    const warns=on.filter(plantHeld).map(st=>`⏸ <b>${esc(st)}</b> is on HOLD — choose another plant`).concat(on.filter(st=>!plantHeld(st)).map(st=>{ const b=plantBusy(st,at); return b&&!u.includes(b.g)&&b.g!==pred?`⚠ <b>${esc(st)}</b> busy on ${esc((b.g.client?b.g.client+' ':'')+b.g.elem)}${b.till?` till ≈${timeShort(b.till)}`:''}`:''; })).filter(Boolean);
+    // (a plant still busy on another pour then is fine — on purpose, user's rule; only a plant on HOLD is warned about)
+    const warns=on.filter(plantHeld).map(st=>`⏸ <b>${esc(st)}</b> is on HOLD — choose another plant`);
     const sameBtn=pred?`<button class="uc-pl uc-plsame${same?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-same="1" title="Use the plants ${esc(site(pred))} is working with — follows them by itself">${same?'✓ ':''}Same working plants</button>`:'';
     const sg=!on.length&&SUG.get(u[0]), sugL=sg&&sg.length?`<div class="uc-plsug">💡 Free for its whole pour: ${sg.map(p=>`<b>${esc(p)}</b>`).join(', ')} — tap one above</div>`:(sg?'<div class="uc-plsug">💡 No plant is free for its whole pour</div>':'');
     return `<div class="uc-plants">🏭 ${sameBtn}${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}${plantHeld(st)?' hd':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="${plantHeld(st)?'On HOLD — take it back on the Plants timeline (All Pours) first':'Planned plant'}">${esc(st)}${plantHeld(st)?' ⏸':''}</button>`).join('')}</div>${sugL}${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
