@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000010">
+<meta name="app-build" content="20261029-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3314,7 +3314,8 @@ let SKIP={};            // checks the user marked as reviewed on this device: {i
 // finished, until the user Skips it (user's rule). {id: {truck, plant, es, q, dep, flag:'hold'|'down', flagNote, seen}}
 const KEY_HOLDSEEN='cmpour:holdseen';
 let HOLDSEEN={};
-const holdId=x=>`${x.flag==='down'?'down':'hold'}|${x.truck}|${x.dep}`;
+// (a departure written as a time only gets the work day, so the same truck at the same minute another day is a new one)
+const holdId=x=>`${x.flag==='down'?'down':'hold'}|${x.truck}|${x.dep}${/\d{4}|\d{1,2}\/\d{1,2}/.test(String(x.dep||''))?'':'@'+workDayStr()}`;
 function rememberHolds(){ let ch=false;
   for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold'||x.flag==='down')){ const id=holdId(x);
     if(!HOLDSEEN[id]){ HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flag:x.flag, flagNote:x.flagNote||'', seen:Date.now()}; ch=true; } }
@@ -4906,8 +4907,14 @@ function dpBuild(start){
   return out;
 }
 const dpDate=t=>{ const d=new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; };
+// a station's lines for the message: one per element (its ESs added up), the code clean; unnamed ESs stay as they are
+function dpLines(list){ const by=new Map(), out=[];
+  for(const L of list){ if(!L.code){ out.push(L); continue; } const k=(L.client||'')+'|'+dpKey(L.code), o=by.get(k);
+    if(o) o.q+=L.q; else { const n={...L, code:dpKey(L.code)}; by.set(k,n); out.push(n); } }
+  return out; }
 function dpText(sts,start){
-  return `*Daily program*\n${dpDate(start)}\n08:00-08:00\n`+sts.map(s=>`\n*${s.name}*\n`+s.list.map(L=>`${L.code?`${L.client?L.client+' . ':''}${L.code}`:'ES '+L.es} . ${fmt(L.q,0)}m³.`).join('\n')
+  // (one line per element — its ESs added up — and the code written clean: "90UPN." -> "90UPN")
+  return `*Daily program*\n${dpDate(start)}\n08:00-08:00\n`+sts.map(s=>`\n*${s.name}*\n`+dpLines(s.list).map(L=>`${L.code?`${L.client?L.client+' . ':''}${L.code}`:'ES '+L.es} . ${fmt(L.q,0)}m³.`).join('\n')
     +(s.start?`\nStartmix . ${fmt(s.start,0)}m³.`:'')+(s.noes.length?`\nNo ES . ${fmt(s.noes.reduce((a,x)=>a+x.q,0),0)}m³.`:'')+`\n\nTotal.   ${fmt(s.total,0)}m`).join('\n');
 }
 // one key per element, whatever the punctuation: "90UPN." = "90UPN" = "90 upn"
