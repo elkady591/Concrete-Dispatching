@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000012">
+<meta name="app-build" content="20261029-000013">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4249,15 +4249,17 @@ function renderUpcoming(){
     const ch=(t,spare)=>siteItems(t).filter(x=>siteKind(x)!=='mob').map(x=>{ const kd=siteKind(x), on=!!sp.r[x];
       return `<button type="button" class="uc-sc${on?' on':''}" data-k="${esc(siteKey(p))}" data-i="${esc(x)}" title="${spare?'Spare · ':''}Tap when it is ready — then it goes in the WhatsApp photo">${on?'✓ ':''}${kd==='st'?'🏗 ':kd==='sp'?'🕷 ':''}${esc(x)}${spare?' <small>spare</small>':''}</button>`; }).join('');
     return ch(sp.w,false)+(sp.s?ch(sp.s,true):''); };
-  // a pump can only be sent when one of that length is Available right now on the Pumps page (not broken down,
-  // with an operator, not on / washing / already sent elsewhere). To send one from another site the user first
-  // frees it there with ✓ on the Pumps page (user's rule) — so a pump is never counted in two places.
-  const freeNow={}; pumpPlan(Date.now()).state.forEach(s=>{ if(s.st==='free'&&!s.noop) freeNow[s.len]=(freeNow[s.len]||0)+1; });
+  // a pump can only be sent when one of that length is not on another pour right now (not broken down, not pouring /
+  // setting up / kept for the next of a chain elsewhere). To send one from another site the user first frees it
+  // there with ✓ on the Pumps page (user's rule) — so a pump is never counted in two places.
+  // …can be sent: Available (even with no operator counted — if it left, it has one) or washing after a finished pour
+  // (the washing is cut short when it is sent). Still on a running pour / setting up / Breakdown = free it first.
+  const freeNow={}; pumpPlan(Date.now()).state.forEach(s=>{ if(s.st==='free'||s.st==='wash') freeNow[s.len]=(freeNow[s.len]||0)+1; });
   const sendChips=p=>{ const need=pumpReq(p.pumps), sc=siteChips(p); if(!need.length&&!sc) return '';
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
       const no=!on && !(freeNow[len]>0);
-      return `<button class="uc-snd${on?' on':''}${no?' no':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}"${no?' data-no="1"':''} title="${on?'Sent — tap to undo':no?`No ${len} pump available right now`:'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}${no?' <small>· busy now</small>':''}</button>`; }).join('')}${sc}</div>`; };
+      return `<button class="uc-snd${on?' on':''}${no?' no':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}"${no?' data-no="1"':''} title="${on?'Sent — tap to undo':no?`Every ${len} is on a pour or broken down right now`:'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}${no?' <small>· busy now</small>':''}</button>`; }).join('')}${sc}</div>`; };
   // chains (same client + element, poured one after the other) become ONE card; its place = its first request
   const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
   // carries on with the pumps of the pour before it (same element, or an "after" link asking for the same pumps)
@@ -4332,7 +4334,7 @@ function renderUpcoming(){
     for(const k of keys) await syncPush('pump',k,val); }));
   el('upcomingArea').querySelectorAll('.uc-snd').forEach(b=>b.addEventListener('click',async()=>{
     const k=decodeURIComponent(b.dataset.k), len=+b.dataset.len;
-    if(b.dataset.no==='1'){ alert(`مفيش مضخة ${len} فاضية دلوقتي.\nلو هتجيبها من موقع تاني، اعملها Available الأول من صفحة Pumps (علامة ✓) وبعدين ابعتها.`); return; }
+    if(b.dataset.no==='1'){ alert(`كل مضخات ${len} لسه شغالة على صبّة أو عطلانة دلوقتي.\nلو هتجيبها من موقع تاني، اعملها Available الأول من صفحة Pumps (علامة ✓) وبعدين ابعتها.`); return; }
     let list=String(PUMPNOTE[k]||'').split(';').filter(x=>/^\d+@\d+$/.test(x));
     if(b.dataset.on==='1'){ const j=list.map(x=>+x.split('@')[0]).lastIndexOf(len); if(j>=0) list.splice(j,1); }
     else list.push(len+'@'+Date.now());
