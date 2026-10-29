@@ -556,6 +556,7 @@
   .dc-via{font-size:10.5px;font-weight:500;color:var(--faint);font-family:var(--sans)}
   .dq{font-weight:800;font-family:var(--mono)} .dq.ok{color:var(--green)} .dq.no{color:var(--rose)} .dq.df{color:var(--amber)}
   .dc-sm{color:var(--amber);font-weight:700} .dc-ne{color:var(--violet)}
+  .dc-rj{color:var(--rose);font-weight:700} .dc-l.rj .n{color:var(--rose);text-decoration:line-through} .dc-sum .rjs{color:var(--rose);font-weight:700}
   .dc-x{margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.3)}
   .dc-xh{font-size:12px;font-weight:800;color:var(--rose);margin-bottom:4px}
   .dc-xl{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0}
@@ -5044,11 +5045,13 @@ function dpHtml(){
         </tbody></table></div>`; }).join('');
   } else {
     // ---- no message yet: the sheet's own day, written like the message ----
-    body=sts.length?sts.map(s=>{ const tbl=sheetTbl(s.tok);
-      return `<div class="dc"><div class="dc-h"><b>${esc(s.name)}</b><span class="dc-sum">Sheet <b>${fq(s.total)}</b> m³${tbl!=null&&!okq(tbl,s.total)?` <small>(sheet table ${fq(tbl)})</small>`:''}</span>${copyBtn(s.tok)}</div>
+    // rejected / waste trucks are not in the total, but the sheet's own Today table counts them -> listed (struck) so the two add up
+    body=sts.length?sts.map(s=>{ const tbl=sheetTbl(s.tok), rjq=s.rej.reduce((a,x)=>a+x.q,0);
+      return `<div class="dc"><div class="dc-h"><b>${esc(s.name)}</b><span class="dc-sum">Sheet <b>${fq(s.total)}</b> m³${rjq?` <span class="rjs">+ ${fq(rjq)} rejected</span>`:''}${tbl!=null&&!okq(tbl,s.total)&&!okq(tbl,s.total+rjq)?` <small>(sheet table ${fq(tbl)})</small>`:''}</span>${copyBtn(s.tok)}</div>
         ${s.list.map(L=>`<div class="dc-l"><span>${L.code?esc(L.client||''):''}</span><b>${L.code?esc(L.code):'ES '+esc(L.es)}</b><span class="n">${fq(L.q)} m³</span></div>`).join('')}
         ${s.start?`<div class="dc-l"><span class="dc-sm">Start mix</span><b></b><span class="n">${fq(s.start)} m³</span></div>`:''}
-        ${s.noes.map(x=>`<div class="dc-l"><span class="dc-ne">No ES · TM ${esc(x.tk||'—')}</span><b></b><span class="n">${fq(x.q)} m³</span></div>`).join('')}</div>`; }).join('')
+        ${s.noes.map(x=>`<div class="dc-l"><span class="dc-ne">No ES · TM ${esc(x.tk||'—')}</span><b></b><span class="n">${fq(x.q)} m³</span></div>`).join('')}
+        ${s.rej.map(x=>`<div class="dc-l rj"><span class="dc-rj">Rejected · TM ${esc(x.tk||'—')} · ${timeShort(x.t)}</span><b>${x.es&&x.es!==SM_MARK?(()=>{ const n=esName(x.es); return esc(n&&n.k?n.k:x.es); })():''}</b><span class="n">${fq(x.q)} m³</span></div>`).join('')}</div>`; }).join('')
       :'<div class="muted" style="font-size:13px;padding:8px 2px">No trucks in this window — the station tabs only show the days their filter lets through.</div>';
   }
   return `<div class="dp-wrap">
