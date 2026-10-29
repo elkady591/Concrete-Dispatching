@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000007">
+<meta name="app-build" content="20261029-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3735,7 +3735,7 @@ function renderCheckList(cb, items){
    going from before it stays (drawn from the window's edge). Tap a bar = that pour; tap anywhere else = every
    plant at that moment. The window choice is this viewer's own. */
 const KEY_TLWIN='cmpour:tlwin2';
-let tlWin=(()=>{ try{ return localStorage.getItem(KEY_TLWIN)||'now12'; }catch(e){ return 'now12'; } })();   // 'now12' | 'now24' | 'day' | 'HH:MM'
+let tlWin=(()=>{ try{ const v=localStorage.getItem(KEY_TLWIN)||'now12'; return v==='day'?'now12':v; }catch(e){ return 'now12'; } })();   // 'now12' | 'now24' | 'HH:MM' (the 8 → 8 work day was taken off)
 // per timeline (plants on All Pours, pumps on the Pumps page): the moment tapped (ms, the "at this time" panel)
 // and the sideways scroll kept across refreshes
 const TLS={plants:{at:null,scroll:null}, pumps:{at:null,scroll:null}};
@@ -3894,7 +3894,7 @@ function renderPlantTimeline(kind){
     return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab${list.hold?' hd':''}">${esc(p)}${list.hold?'<small>⏸ HOLD</small>':''}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${hb}${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
   const tlAt=S.at, nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
   const entries=PU?[...T.pumps.values()].map(l=>[l.lab,l]):[...T.rows.entries()].filter(([p,l])=>!l.hold);   // on hold = not drawn
-  const winChips=[['now12','Next 12 h'],['now24','Next 24 h'],['day','Work day 8→8']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
+  const winChips=[['now12','Next 12 h'],['now24','Next 24 h']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
     +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select class="ptl-from"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
   const AT=tlAt!=null?tlAtMoment(entries,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length&&!o.held).map(o=>o.p):[];
   const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:(PU?' · no pump free':' · no plant free')}<button type="button" class="ptl-x">✕</button></div>
