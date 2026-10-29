@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000005">
+<meta name="app-build" content="20261029-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1125,7 +1125,7 @@
   .uc-plsug{font-size:12px;color:var(--green);margin:4px 0 2px}
   .ph-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;align-items:center;font-size:12px}.ph-hint{font-size:11px}
   .ph-c{font:700 12px var(--mono);padding:5px 10px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:inherit;cursor:pointer}
-  .ph-c.hd{background:rgba(148,163,184,.22);border-color:#94a3b8;color:#e2e8f0}
+  .ph-c.hd{background:rgba(251,113,133,.14);border:1.5px dashed var(--rose);color:var(--rose)} .ph-c.hd s{text-decoration-thickness:2px}
   .ptl-hold{position:absolute;top:0;bottom:0;box-sizing:border-box;background:repeating-linear-gradient(135deg,rgba(148,163,184,.30) 0 8px,rgba(148,163,184,.10) 8px 16px);border-left:2px solid #94a3b8;z-index:0;padding:1px 6px;font-size:10px;line-height:13px;font-weight:800;color:#cbd5e1;overflow:clip;white-space:nowrap}
   .ptl-hold span{position:sticky;left:62px}
   .ptl-lab.hd{color:#94a3b8;flex-direction:column;align-items:flex-start;justify-content:center}.ptl-lab.hd small{font:800 9px var(--sans);color:var(--amber)}
@@ -3892,7 +3892,7 @@ function renderPlantTimeline(kind){
     const hb=list.hold?`<div class="ptl-hold" style="left:${X(Math.max(list.hold.since,W.s))}px;width:${X(W.e)-X(Math.max(list.hold.since,W.s))}px"><span>⏸ HOLD${list.hold.by?' · '+esc(list.hold.by):''}</span></div>`:'';
     return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab${list.hold?' hd':''}">${esc(p)}${list.hold?'<small>⏸ HOLD</small>':''}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${hb}${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
   const tlAt=S.at, nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
-  const entries=PU?[...T.pumps.values()].map(l=>[l.lab,l]):[...T.rows.entries()];
+  const entries=PU?[...T.pumps.values()].map(l=>[l.lab,l]):[...T.rows.entries()].filter(([p,l])=>!l.hold);   // on hold = not drawn
   const winChips=[['now12','Next 12 h'],['now24','Next 24 h'],['day','Work day 8→8']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
     +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select class="ptl-from"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
   const AT=tlAt!=null?tlAtMoment(entries,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length&&!o.held).map(o=>o.p):[];
@@ -3910,7 +3910,7 @@ function renderPlantTimeline(kind){
     return entries.filter(([lab,l])=>(PU?'Pump '+lab:lab)!==c.p && !l.hold && (!PU||String(lab).split(' ')[0]===len) && !busyIn(l,pl.s,pl.e)).map(([lab])=>esc(lab)); };
   const warn=CL.length?`<div class="ptl-warn">${CL.map(c=>{
       if(c.hold){ const x=c.a, alt=entries.filter(([lab,l])=>lab!==c.p&&!l.hold&&!busyIn(l,x.s,x.e)).map(([lab])=>esc(lab));
-        return `<div class="ptl-cl"><div class="ptl-cl-h">⏸ <b>${esc(c.p)}</b> is on HOLD — but a request is planned on it</div>
+        return `<div class="ptl-cl"><div class="ptl-cl-h">⏸ <b>${esc(c.p)}</b> is on HOLD (not shown above) — but a request is planned on it</div>
           <div>• <b>${nmOf(x)}</b> — ${doing(x)}</div>
           <div class="ptl-cl-do">→ ${alt.length?`choose <b>${alt.join(', ')}</b> for it (free then)`:'no other plant is free then'} · or take ${esc(c.p)} back from hold</div></div>`; }
       // the one to move = the planned one (two planned: the later one)
@@ -3923,7 +3923,7 @@ function renderPlantTimeline(kind){
   const np=!PU&&T.noPlant.length?`<div class="ptl-np"><div>🏭 <b>No plant chosen yet</b> — free for the whole pour (tap = choose it):</div>${T.noPlant.map(x=>`<div class="np-r"><span>${nmOf(x)} <small>${timeShort(x.s)} → ≈${timeShort(x.e)}</small></span>${x.sug.length?x.sug.map(p=>`<button type="button" class="np-sug" data-k="${encodeURIComponent(plantKey(x.g))}" data-p="${esc(p)}">${esc(p)}</button>`).join(''):'<small class="np-none">no plant free for its whole pour</small>'}</div>`).join('')}</div>`:'';
   box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
-    ${PU?'':`<div class="ph-chips"><span class="muted">🏭 Plant hold</span>${PLANT_LIST().map(p=>`<button type="button" class="ph-c${plantHeld(p)?' hd':''}" data-ph="${esc(p)}">${esc(p)}${plantHeld(p)?' ⏸ HOLD':''}</button>`).join('')}<span class="muted ph-hint">tap = hold / take back · every device</span></div>`}
+    ${PU?'':`<div class="ph-chips"><span class="muted">🏭 Plant hold</span>${PLANT_LIST().map(p=>`<button type="button" class="ph-c${plantHeld(p)?' hd':''}" data-ph="${esc(p)}" title="${plantHeld(p)?'On HOLD — tap to take it back':'Tap to put it on HOLD'}">${plantHeld(p)?`<s>${esc(p)}</s> ⏸`:esc(p)}</button>`).join('')}<span class="muted ph-hint">${PLANT_LIST().some(plantHeld)?`on hold: ${PLANT_LIST().filter(plantHeld).map(esc).join(', ')} — not in the timeline · tap to take back`:'tap a plant = put it on hold (every device)'}</span></div>`}
     <div class="ptl-scroll"><div class="ptl-in" style="width:${width+56}px">
       <div class="ptl-axis" style="width:${width}px">${ticks.map(t=>`<span style="left:${X(t)}px">${timeShort(t).replace(':00','')}</span>`).join('')}</div>
       ${entries.length?entries.map(([p,l])=>row(p,l)).join(''):`<div class="muted" style="padding:10px 4px;font-size:12.5px">${PU?'No working pump (the ones with a breakdown are left out)':'No plant'}</div>`}
