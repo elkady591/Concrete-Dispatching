@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000014">
+<meta name="app-build" content="20261029-000015">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2551,7 +2551,8 @@ function pumpTimes(g,t){ if(!t||t.est||t.afterDone||!pumpReq(g.pumps).length) re
 function lateMins(g,t,now){ if(!t||t.est||g.trucks>0) return 0; const pt=pumpTimes(g,t);
   if(pt) return !pt.sent?(now-t.at>=PUMP_SEND_LATE?Math.round((now-t.at)/60000):0):(now>=pt.load?Math.round((now-pt.load)/60000):0);
   return now-t.at>=LATE_START?Math.round((now-t.at)/60000):0; }
-function sentPour(g,sentAt,now){ const t=requestTimes().get(g), q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate;
+// (tt = its time when the caller has it — requestTimes itself passes it, else this would call requestTimes in a loop)
+function sentPour(g,sentAt,now,tt){ const t=tt!==undefined?tt:requestTimes().get(g), q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate;
   const ps=Math.max(now, sentAt+PUMP_LOAD_AFTER, t&&!t.est?pourStartAt(g,t):0); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
 // plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
 function planRowsOf(){
@@ -2623,7 +2624,7 @@ function requestTimes(){
       const a=(g.loads||[]).map(l=>l.t).filter(t=>t!=null), d=dur(g); return a.length&&d?Math.min(...a)+d:null; }
     // not started yet: from its time — or from NOW once that time has passed (it can only start from now on)
     const s=out.get(g), d=dur(g); if(!s||!d) return null; const fs=firstSentAt(g);
-    return fs!=null?sentPour(g,fs,Date.now()).pe:Math.max(pourStartAt(g,s),Date.now())+d; };   // pumps sent = from their sending
+    return fs!=null?sentPour(g,fs,Date.now(),s).pe:Math.max(pourStartAt(g,s),Date.now())+d; };   // pumps sent = from their sending
   const LK=pourLinks(PRm);
   const waits=g=>{ const ch=CH.get(g); return !!(ch && ch.prev && g.trucks===0) || (g.trucks===0 && LK.has(g)); };
   for(const g of (VD.summary||[])){                          // 1) own times (not for the ones waiting behind a sibling)
