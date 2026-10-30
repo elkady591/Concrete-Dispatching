@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261030-000001">
+<meta name="app-build" content="20261102-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2448,6 +2448,10 @@ function plantNext(st){
 function PLANT_LIST(){ const t=String((CFG&&CFG.tabs)||(el('tabs')&&el('tabs').value)||'').split(',').map(x=>x.trim()).filter(x=>x&&!/^\d+$/.test(x));
   return t.length?t:['L1','L2','V3','V4','V5']; }
 function pumpSent(g){ return String(PUMPNOTE[sentKey(g)]||'').split(';').map(x=>{ const m=x.match(/^(\d+)@(\d+)$/); return m?{len:+m[1],t:+m[2]}:null; }).filter(Boolean); }
+// the requests of a pump family (same client + element) not started yet, in their order — also one with no pumps
+// written: the pump plan keeps the pumps on site for it all the same ("Waiting next …" on the Pumps page)
+function famChain(fam,SF,RT){ const at=g=>{ const t=RT.get(g); return t?t.at:Infinity; };
+  return (VD.upcoming||[]).filter(h=>h.trucks===0&&SF(h)===fam).sort((a,b)=>at(a)-at(b)); }
 function pumpPlan(now){
   now=now||Date.now(); const SF=pumpShareFam(), WASH=washHours()*3600000;
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
@@ -2499,14 +2503,18 @@ function pumpPlan(now){
   // washing (as the timeline draws it) — not "busy until it really ends". Right now nothing changes.
   const ahead=now>Date.now()+60000;
   const qDur=g=>{ const q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate; return q>0&&r>0?q/r*3600000:null; };
+  // the end of the WHOLE chain behind a pour (every request of it not started yet, one after the other) — the washing comes after that
+  const chainEnd=(fam,from)=>{ const RT=requestTimes(); let cur=from;
+    for(const h of famChain(fam,SF,RT)){ const d=qDur(h); if(!d) return null; const th=RT.get(h), fs=firstSentAt(h);
+      const s=fs!=null?sentPour(h,fs,Date.now()).ps:(th?pourStartAt(h,th):0); cur=Math.max(cur,s)+d; }
+    return cur; };
   const freeOf=b=>{
     if(b.hold && b.free==null){ if(!ahead) return null;   // kept on site for the next of its chain: it starts now (or at its time)
-      const h=b.hold, th=requestTimes().get(h), d=qDur(h); if(!d) return null;
-      const fs=firstSentAt(h); if(fs!=null) return sentPour(h,fs,Date.now()).pe+WASH;
-      const st0=Math.max(Date.now(), th?pourStartAt(h,th):0); return st0+d+WASH; }
+      const c=chainEnd(b.p.fam,Date.now()); return c==null?null:c+WASH; }
     if(b.p.setup){ if(!ahead||b.free!=null) return b.free; return sentPour(b.p.g,b.start,Date.now()).pe+WASH; }
     if(b.free!=null||!ahead||b.end!=null) return b.free;
-    const g=b.p.g, e=g.finishAvg!=null?g.finishAvg:g.finishTgt; return e!=null?Math.max(e,Date.now())+WASH:null; };
+    const g=b.p.g, e=g.finishAvg!=null?g.finishAvg:g.finishTgt; if(e==null) return null;
+    const c=chainEnd(b.p.fam,Math.max(e,Date.now())); return c==null?null:c+WASH; };
   const state=PUMPS.map((len,i)=>{
     const pn=pumpNote(i), note=pn.text||(pn.code?'Breakdown':''), code=pn.code;
     const live=busy[i].map(b=>{ const f=freeOf(b); return f===b.free?b:Object.assign({},b,{free:f, end:f-WASH}); })
@@ -2652,6 +2660,7 @@ function upcomingPumpCheck(now){
   now=now||Date.now();
   const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
   const picks=new Map(); out.picks=picks;   // request -> the pump indexes it gets (for the timeline)
+  const short=new Map(); out.short=short;   // request -> the pumps it asks for but an earlier request has then (the timeline shows the clash)
   const claimedBy=new Map();   // pump -> the (earlier) request that took it
   // …until when: that request's pour end + the washing — a later request may have the pump after it (no rate = all day)
   const claimedTill=new Map(), WASHc=washHours()*3600000;
@@ -2697,6 +2706,7 @@ function upcomingPumpCheck(now){
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
     picks.set(g,res.filter(r=>r.s&&r.kind!=='taken'&&r.kind!=='none'&&r.kind!=='down').map(r=>r.s.i));
+    short.set(g,res.filter(r=>r.kind==='taken').map(r=>r.s.i));
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
     if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(allPumpsLabel(g,need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
@@ -3771,6 +3781,7 @@ function tlWindow(now){
   if(/^\d{1,2}:\d{2}$/.test(tlWin)){ const s=lastDailyCut(tlWin,now); return {s, e:s+24*3600000, lab:`From ${timeShort(s)} · 24 h`}; }
   const c=planCutAt(), s=c!=null?c:lastDailyCut(hm,now); return {s, e:s+24*3600000, lab:`Work day · from ${cutLabel(s)}`};
 }
+const ovTxt=ms=>{ const m=Math.round(ms/60000); return m>=60?Math.floor(m/60)+'h '+(m%60)+'m':m+' min'; };   // a clash's length: 2h 18m
 function plantTimeline(now){
   now=now||Date.now();
   const W=tlWindow(now), RT=requestTimes(), plants=PLANT_LIST(), rows=new Map(plants.map(p=>[p,[]])), nameOf=g=>(g.client?g.client+' ':'')+(g.elem||'');
@@ -3801,31 +3812,45 @@ function plantTimeline(now){
   // 3) pumps: what each one is on (to the expected end), its washing after it, the requests it is planned for.
   //    A pump with a breakdown written is left out (user's choice).
   const pumps=new Map(), WASH=washHours()*3600000;
-  try{ const PP=pumpPlan(now), UP=upcomingPumpCheck(now).picks||new Map();
+  try{ const PP=pumpPlan(now), UC=upcomingPumpCheck(now), UP=UC.picks||new Map(), SH=UC.short||new Map(), SF=pumpShareFam();
+    // the rest of a pour's chain on pump i: each request after the other (the same pumps stay on site), then the washing.
+    // Returns false when no request of the chain is left for this pump.
+    const chainTail=(list,i,fam,from)=>{ const Q=famChain(fam,SF,RT).filter(h=>!(PP.busy[i]||[]).some(o=>o.p.g===h) && (!pumpReq(h.pumps).length||pumpReq(h.pumps).some(L=>String(L)===String(PUMPS[i]))) && (!UP.get(h)||UP.get(h).includes(i)));
+      if(!Q.length) return false; let cur=from, last=null;
+      for(const h of Q){ const th=RT.get(h), d=dur(h), hs=firstSentAt(h);
+        if(!d){ list.push({g:h, s:cur, e:W.e, kind:'stop', txt:`waiting on site for ${nameOf(h)} · no rate`}); return true; }
+        const ns=hs!=null?Math.max(cur,sentPour(h,hs,now).ps):Math.max(cur,now,th?pourStartAt(h,th):0);
+        if(ns>cur+60000) list.push({g:h, s:cur, e:ns, kind:'stop', txt:`waiting on site for ${nameOf(h)}`});
+        list.push({g:h, s:ns, e:ns+d, kind:'plan', fromHold:true, txt:`${ns<=now+60000?'from now':'≈'+timeShort(ns)} · ${nameOf(h)} (same pumps) · ≈${timeShort(ns+d)}`});
+        cur=ns+d; last=h; }
+      list.push({g:last, s:cur, e:cur+WASH, kind:'wash', txt:`washing → ${timeShort(cur+WASH)}`}); return true; };
     PUMPS.forEach((len,i)=>{ if(pumpBroken(i)) return; const code=`${len}${PUMPS.filter(L=>L===len).length>1?' #'+PUMPS.slice(0,i+1).filter(L=>L===len).length:''}`;   // by length (the app tracks pumps by length)
       const list=[]; pumps.set(i,list); list.lab=code;
       for(const b of (PP.busy[i]||[])){ const g=b.p.g, ex=g.finishAvg!=null?g.finishAvg:g.finishTgt;
         const runE=b.end!=null?b.end:Math.max(now,ex!=null?ex:now), live=b.end==null&&!b.p.setup;
+        // the next of its chain ALREADY on this pump (started before this one's washing would end): the pump never went washing between them
+        const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&o.start>b.start&&(b.free==null||o.start<b.free)).sort((x,y)=>x.start-y.start)[0];
         if(b.p.setup){ const {ps,pe}=sentPour(g,b.start,now);   // sent, no truck yet: setting up -> its pour -> washing
           list.push({g, s:b.start, e:pe, kind:'plan', setup:true, txt:`setting up · ${nameOf(g)} · pour ≈${timeShort(ps)} → ≈${timeShort(pe)}`});
-          list.push({g, s:pe, e:pe+WASH, kind:'wash', txt:`washing → ${timeShort(pe+WASH)}`}); continue; }
-        else list.push({g, s:b.start, e:runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
-        // kept on site for the next of its chain: waiting until that one starts (its own bar follows), else to the end
-        // kept on site for the next of its chain: that request from now (or its own time, if later) for qty ÷ rate —
-        // not started yet = it moves with now — then washing. No rate: waiting to the end of the window.
-        if(b.hold){ const h=b.hold, th=RT.get(h), d=dur(h), hs=firstSentAt(h), ns=hs!=null?sentPour(h,hs,now).ps:Math.max(now,th?pourStartAt(h,th):0);
-          if(!d){ list.push({g:h, s:runE, e:W.e, kind:'stop', txt:`waiting on site for ${nameOf(h)} · no rate`}); continue; }
-          if(ns>runE+60000) list.push({g:h, s:runE, e:ns, kind:'stop', txt:`waiting on site for ${nameOf(h)}`});
-          list.push({g:h, s:ns, e:ns+d, kind:'plan', fromHold:true, txt:`${ns<=now+60000?'from now':'⏰ '+timeShort(ns)} · ${nameOf(h)} (same pumps) · ≈${timeShort(ns+d)}`});
-          list.push({g:h, s:ns+d, e:ns+d+WASH, kind:'wash', txt:`washing → ${timeShort(ns+d+WASH)}`}); continue; }
+          if(!chainTail(list,i,b.p.fam,pe)) list.push({g, s:pe, e:pe+WASH, kind:'wash', txt:`washing → ${timeShort(pe+WASH)}`}); continue; }
+        else list.push({g, s:b.start, e:nx&&b.end!=null?Math.min(runE,nx.start):runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
+        if(nx) continue;
+        // kept on site for the rest of its chain — also while this pour still runs (its pumps don't go washing between
+        // them): each request for qty ÷ rate, not started yet = it moves with now, then washing. No rate: waiting to the end.
+        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&o.start>=b.start)) continue;   // its sibling on this pump goes on: that one draws what follows
+        if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now))) continue;
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
-    for(const g of (VD.upcoming||[])){ const ix=UP.get(g); if(!ix||!ix.length) continue;
+    for(const g of (VD.upcoming||[])){ const ix=[...(UP.get(g)||[]),...(SH.get(g)||[])]; if(!ix.length) continue;   // also a pump an earlier request has then: drawn there, it shows as a clash
       const t=RT.get(g), d=dur(g), s0=t?Math.max(t.at,now):now, e0=pourOf(g,t,d)[1];   // pumps: from sending to the pour's end
       ix.forEach(i=>{ const l=pumps.get(i); if(!l) return;
         if(l.some(x=>x.fromHold&&x.g===g)) return;   // already drawn from its chain's pumps (above)
         if(l.some(x=>x.g===g&&x.setup)) return;   // already drawn from its sent pumps (above)
         l.push({g, s:s0, e:e0, kind:'plan', late:lateOf(g,t), txt:`${whenTxt(g,t)}${nameOf(g)}`}); }); }
+    // a planned request washes after it too — unless the next of its chain follows on the same pump
+    for(const l of pumps.values()) l.filter(x=>x.kind==='plan'&&!x.fromHold&&!x.setup).forEach(x=>{
+      if(l.some(y=>y.kind==='plan'&&y.g!==x.g&&SF(y.g)===SF(x.g)&&y.s>x.s&&y.s<x.e+WASH)) return;
+      l.push({g:x.g, s:x.e, e:x.e+WASH, kind:'wash', txt:`washing → ${timeShort(x.e+WASH)}`}); });
     for(const [i,l] of pumps){ const keep=l.filter(x=>x.e>=W.s&&x.s<=W.e); keep.lab=l.lab; pumps.set(i,keep); }
   }catch(e){}
   // "from now" views: what already ended before now (finished pours, a plant that stopped) is left out — only stubs there
@@ -3887,7 +3912,7 @@ function tlDetail(x,PU,clashes){
   if(need.length) L.push(['Pumps', `${esc(allPumpsLabel(g,need))}${sent.length?` · sent: ${sent.map(v=>v.len).join(', ')}`:started?'':' · not sent yet'}`]);
   if(g.esId) L.push(['ES', esc(g.esId)]);
   [['Card',g.sc],['Temp.',g.tem],['Mix',g.mix]].forEach(([k,v])=>{ if(v) L.push([k,esc(String(v))]); });
-  const cl=(clashes||[]).filter(c=>c.a===x||c.b===x).map(c=>{ if(c.hold) return `⏸ ${esc(c.p)} is on HOLD — choose another plant for it`; const o2=c.a===x?c.b:c.a; return `⚠ ${esc(c.p)}: with ${esc((o2.g.client?o2.g.client+' ':'')+o2.g.elem)} (${Math.round(c.ov/60000)} min)`; });
+  const cl=(clashes||[]).filter(c=>c.a===x||c.b===x).map(c=>{ if(c.hold) return `⏸ ${esc(c.p)} is on HOLD — choose another plant for it`; const o2=c.a===x?c.b:c.a; return `⚠ ${esc(c.p)}: with ${esc((o2.g.client?o2.g.client+' ':'')+o2.g.elem)} (${ovTxt(c.ov)})`; });
   o.innerHTML=`<div class="rq-box tl-box"><div class="rq-head"><b>${esc(nm)}</b><button type="button" class="rq-x">✕</button></div>
     <div class="tl-st ${x.kind}${x.late?' late':''}">${state}${x.late?' · late':''}</div>
     <div class="tl-kv">${L.map(([k,v])=>`<span>${k}</span><div>${v}</div>`).join('')}</div>
@@ -3947,8 +3972,7 @@ function renderPlantTimeline(kind){
       // (one box per pump / plant and request: everything keeping it busy in it — e.g. a pour and then its washing)
       const {pl,os,s0,e0}=c, alt=freeFor(c,pl), till=Math.max(...os.map(o=>o.e));
       const byG=new Map(); os.slice().sort((a,b)=>a.s-b.s).forEach(o=>{ const L=byG.get(o.g)||[]; L.push(o); byG.set(o.g,L); });
-      const mins=Math.round((e0-s0)/60000), dur=mins>=60?`${Math.floor(mins/60)}h ${mins%60}m`:`${mins} min`;
-      return `<div class="ptl-cl"><div class="ptl-cl-h">⚠ <b>${esc(c.p)}</b> is needed twice <b>${timeShort(s0)} → ${timeShort(e0)}</b> (${dur})</div>
+      return `<div class="ptl-cl"><div class="ptl-cl-h">⚠ <b>${esc(c.p)}</b> is needed twice <b>${timeShort(s0)} → ${timeShort(e0)}</b> (${ovTxt(e0-s0)})</div>
         ${[...byG.values()].map(L=>`<div>• <b>${nmOf(L[0])}</b> — ${L.map(doing).join(', then ')}</div>`).join('')}
         <div>• <b>${nmOf(pl)}</b> — ${doing(pl)}</div>
         <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(till)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}</div></div>`; }).join('')}</div>`:'';
@@ -5341,6 +5365,7 @@ function parseCSV(text){
    reload once from a fresh URL. No hard-refresh needed by anyone, on any device. */
 const APP_BUILD=(document.querySelector('meta[name="app-build"]')||{}).content||'';
 async function checkForUpdate(){
+  if(window.top!==window) return;   // inside Concrete Management: its "Update available" button does this (a silent reload here hid the button)
   try{
     const base=location.href.split('#')[0].split('?')[0];
     const r=await fetch(base+'?cb='+Date.now(),{cache:'no-store'});
