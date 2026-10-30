@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000003">
+<meta name="app-build" content="20261102-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2659,6 +2659,7 @@ function upcomingPumpCheck(now){
   now=now||Date.now();
   const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
   const picks=new Map(); out.picks=picks;   // request -> the pump indexes it gets (for the timeline)
+  const short=new Map(); out.short=short;   // request -> the pumps it asks for but an earlier request has then (the timeline shows the clash)
   const claimedBy=new Map();   // pump -> the (earlier) request that took it
   // …until when: that request's pour end + the washing — a later request may have the pump after it (no rate = all day)
   const claimedTill=new Map(), WASHc=washHours()*3600000;
@@ -2704,6 +2705,7 @@ function upcomingPumpCheck(now){
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
     picks.set(g,res.filter(r=>r.s&&r.kind!=='taken'&&r.kind!=='none'&&r.kind!=='down').map(r=>r.s.i));
+    short.set(g,res.filter(r=>r.kind==='taken').map(r=>r.s.i));
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
     if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(allPumpsLabel(g,need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
@@ -3809,7 +3811,7 @@ function plantTimeline(now){
   // 3) pumps: what each one is on (to the expected end), its washing after it, the requests it is planned for.
   //    A pump with a breakdown written is left out (user's choice).
   const pumps=new Map(), WASH=washHours()*3600000;
-  try{ const PP=pumpPlan(now), UP=upcomingPumpCheck(now).picks||new Map(), SF=pumpShareFam();
+  try{ const PP=pumpPlan(now), UC=upcomingPumpCheck(now), UP=UC.picks||new Map(), SH=UC.short||new Map(), SF=pumpShareFam();
     // the rest of a pour's chain on pump i: each request after the other (the same pumps stay on site), then the washing.
     // Returns false when no request of the chain is left for this pump.
     const chainTail=(list,i,fam,from)=>{ const Q=famChain(fam,SF,RT).filter(h=>!(PP.busy[i]||[]).some(o=>o.p.g===h) && pumpReq(h.pumps).some(L=>String(L)===String(PUMPS[i])) && (!UP.get(h)||UP.get(h).includes(i)));
@@ -3838,12 +3840,16 @@ function plantTimeline(now){
         if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now))) continue;
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
-    for(const g of (VD.upcoming||[])){ const ix=UP.get(g); if(!ix||!ix.length) continue;
+    for(const g of (VD.upcoming||[])){ const ix=[...(UP.get(g)||[]),...(SH.get(g)||[])]; if(!ix.length) continue;   // also a pump an earlier request has then: drawn there, it shows as a clash
       const t=RT.get(g), d=dur(g), s0=t?Math.max(t.at,now):now, e0=pourOf(g,t,d)[1];   // pumps: from sending to the pour's end
       ix.forEach(i=>{ const l=pumps.get(i); if(!l) return;
         if(l.some(x=>x.fromHold&&x.g===g)) return;   // already drawn from its chain's pumps (above)
         if(l.some(x=>x.g===g&&x.setup)) return;   // already drawn from its sent pumps (above)
         l.push({g, s:s0, e:e0, kind:'plan', late:lateOf(g,t), txt:`${whenTxt(g,t)}${nameOf(g)}`}); }); }
+    // a planned request washes after it too — unless the next of its chain follows on the same pump
+    for(const l of pumps.values()) l.filter(x=>x.kind==='plan'&&!x.fromHold&&!x.setup).forEach(x=>{
+      if(l.some(y=>y.kind==='plan'&&y.g!==x.g&&SF(y.g)===SF(x.g)&&y.s>x.s&&y.s<x.e+WASH)) return;
+      l.push({g:x.g, s:x.e, e:x.e+WASH, kind:'wash', txt:`washing → ${timeShort(x.e+WASH)}`}); });
     for(const [i,l] of pumps){ const keep=l.filter(x=>x.e>=W.s&&x.s<=W.e); keep.lab=l.lab; pumps.set(i,keep); }
   }catch(e){}
   // "from now" views: what already ended before now (finished pours, a plant that stopped) is left out — only stubs there
