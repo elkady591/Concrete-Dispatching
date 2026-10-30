@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261029-000015">
+<meta name="app-build" content="20261030-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3932,18 +3932,26 @@ function renderPlantTimeline(kind){
   const busyIn=(list,s0,e0)=>list.some(y=>(y.kind==='run'||y.kind==='plan'||y.kind==='wash'||y.kind==='stop')&&y.s<e0&&y.e>s0);
   const freeFor=(c,pl)=>{ const len=PU?String(c.p).replace(/^Pump\s+/,'').split(' ')[0]:null;
     return entries.filter(([lab,l])=>(PU?'Pump '+lab:lab)!==c.p && !l.hold && (!PU||String(lab).split(' ')[0]===len) && !busyIn(l,pl.s,pl.e)).map(([lab])=>esc(lab)); };
-  const warn=CL.length?`<div class="ptl-warn">${CL.map(c=>{
+  // the clashes of one pump / plant with one request become ONE box (the one to move = the planned one; two planned: the later one)
+  const CG=[], cgBy=new Map();
+  CL.forEach(c=>{ if(c.hold){ CG.push(c); return; }
+    const pl=c.a.kind==='plan'&&c.b.kind!=='plan'?c.a:c.b.kind==='plan'&&c.a.kind!=='plan'?c.b:(c.a.s>=c.b.s?c.a:c.b), o=pl===c.a?c.b:c.a;
+    const k=c.p+'|'+pl.g.key, s1=Math.max(c.a.s,c.b.s), e1=Math.min(c.a.e,c.b.e); let G=cgBy.get(k);
+    if(!G){ G={p:c.p, pl, os:[], s0:s1, e0:e1}; cgBy.set(k,G); CG.push(G); }
+    G.os.push(o); G.s0=Math.min(G.s0,s1); G.e0=Math.max(G.e0,e1); });
+  const warn=CG.length?`<div class="ptl-warn">${CG.map(c=>{
       if(c.hold){ const x=c.a, alt=entries.filter(([lab,l])=>lab!==c.p&&!l.hold&&!busyIn(l,x.s,x.e)).map(([lab])=>esc(lab));
         return `<div class="ptl-cl"><div class="ptl-cl-h">⏸ <b>${esc(c.p)}</b> is on HOLD (not shown above) — but a request is planned on it</div>
           <div>• <b>${nmOf(x)}</b> — ${doing(x)}</div>
           <div class="ptl-cl-do">→ ${alt.length?`choose <b>${alt.join(', ')}</b> for it (free then)`:'no other plant is free then'} · or take ${esc(c.p)} back from hold</div></div>`; }
-      // the one to move = the planned one (two planned: the later one)
-      const pl=c.a.kind==='plan'&&c.b.kind!=='plan'?c.a:c.b.kind==='plan'&&c.a.kind!=='plan'?c.b:(c.a.s>=c.b.s?c.a:c.b), o=pl===c.a?c.b:c.a;
-      const s0=Math.max(c.a.s,c.b.s), e0=Math.min(c.a.e,c.b.e), alt=freeFor(c,pl);
-      return `<div class="ptl-cl"><div class="ptl-cl-h">⚠ <b>${esc(c.p)}</b> is needed twice <b>${timeShort(s0)} → ${timeShort(e0)}</b> (${Math.round(c.ov/60000)} min)</div>
-        <div>• <b>${nmOf(o)}</b> — ${doing(o)}</div>
+      // (one box per pump / plant and request: everything keeping it busy in it — e.g. a pour and then its washing)
+      const {pl,os,s0,e0}=c, alt=freeFor(c,pl), till=Math.max(...os.map(o=>o.e));
+      const byG=new Map(); os.slice().sort((a,b)=>a.s-b.s).forEach(o=>{ const L=byG.get(o.g)||[]; L.push(o); byG.set(o.g,L); });
+      const mins=Math.round((e0-s0)/60000), dur=mins>=60?`${Math.floor(mins/60)}h ${mins%60}m`:`${mins} min`;
+      return `<div class="ptl-cl"><div class="ptl-cl-h">⚠ <b>${esc(c.p)}</b> is needed twice <b>${timeShort(s0)} → ${timeShort(e0)}</b> (${dur})</div>
+        ${[...byG.values()].map(L=>`<div>• <b>${nmOf(L[0])}</b> — ${L.map(doing).join(', then ')}</div>`).join('')}
         <div>• <b>${nmOf(pl)}</b> — ${doing(pl)}</div>
-        <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(o.e)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}</div></div>`; }).join('')}</div>`:'';
+        <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(till)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}</div></div>`; }).join('')}</div>`:'';
   const np=!PU&&T.noPlant.length?`<div class="ptl-np"><div>🏭 <b>No plant chosen yet</b> — free for the whole pour (tap = choose it):</div>${T.noPlant.map(x=>`<div class="np-r"><span>${nmOf(x)} <small>${timeShort(x.s)} → ≈${timeShort(x.e)}</small></span>${x.sug.length?x.sug.map(p=>`<button type="button" class="np-sug" data-k="${encodeURIComponent(plantKey(x.g))}" data-p="${esc(p)}">${esc(p)}</button>`).join(''):'<small class="np-none">no plant free for its whole pour</small>'}</div>`).join('')}</div>`:'';
   box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
