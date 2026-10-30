@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000001">
+<meta name="app-build" content="20261102-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3824,10 +3824,13 @@ function plantTimeline(now){
       const list=[]; pumps.set(i,list); list.lab=code;
       for(const b of (PP.busy[i]||[])){ const g=b.p.g, ex=g.finishAvg!=null?g.finishAvg:g.finishTgt;
         const runE=b.end!=null?b.end:Math.max(now,ex!=null?ex:now), live=b.end==null&&!b.p.setup;
+        // the next of its chain ALREADY on this pump (started before this one's washing would end): the pump never went washing between them
+        const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&o.start>b.start&&(b.free==null||o.start<b.free)).sort((x,y)=>x.start-y.start)[0];
         if(b.p.setup){ const {ps,pe}=sentPour(g,b.start,now);   // sent, no truck yet: setting up -> its pour -> washing
           list.push({g, s:b.start, e:pe, kind:'plan', setup:true, txt:`setting up · ${nameOf(g)} · pour ≈${timeShort(ps)} → ≈${timeShort(pe)}`});
           if(!chainTail(list,i,b.p.fam,pe)) list.push({g, s:pe, e:pe+WASH, kind:'wash', txt:`washing → ${timeShort(pe+WASH)}`}); continue; }
-        else list.push({g, s:b.start, e:runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
+        else list.push({g, s:b.start, e:nx&&b.end!=null?Math.min(runE,nx.start):runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
+        if(nx) continue;
         // kept on site for the rest of its chain — also while this pour still runs (its pumps don't go washing between
         // them): each request for qty ÷ rate, not started yet = it moves with now, then washing. No rate: waiting to the end.
         if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&o.start>=b.start)) continue;   // its sibling on this pump goes on: that one draws what follows
