@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000011">
+<meta name="app-build" content="20261102-000012">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2601,7 +2601,8 @@ function lateMins(g,t,now){ if(!t||t.est||g.trucks>0) return 0; const pt=pumpTim
 function sentPour(g,sentAt,now,tt){ const t=tt!==undefined?tt:requestTimes().get(g), q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate;
   // an "after …" request never starts before the one it waits for. Next of its chain with pumps already on site: it starts
   // right after it with those; a pump added to it just joins them, the pour does not wait for it
-  const onSite=t&&t.after&&pumpFam(t.after)===pumpFam(g)&&pumpReq(g.pumps).some(L=>pumpReq(t.after.pumps).includes(L));
+  // (the one before already finished, same thing: the pumps not marked sent are the ones still there)
+  const onSite=t&&(t.after?pumpFam(t.after)===pumpFam(g)&&pumpReq(g.pumps).some(L=>pumpReq(t.after.pumps).includes(L)):t.afterDone&&pumpSent(g).length<pumpReq(g.pumps).length);
   const ps=onSite?Math.max(now,t.at):Math.max(now, sentAt+PUMP_LOAD_AFTER, t?(t.est?t.at:pourStartAt(g,t)):0); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
 // plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
 function planRowsOf(){
@@ -4033,9 +4034,10 @@ function renderPlantTimeline(kind){
   const entries=PU?pumpRows():[...T.rows.entries()].filter(([p,l])=>!l.hold);   // on hold = not drawn
   const winChips=[['now12','Next 12 h'],['now24','Next 24 h']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
     +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select class="ptl-from"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
+  const qtyRate=g=>{ const q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate; return `${q>0?fmt(q,0):'—'} m³ · ${r>0?fmt(r,0):'—'} m³/h`; };
   const AT=tlAt!=null?tlAtMoment(entries,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length&&!o.held).map(o=>o.p):[];
   const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:(PU?' · no pump free':' · no plant free')}<button type="button" class="ptl-x">✕</button></div>
-      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.held?' hdc':o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.held?'<div class="hd">⏸ On hold</div>':''}${o.on.length?o.on.map(x=>`<div class="${x.kind}">${x.kind==='wash'?'washing':x.kind==='stop'?'waiting':''}${x.kind==='wash'||x.kind==='stop'?' <small>after</small> ':''}${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):(o.held?'':'<div class="ok">Free</div>')}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))}</small>`:''}</div>`).join('')}</div></div>`:'';
+      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.held?' hdc':o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.held?'<div class="hd">⏸ On hold</div>':''}${o.on.length?o.on.map(x=>`<div class="${x.kind}">${x.kind==='wash'?'washing':x.kind==='stop'?'waiting':''}${x.kind==='wash'||x.kind==='stop'?' <small>after</small> ':''}${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}${x.kind==='run'||x.kind==='plan'?`<small>${qtyRate(x.g)}</small>`:''}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):(o.held?'':'<div class="ok">Free</div>')}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))} · ${qtyRate(o.next.g)}</small>`:''}</div>`).join('')}</div></div>`:'';
   const CL=T.clashes.filter(c=>/^Pump /.test(c.p)===PU);
   // each clash in full: where, when the two overlap, what each one is doing, and what can be done about it
   const nmOf=x=>esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''));
@@ -4066,7 +4068,7 @@ function renderPlantTimeline(kind){
         ${[...byG.values()].map(L=>`<div>• <b>${nmOf(L[0])}</b> — ${L.map(doing).join(', then ')}</div>`).join('')}
         <div>• <b>${nmOf(pl)}</b> — ${doing(pl)}</div>
         <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(till)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}${(UCs.get(pl.g)||{}).spareN?' · or 🔁 use a spare (on its Upcoming card)':''}</div></div>`; }).join('')}</div>`:'';
-  const np=!PU&&T.noPlant.length?`<div class="ptl-np"><div>🏭 <b>No plant chosen yet</b> — free for the whole pour (tap = choose it):</div>${T.noPlant.map(x=>`<div class="np-r"><span>${nmOf(x)} <small>${timeShort(x.s)} → ≈${timeShort(x.e)}</small></span>${x.sug.length?x.sug.map(p=>`<button type="button" class="np-sug" data-k="${encodeURIComponent(plantKey(x.g))}" data-p="${esc(p)}">${esc(p)}</button>`).join(''):'<small class="np-none">no plant free for its whole pour</small>'}</div>`).join('')}</div>`:'';
+  const np=!PU&&T.noPlant.length?`<div class="ptl-np"><div>🏭 <b>No plant chosen yet</b> — free for the whole pour (tap = choose it):</div>${T.noPlant.map(x=>`<div class="np-r"><span>${nmOf(x)} <small>${qtyRate(x.g)} · ${timeShort(x.s)} → ≈${timeShort(x.e)}</small></span>${x.sug.length?x.sug.map(p=>`<button type="button" class="np-sug" data-k="${encodeURIComponent(plantKey(x.g))}" data-p="${esc(p)}">${esc(p)}</button>`).join(''):'<small class="np-none">no plant free for its whole pour</small>'}</div>`).join('')}</div>`:'';
   box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
     ${PU?'':`<div class="ph-chips"><span class="muted">🏭 Plant hold</span>${PLANT_LIST().map(p=>`<button type="button" class="ph-c${plantHeld(p)?' hd':''}" data-ph="${esc(p)}" title="${plantHeld(p)?'On HOLD — tap to take it back':'Tap to put it on HOLD'}">${plantHeld(p)?`<s>${esc(p)}</s> ⏸`:esc(p)}</button>`).join('')}<span class="muted ph-hint">${PLANT_LIST().some(plantHeld)?`on hold: ${PLANT_LIST().filter(plantHeld).map(esc).join(', ')} — not in the timeline · tap to take back`:'tap a plant = put it on hold (every device)'}</span></div>`}
@@ -4380,7 +4382,7 @@ function renderUpcoming(){
   // (the washing is cut short when it is sent). Still on a running pour / setting up / Breakdown = free it first.
   const freeNow={}; pumpPlan(Date.now()).state.forEach(s=>{ if(s.st==='free'||s.st==='wash') freeNow[s.len]=(freeNow[s.len]||0)+1; });
   // (lens = only these lengths: a request that carries on sends just the pumps added to it)
-  const sendChips=(p,lens)=>{ const need=lens||pumpReq(p.pumps), sc=lens?'':siteChips(p); if(!need.length&&!sc) return '';
+  const sendChips=(p,lens)=>{ const need=lens||pumpReq(p.pumps), sc=lens&&carriesOn(p)?'':siteChips(p); if(!need.length&&!sc) return '';
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
       const no=!on && !(freeNow[len]>0) && !pumpSpares(p).some(r=>PUMPS[r.i]===len);   // (the spare chosen for it can always leave)
@@ -4417,7 +4419,7 @@ function renderUpcoming(){
         ${p.tem?('<span class="um">Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b></span><br>'):''}
         <span class="um">Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b></span>
         ${p.mix?('<br><span class="um">Grade: <b>'+esc(p.mix)+'</b></span>'):''}
-      </div>${plantChips(u)}${!pc&&!carriesOn(p)&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?sendChips(p,addedPumps(p)):sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+      </div>${plantChips(u)}${!pc&&!carriesOn(p)&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)||addedPumps(p).length<pumpReq(p.pumps).length?sendChips(p,addedPumps(p)):sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
           // a later request of the card that asks for one pump more than the one before it: that pump gets its own 🚚 chip
           const more=u.map((g,k)=>{ if(!k) return ''; const was=pumpReq(u[k-1].pumps).slice(), add=pumpReq(g.pumps).filter(L=>{ const j=was.indexOf(L); if(j<0) return true; was.splice(j,1); return false; }).filter(L=>addedPumps(g).includes(L));
             return add.length?`<div class="uc-same">#${k+1} needs one more: <b>${esc(pumpLabel(add))}</b>${sendChips(g,add)}</div>`:''; }).join('');
