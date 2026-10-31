@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000008">
+<meta name="app-build" content="20261102-000009">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2769,14 +2769,15 @@ function upcomingPumpCheck(now){
     out.set(g,{cls:bad.every(r=>r.kind==='wash'||r.kind==='taken')?'warn':'bad', html:parts.join('<br>')});
   }
   // the spares chosen for each request (Undo), and for the lengths it is short of: pumps of that length on a RUNNING pour
-  // with 2 pumps or more of any lengths (one alone has no spare) that has not given its spare yet and was not marked "No spare".
+  // that still keeps 2 pumps or more of any lengths (one alone has no spare) and was not marked "No spare". A pump it gave
+  // already leaves the list, the pour stays: it may have more than one spare.
   // The app can't tell which pump is the spare there: the user picks the request, then the pump itself.
-  const given=new Set([...allSpares().values()].filter(r=>r.to.trucks===0||!pourDone(r.to)).map(r=>String(r.from)));
+  const keeps=p=>base.filter(s=>s.pour===p&&s.st==='on'&&!RS.has(s.i)).length;
   for(const g of list){ const v=out.get(g); if(!v) continue;
     const k=encodeURIComponent(spareKey(g)), lens=shortOf.get(g)||[];
     const c0=base.filter(s=>lens.includes(s.len) && s.st==='on' && !s.setup && !s.next && !s.note && s.pour && s.pour.trucks>0
-      && SF(s.pour)!==SF(g) && !RS.has(s.i) && !given.has(String(s.pour.key)));
-    const two=c0.filter(s=>((PPn.byPour.get(s.pour)||{}).got||[]).length>=2);
+      && SF(s.pour)!==SF(g) && !RS.has(s.i));
+    const two=c0.filter(s=>keeps(s.pour)>=2);
     const cands=two.filter(s=>!noSpare(s.pour)), off=[...new Set(two.filter(s=>noSpare(s.pour)).map(s=>s.pour))];
     v.spareN=cands.length;
     const opts=[...new Set(cands.map(s=>s.pour))].map(p=>`<div class="uc-spp-r"><span class="uc-spp-n">${esc(site(p))}</span>${cands.filter(s=>s.pour===p).map(s=>`<button type="button" class="uc-spu" data-k="${k}" data-i="${s.i}" data-from="${encodeURIComponent(p.key)}" data-name="${encodeURIComponent(site(p))}" title="Only if this pump is the spare there — it has not poured, so no washing">${pumpCode(s.i)}</button>`).join('')}<button type="button" class="uc-spn" data-p="${encodeURIComponent(noSpareKey(p))}" title="This request has no spare: take it off this list on every card">No spare</button></div>`).join('')
