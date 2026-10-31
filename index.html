@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000013">
+<meta name="app-build" content="20261102-000014">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2759,6 +2759,8 @@ function upcomingPumpCheck(now){
       res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
+    // a pump marked sent to it stays "sent" also while it is on a sibling of the same site (a sibling started first)
+    const snt=pumpSent(g).map(x=>x.len); res.forEach(r=>{ const j=snt.indexOf(r.len); if(j>=0&&(r.kind==='sent'||r.kind==='same'||r.kind==='ok')){ snt.splice(j,1); r.kind='sent'; } });
     picks.set(g,res.filter(r=>r.s&&r.kind!=='taken'&&r.kind!=='none'&&r.kind!=='down').map(r=>r.s.i));
     short.set(g,res.filter(r=>r.kind==='taken').map(r=>r.s.i));
     toSend.set(g,res.filter(r=>r.kind!=='same').map(r=>r.len));
@@ -3905,7 +3907,7 @@ function plantTimeline(now){
       for(const b of (PP.busy[i]||[])){ const g=b.p.g, ex=g.finishAvg!=null?g.finishAvg:g.finishTgt;
         const runE=b.end!=null?b.end:Math.max(now,ex!=null?ex:now), live=b.end==null&&!b.p.setup;
         // the next of its chain ALREADY on this pump (started before this one's washing would end): the pump never went washing between them
-        const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&o.start>b.start&&(b.free==null||o.start<b.free)).sort((x,y)=>x.start-y.start)[0];
+        const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&o.start>b.start&&(b.free==null||o.start<b.free)&&!(o.p.setup&&b.end==null)).sort((x,y)=>x.start-y.start)[0];
         // its spare, taken by another request: on this pour until it leaves for that one (its time, or when it was sent) — no washing
         if(b.spare){ const to=b.spare.to, t0=RT.get(to), mv=to.trucks>0||pumpSent(to).length?(b.free!=null?b.free:now):Math.max(t0?t0.at:now,now), e=Math.min(runE,mv);
           list.push({g, s:b.start, e, now:live&&mv>now?now:null, kind:b.end!=null||mv<=now?'done':'run', txt:`${nameOf(g)} · spare → ${nameOf(to)}`}); continue; }
@@ -3918,7 +3920,7 @@ function plantTimeline(now){
         if(nx) continue;
         // kept on site for the rest of its chain — also while this pour still runs (its pumps don't go washing between
         // them): each request for qty ÷ rate, not started yet = it moves with now, then washing. No rate: waiting to the end.
-        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&(o.start>=b.start||(b.end!=null&&o.p.setup)))) continue;   // its sibling on this pump goes on: that one draws what follows
+        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&(b.end==null?!o.p.setup&&o.start>=b.start:o.start>=b.start||o.p.setup))) continue;   // its sibling on this pump goes on: that one draws what follows
         if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now),b.end==null)) continue;
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
@@ -3927,6 +3929,7 @@ function plantTimeline(now){
       ix.forEach(i=>{ const l=pumps.get(i); if(!l) return;
         if(l.some(x=>x.fromHold&&x.g===g)) return;   // already drawn from its chain's pumps (above)
         if(l.some(x=>x.g===g&&x.setup)) return;   // already drawn from its sent pumps (above)
+        if(l.some(x=>x.kind==='stop'&&/no rate/.test(x.txt)&&x.g!==g&&SF(x.g)===SF(g))) return;   // the chain stops on one with no rate: its end is unknown, nothing to draw after it
         const sn=(pumpSpares(g).find(r=>+r.i===i)||{}).name;
         l.push({g, s:s0, e:e0, kind:'plan', late:lateOf(g,t), txt:`${whenTxt(g,t)}${nameOf(g)}${sn?` · spare of ${esc(sn)}`:''}`}); }); }
     // a planned request washes after it too — unless the next of its chain follows on the same pump
