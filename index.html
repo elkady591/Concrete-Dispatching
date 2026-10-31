@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000007">
+<meta name="app-build" content="20261102-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2724,7 +2724,7 @@ function upcomingPumpCheck(now){
         res.push({len, kind:srS.pour===g?'sent':'ok', s:srS}); continue; }
       // (a pump already SENT to another request — setting up there — is that request's; not up for grabs)
       const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!held(s.i,g) || claimed.get(s.i)===fam)
-        && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam) && !(RS.has(s.i) && RS.get(s.i)!==g));
+        && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam) && !(RS.has(s.i) && SF(RS.get(s.i))!==fam));   // (a spare stays with the whole chain of its request)
       // a pump on / washing after the same client + element = this request just carries on with it
       const own=s=>s.pour===g;                       // already sent to this request
       const sib=s=>!own(s) && !s.note && s.pour && SF(s.pour)===fam && (s.st==='on'||s.st==='wash');
