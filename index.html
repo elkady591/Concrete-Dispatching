@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000012">
+<meta name="app-build" content="20261102-000013">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2591,19 +2591,24 @@ const firstSentAt=g=>{ const s=pumpSent(g); return s.length?Math.min(...s.map(x=
 // pumps are already on site): {send: its time, load: the first truck due = 1½ h after the pumps left (after its time
 // if not sent yet)} — else null (then its time is simply when it starts)
 function pumpTimes(g,t){ if(!t||t.est||t.afterDone||!pumpReq(g.pumps).length) return null;
-  const fs=firstSentAt(g); return {send:t.at, load:Math.max(t.at, fs!=null?fs:t.at)+PUMP_LOAD_AFTER, sent:fs!=null}; }
+  const fs=firstSentAt(g), load=Math.max(t.at, fs!=null?fs:t.at)+PUMP_LOAD_AFTER; return {send:t.at, load:fs!=null?Math.max(load,sibRunEnd(g)):load, sent:fs!=null}; }
 // minutes late of a not-started request (0 = not late): pumps not sent 30 min after its time / no truck after the
 // load time / (no pumps to send) not started 30 min after its time
 function lateMins(g,t,now){ if(!t||t.est||g.trucks>0) return 0; const pt=pumpTimes(g,t);
   if(pt) return !pt.sent?(now-t.at>=PUMP_SEND_LATE?Math.round((now-t.at)/60000):0):(now>=pt.load?Math.round((now-pt.load)/60000):0);
   const due=pourStartAt(g,t); return now-due>=LATE_START?Math.round((now-due)/60000):0; }
 // (tt = its time when the caller has it — requestTimes itself passes it, else this would call requestTimes in a loop)
+// the end of a sibling (same pumps on the same site) that is pouring NOW — it may have started before this one, out of
+// the plan's order: the pumps are on it, this one comes after it (0 = none)
+function sibRunEnd(g){ const SF=pumpShareFam(), f=SF(g); let e=0;
+  for(const h of (VD.summary||[])) if(h!==g&&h.trucks>0&&!pourDone(h)&&SF(h)===f){ const x=h.finishAvg!=null?h.finishAvg:h.finishTgt; if(x>e) e=x; }
+  return e; }
 function sentPour(g,sentAt,now,tt){ const t=tt!==undefined?tt:requestTimes().get(g), q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate;
   // an "after …" request never starts before the one it waits for. Next of its chain with pumps already on site: it starts
   // right after it with those; a pump added to it just joins them, the pour does not wait for it
   // (the one before already finished, same thing: the pumps not marked sent are the ones still there)
   const onSite=t&&(t.after?pumpFam(t.after)===pumpFam(g)&&pumpReq(g.pumps).some(L=>pumpReq(t.after.pumps).includes(L)):t.afterDone&&pumpSent(g).length<pumpReq(g.pumps).length);
-  const ps=onSite?Math.max(now,t.at):Math.max(now, sentAt+PUMP_LOAD_AFTER, t?(t.est?t.at:pourStartAt(g,t)):0); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
+  const ps=Math.max(sibRunEnd(g), onSite?Math.max(now,t.at):Math.max(now, sentAt+PUMP_LOAD_AFTER, t?(t.est?t.at:pourStartAt(g,t)):0)); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
 // plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
 function planRowsOf(){
   const out=new Map(), used=new Set();
@@ -3885,7 +3890,8 @@ function plantTimeline(now){
   try{ const PP=pumpPlan(now), UC=upcomingPumpCheck(now), UP=UC.picks||new Map(), SH=UC.short||new Map(), SF=pumpShareFam();
     // the rest of a pour's chain on pump i: each request after the other (the same pumps stay on site), then the washing.
     // Returns false when no request of the chain is left for this pump.
-    const chainTail=(list,i,fam,from)=>{ const Q=famChain(fam,SF,RT).filter(h=>!(PP.busy[i]||[]).some(o=>o.p.g===h) && (!pumpReq(h.pumps).length||pumpReq(h.pumps).some(L=>String(L)===String(PUMPS[i]))) && (!UP.get(h)||UP.get(h).includes(i)));
+    // (withSent: also the requests of the chain whose pumps were sent — they wait behind a sibling that started before them)
+    const chainTail=(list,i,fam,from,withSent)=>{ const Q=famChain(fam,SF,RT).filter(h=>!(PP.busy[i]||[]).some(o=>o.p.g===h&&!(withSent&&o.p.setup)) && (!pumpReq(h.pumps).length||pumpReq(h.pumps).some(L=>String(L)===String(PUMPS[i]))) && (!UP.get(h)||UP.get(h).includes(i)));
       if(!Q.length) return false; let cur=from, last=null;
       for(const h of Q){ const th=RT.get(h), d=dur(h), hs=firstSentAt(h);
         if(!d){ list.push({g:h, s:cur, e:W.e, kind:'stop', txt:`waiting on site for ${nameOf(h)} · no rate`}); return true; }
@@ -3904,6 +3910,7 @@ function plantTimeline(now){
         if(b.spare){ const to=b.spare.to, t0=RT.get(to), mv=to.trucks>0||pumpSent(to).length?(b.free!=null?b.free:now):Math.max(t0?t0.at:now,now), e=Math.min(runE,mv);
           list.push({g, s:b.start, e, now:live&&mv>now?now:null, kind:b.end!=null||mv<=now?'done':'run', txt:`${nameOf(g)} · spare → ${nameOf(to)}`}); continue; }
         const spOf=(pumpSpares(g).find(r=>+r.i===i)||{}).name;   // the spare chosen for this request
+        if(b.p.setup&&(PP.busy[i]||[]).some(o=>o.p.fam===b.p.fam&&!o.p.setup&&o.end==null)) continue;   // a sibling is pouring on this pump: that one draws what follows
         if(b.p.setup){ const {ps,pe}=sentPour(g,b.start,now);   // sent, no truck yet: setting up -> its pour -> washing
           list.push({g, s:b.start, e:pe, kind:'plan', setup:true, txt:`setting up · ${nameOf(g)}${spOf?` · spare of ${esc(spOf)}`:''} · pour ≈${timeShort(ps)} → ≈${timeShort(pe)}`});
           if(!chainTail(list,i,b.p.fam,pe)) list.push({g, s:pe, e:pe+WASH, kind:'wash', txt:`washing → ${timeShort(pe+WASH)}`}); continue; }
@@ -3911,8 +3918,8 @@ function plantTimeline(now){
         if(nx) continue;
         // kept on site for the rest of its chain — also while this pour still runs (its pumps don't go washing between
         // them): each request for qty ÷ rate, not started yet = it moves with now, then washing. No rate: waiting to the end.
-        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&o.start>=b.start)) continue;   // its sibling on this pump goes on: that one draws what follows
-        if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now))) continue;
+        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&(o.start>=b.start||(b.end!=null&&o.p.setup)))) continue;   // its sibling on this pump goes on: that one draws what follows
+        if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now),b.end==null)) continue;
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
     for(const g of (VD.upcoming||[])){ const ix=[...(UP.get(g)||[]),...(SH.get(g)||[])]; if(!ix.length) continue;   // also a pump an earlier request has then: drawn there, it shows as a clash
@@ -3934,13 +3941,13 @@ function plantTimeline(now){
   // a plant on HOLD: held from its "since" to the end of the window; whatever is planned on it then is a clash
   for(const [p,list] of rows){ const v=PUMPNOTE[phKey(p)]; if(v) list.hold={since:+String(v).split('|')[0]||now, by:String(v).split('|')[1]||''}; }
   // 4) clashes (a planned request on a plant still busy then) + free gaps from now on
-  const clashes=[];
+  const clashes=[], SFc=pumpShareFam();
   for(const [p,list] of rows){ if(!list.hold) continue; const hs=Math.max(list.hold.since,W.s);
     list.filter(x=>x.kind==='plan'&&x.e>hs).forEach(x=>{ x.clash=true; clashes.push({p, a:x, b:null, hold:true, ov:x.e-Math.max(x.s,hs)}); }); }
   for(const [p,list] of [...rows,...[...pumps].map(([i,l])=>['P'+i,l])]){ list.sort((a,b)=>a.s-b.s);
     // a PLANT on two requests at once is on purpose (user's rule): no clash — only a pump can't be in two places
     if(/^P\d+$/.test(p)) for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i], b=list[j];
-      if(a.g===b.g) continue;
+      if(a.g===b.g||SFc(a.g)===SFc(b.g)) continue;   // the same site: the pump is not in two places
       if(a.kind!=='plan'&&b.kind!=='plan') continue; if(a.kind==='done'||b.kind==='done'||a.kind==='stop'||b.kind==='stop') continue;
       const ov=Math.min(a.e,b.e)-Math.max(a.s,b.s); if(ov<5*60000) continue;
       a.clash=b.clash=true; clashes.push({p:/^P\d+$/.test(p)?'Pump '+list.lab:p, a, b, ov}); }
