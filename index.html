@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000005">
+<meta name="app-build" content="20261102-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2545,7 +2545,8 @@ const PUMP_SEND_LATE=30*60000, PUMP_LOAD_AFTER=90*60000;
 // when a not-started request's POUR (first truck) begins, from its time t (requestTimes): with pumps and its own time
 // = t + 1½ h (the time is for sending the pumps); "after …" estimates and requests without pumps = t itself
 // (after the previous one of its chain finished = its pumps are already on site: no 1½ h)
-const pourStartAt=(g,t)=>t?t.at+(!t.est&&!t.afterDone&&pumpReq(g.pumps).length?PUMP_LOAD_AFTER:0):null;
+// (stationary / spider pumps only count the same: "(4.4)-(4.6)-Spider" at 8:00 = the plants start ≈9:30)
+const pourStartAt=(g,t)=>t?t.at+(!t.est&&!t.afterDone&&(pumpReq(g.pumps).length||isSiteP(g.pumps))?PUMP_LOAD_AFTER:0):null;
 // pumps SENT to a request that has no truck yet: its pour starts about 1½ h after they left (or at its own pour time if
 // later; never before now) and lasts quantity ÷ rate (1 h when unknown) -> {ps, pe}
 const firstSentAt=g=>{ const s=pumpSent(g); return s.length?Math.min(...s.map(x=>x.t)):null; };
@@ -2558,7 +2559,7 @@ function pumpTimes(g,t){ if(!t||t.est||t.afterDone||!pumpReq(g.pumps).length) re
 // load time / (no pumps to send) not started 30 min after its time
 function lateMins(g,t,now){ if(!t||t.est||g.trucks>0) return 0; const pt=pumpTimes(g,t);
   if(pt) return !pt.sent?(now-t.at>=PUMP_SEND_LATE?Math.round((now-t.at)/60000):0):(now>=pt.load?Math.round((now-pt.load)/60000):0);
-  return now-t.at>=LATE_START?Math.round((now-t.at)/60000):0; }
+  const due=pourStartAt(g,t); return now-due>=LATE_START?Math.round((now-due)/60000):0; }
 // (tt = its time when the caller has it — requestTimes itself passes it, else this would call requestTimes in a loop)
 function sentPour(g,sentAt,now,tt){ const t=tt!==undefined?tt:requestTimes().get(g), q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate;
   const ps=Math.max(now, sentAt+PUMP_LOAD_AFTER, t&&!t.est?pourStartAt(g,t):0); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
@@ -3693,13 +3694,14 @@ function collectChecks(pours){
               det:'The pumps were sent — the first truck was due about 1½ h after they left'}}); }
         continue; }
       if(pumpSent(g).length && !t.afterDone) continue;
-      if(now-t.at<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
+      const due=pourStartAt(g,t); if(now<due) continue;   // stationary / spider pumps: the plants start 1½ h after its time
+      if(now-due<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
         txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time} — start this one`:`planned ${t.time} — it is time to start`}${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`,
         ui:{sev:'blue', icon:'🔔', head:'Time to start', at:t.at, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk'), ...(g.pumps&&pumpReq(g.pumps).length?[CT('pumps '+esc(pumpLabel(pumpReq(g.pumps))))]:[])],
           det:t.afterDone?'The request before it has finished — start this one':'Its planned time has come'}});
       else items.push({id:`late|${id}`, kind:'Late start', cls:'gap',
-        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time}`:`planned ${t.time}`} — not started yet (${mins(now-t.at)} late)`,
-        ui:{sev:'red', icon:'🕒', head:`Not started — ${mins(now-t.at)} late`, at:t.at, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk')],
+        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time}`:`planned ${t.time}`} — not started yet (${mins(now-due)} late)`,
+        ui:{sev:'red', icon:'🕒', head:`Not started — ${mins(now-due)} late`, at:due, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk')],
           det:'No truck has left for it yet'}}); } }catch(e){}
   return items;
 }
