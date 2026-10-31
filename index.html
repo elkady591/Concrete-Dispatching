@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000010">
+<meta name="app-build" content="20261102-000011">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2545,7 +2545,8 @@ function pumpPlan(now){
   const freeOf=b=>{
     if(b.hold && b.free==null){ if(!ahead) return null;   // kept on site for the next of its chain: it starts now (or at its time)
       const c=chainEnd(b.p.fam,Date.now()); return c==null?null:c+WASH; }
-    if(b.p.setup){ if(!ahead||b.free!=null) return b.free; return sentPour(b.p.g,b.start,Date.now()).pe+WASH; }
+    if(b.p.setup){ if(!ahead||b.free!=null) return b.free; const c=chainEnd(b.p.fam,Date.now());   // (it stays for the rest of its chain)
+      return (c!=null?c:sentPour(b.p.g,b.start,Date.now()).pe)+WASH; }
     if(b.free!=null||!ahead||b.end!=null) return b.free;
     const g=b.p.g, e=g.finishAvg!=null?g.finishAvg:g.finishTgt; if(e==null) return null;
     const c=chainEnd(b.p.fam,Math.max(e,Date.now())); return c==null?null:c+WASH; };
@@ -2598,7 +2599,10 @@ function lateMins(g,t,now){ if(!t||t.est||g.trucks>0) return 0; const pt=pumpTim
   const due=pourStartAt(g,t); return now-due>=LATE_START?Math.round((now-due)/60000):0; }
 // (tt = its time when the caller has it — requestTimes itself passes it, else this would call requestTimes in a loop)
 function sentPour(g,sentAt,now,tt){ const t=tt!==undefined?tt:requestTimes().get(g), q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate;
-  const ps=Math.max(now, sentAt+PUMP_LOAD_AFTER, t&&!t.est?pourStartAt(g,t):0); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
+  // an "after …" request never starts before the one it waits for. Next of its chain with pumps already on site: it starts
+  // right after it with those; a pump added to it just joins them, the pour does not wait for it
+  const onSite=t&&t.after&&pumpFam(t.after)===pumpFam(g)&&pumpReq(g.pumps).some(L=>pumpReq(t.after.pumps).includes(L));
+  const ps=onSite?Math.max(now,t.at):Math.max(now, sentAt+PUMP_LOAD_AFTER, t?(t.est?t.at:pourStartAt(g,t)):0); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
 // plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
 function planRowsOf(){
   const out=new Map(), used=new Set();
@@ -2698,6 +2702,7 @@ function upcomingPumpCheck(now){
   const PPn=pumpPlan(now), base=PPn.state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
   const picks=new Map(); out.picks=picks;   // request -> the pump indexes it gets (for the timeline)
   const short=new Map(); out.short=short;   // request -> the pumps it asks for but an earlier request has then (the timeline shows the clash)
+  const toSend=new Map(); out.toSend=toSend;   // request -> the lengths that are NOT already on site with its chain (a pump added to a request that carries on)
   const claimedBy=new Map();   // pump -> the (earlier) request that took it
   // …until when: that request's pour end + the washing — a later request may have the pump after it (no rate = all day)
   const claimedTill=new Map(), WASHc=washHours()*3600000;
@@ -2750,11 +2755,13 @@ function upcomingPumpCheck(now){
     }
     picks.set(g,res.filter(r=>r.s&&r.kind!=='taken'&&r.kind!=='none'&&r.kind!=='down').map(r=>r.s.i));
     short.set(g,res.filter(r=>r.kind==='taken').map(r=>r.s.i));
+    toSend.set(g,res.filter(r=>r.kind!=='same').map(r=>r.len));
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
     shortOf.set(g,bad.map(r=>r.len));
     if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(allPumpsLabel(g,need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
-      if(sameOn){ out.set(g,{cls:'ok', html:`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(allPumpsLabel(g,need))}</b>`}); continue; }
+      if(sameOn){ const lens=k=>res.filter(r=>k(r.kind)).map(r=>r.len), add=lens(k=>k==='ok'), gone=lens(k=>k==='sent');   // a pump added to it is not "the same": it has to be sent
+        out.set(g,{cls:'ok', html:`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(allPumpsLabel(g,lens(k=>k==='same')))}</b>${add.length?`<br>+ New pump to send: <b>${esc(pumpLabel(add))}</b>`:''}${gone.length?`<br>+ <b>${esc(pumpLabel(gone))}</b> sent — joins them`:''}`}); continue; }
       // a timed request is checked with the pumps as they will be AT its time: say so, and what the ones that are
       // not free yet are doing now (else "ready" next to "no free" chips reads as a contradiction)
       const t=RT.get(g), later=state!==base, busy=later?res.map(r=>({r, n:base.find(x=>x.i===r.s.i)})).filter(o=>o.n&&!(o.n.st==='free'&&!o.n.noop)):[];
@@ -4348,7 +4355,7 @@ function renderUpcoming(){
   // no time = due now (same order the pumps are handed out in upcomingPumpCheck)
   const sorted=rest.slice().sort((a,b)=>{ const ta=RT.get(a), tb=RT.get(b), xa=ta?ta.at:now, xb=tb?tb.at:now;
     return (xa-xb)||((ta?0:1)-(tb?0:1))||((pIdx.get(a)??1e9)-(pIdx.get(b)??1e9)); });
-  const PC=upcomingPumpCheck();
+  const PC=upcomingPumpCheck(), addedPumps=g=>PC.toSend.get(g)||[];
   const dayLbl=t=>{ const d=new Date(t), n=new Date(); return d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `; };
   // one small chip per requested pump inside the pump box: tap = "sent to site" (tap again = undo)
   // 🏭 one chip per plant; lit = planned for this card's requests
@@ -4372,7 +4379,8 @@ function renderUpcoming(){
   // …can be sent: Available (even with no operator counted — if it left, it has one) or washing after a finished pour
   // (the washing is cut short when it is sent). Still on a running pour / setting up / Breakdown = free it first.
   const freeNow={}; pumpPlan(Date.now()).state.forEach(s=>{ if(s.st==='free'||s.st==='wash') freeNow[s.len]=(freeNow[s.len]||0)+1; });
-  const sendChips=p=>{ const need=pumpReq(p.pumps), sc=siteChips(p); if(!need.length&&!sc) return '';
+  // (lens = only these lengths: a request that carries on sends just the pumps added to it)
+  const sendChips=(p,lens)=>{ const need=lens||pumpReq(p.pumps), sc=lens?'':siteChips(p); if(!need.length&&!sc) return '';
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
       const no=!on && !(freeNow[len]>0) && !pumpSpares(p).some(r=>PUMPS[r.i]===len);   // (the spare chosen for it can always leave)
@@ -4380,7 +4388,7 @@ function renderUpcoming(){
   // chains (same client + element, poured one after the other) become ONE card; its place = its first request
   const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
   // carries on with the pumps of the pour before it (same element, or an "after" link asking for the same pumps)
-  // -> nothing to send: the 🚚 chips are left out
+  // -> only the pumps that are not there yet (added to it) get a 🚚 chip
   const SFu=pumpShareFam(), LKu=pourLinks();
   const carriesOn=p=>!!(CH.get(p)||{}).prev || (LKu.has(p) && SFu(p)===SFu(LKu.get(p)));
   // the one it waits for: same client + element -> just its quantity ("after the 72 m³"), else its name
@@ -4396,7 +4404,7 @@ function renderUpcoming(){
     const late=lateMins(p,rt,now);   // the same rule as the Data checks (pumpTimes / lateMins)
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
     return `
-    <div class="ucard${multi?' chain':''}">${timeLine(rt,late,sent.length,p)}
+    <div class="ucard${multi?' chain':''}">${timeLine(rt,late,rt&&rt.est&&carriesOn(p)?0:sent.length,p)}
       <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}${u.some(g=>g.app)?' <span class="uc-app" title="Added in the app — not in the sheet">App</span>':''}</div>
       ${u.filter(g=>g.app).map(g=>{ const m=APP_MAYBE.get(g.app);
         return (m?`<div class="uc-maybe">⚠ Same as sheet request? <b>${esc(m.client||'')} ${esc(m.code)}</b> · ${fmt(m.req,0)} m³ (here ${fmt(g.planReq,0)} m³)
@@ -4409,7 +4417,11 @@ function renderUpcoming(){
         ${p.tem?('<span class="um">Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b></span><br>'):''}
         <span class="um">Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b></span>
         ${p.mix?('<br><span class="um">Grade: <b>'+esc(p.mix)+'</b></span>'):''}
-      </div>${plantChips(u)}${!pc&&!carriesOn(p)&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+      </div>${plantChips(u)}${!pc&&!carriesOn(p)&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?sendChips(p,addedPumps(p)):sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+          // a later request of the card that asks for one pump more than the one before it: that pump gets its own 🚚 chip
+          const more=u.map((g,k)=>{ if(!k) return ''; const was=pumpReq(u[k-1].pumps).slice(), add=pumpReq(g.pumps).filter(L=>{ const j=was.indexOf(L); if(j<0) return true; was.splice(j,1); return false; }).filter(L=>addedPumps(g).includes(L));
+            return add.length?`<div class="uc-same">#${k+1} needs one more: <b>${esc(pumpLabel(add))}</b>${sendChips(g,add)}</div>`:''; }).join('');
+          if(more) return more;
           // the ones after it with NO pumps written start without them; the pumps go washing once #1 finishes
           if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} without pumps — they wash after #1 finishes</div>`;
           if(rest.every(g=>pumpReq(g.pumps).slice().sort().join()===pumpReq(p.pumps).slice().sort().join())) return `<div class="uc-same">${n}${u.length>2?' continue':' continues'} with the same pumps</div>`;
