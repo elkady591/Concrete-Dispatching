@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000006">
+<meta name="app-build" content="20261102-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -739,6 +739,18 @@
   .uc-snd.on{color:#0b1020;background:var(--cyan);border:1px solid var(--cyan)}
   .uc-snd.no{opacity:.55;border-style:solid;border-color:rgba(251,113,133,.45);color:var(--rose);cursor:not-allowed}
   .uc-snd.no small{font-weight:600}
+  .uc-spr,.pm-spr{font-size:12.5px;font-weight:700;color:var(--cyan);margin-top:4px}
+  .uc-spw{margin-top:6px}
+  .uc-spu,.uc-spo,.uc-spx{font:inherit;font-size:12px;font-weight:800;color:var(--accent);background:transparent;border:1px dashed var(--accent);border-radius:99px;padding:3px 10px;cursor:pointer}
+  .uc-spo.on{border-style:solid}
+  .uc-spu{font-family:var(--mono);border-style:solid}
+  .uc-spx{color:var(--muted);border-color:var(--line2);margin-inline-start:6px;padding:1px 8px}
+  .uc-spp{margin-top:6px;padding:8px 10px;border:1px solid var(--line2);border-radius:12px}
+  .uc-spp-h{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .uc-spp-r{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0}
+  .uc-spp-n{font-size:12.5px;font-weight:800;margin-inline-end:4px}
+  .uc-spn{font:inherit;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:1px dashed var(--line2);border-radius:99px;padding:3px 10px;cursor:pointer}
+  .uc-spp-off{font-size:12px;color:var(--muted)}
   .uc-late{font-family:inherit;font-size:12px;font-weight:800;color:#fb923c;border:1px solid rgba(251,146,60,.5);background:rgba(251,146,60,.1);border-radius:99px;padding:1px 9px}
   .vtab .pm-alert{color:#fb923c;margin-inline-start:4px}
   .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -2375,6 +2387,19 @@ function pumpFam(g){ return String(g.client||'').trim().toLowerCase()+'|'+
 // "Available now" pressed on a busy/washing pump: stored as PUMPNOTE['r<i>'] = ms. It frees the pump from
 // that moment — but only for the pour it was on; a truck that loads AFTER the press (a top-up) cancels it.
 function pumpRelease(i){ const v=+String(PUMPNOTE['r'+i]||'').trim(); return v>0?v:0; }
+// A SPARE taken from a running pour for another request (the "Use … spare of …" button on the Upcoming card): it never
+// poured, so it needs no washing. PUMPNOTE['SP|<request id>'] = JSON [{i: pump index, from: pour key, name: pour name, at, by}]
+const spareKey=g=>'SP|'+(g.esId||g.key);
+function pumpSpares(g){ try{ const v=JSON.parse(PUMPNOTE[spareKey(g)]||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+const pumpCode=i=>`${PUMPS[i]}${PUMPS.filter(L=>L===PUMPS[i]).length>1?' #'+PUMPS.slice(0,+i+1).filter(L=>L===PUMPS[i]).length:''}`;   // "63 #2": the same names as the timeline
+let spareOpen=null;   // the Upcoming card whose "Use a spare" list is open (its spareKey, encoded)
+// "No spare" pressed for a running pour: PUMPNOTE['NS|<request id>'] = '1' — it leaves the spare lists of every card
+const noSpareKey=g=>'NS|'+(g.esId||g.key), noSpare=g=>!!PUMPNOTE[noSpareKey(g)];
+// pump index -> its record + to (the request taking it)
+function allSpares(){ const out=new Map(); for(const g of (VD.summary||[])) for(const r of pumpSpares(g)) out.set(+r.i,Object.assign({to:g},r)); return out; }
+// on the card of the pour it was taken from
+function spareOutHtml(g){ return [...allSpares().entries()].filter(([i,r])=>String(r.from)===String(g.key)&&(r.to.trucks===0||!pourDone(r.to)))
+  .map(([i,r])=>`<div class="uc-spr">🔁 <b>${pumpCode(i)}</b> (spare) moved to <b>${esc((r.to.client?r.to.client+' ':'')+r.to.elem)}</b></div>`).join(''); }
 const UNDO_FREE=30*60000;   // the ↶ Undo next to a freed pump stays this long after the ✓
 
 // Pumps already SENT to a request's site before its first truck (they drive there and set up first):
@@ -2470,13 +2495,17 @@ function pumpPlan(now){
   // a finished pour whose chain sibling (same client + element) has not started yet keeps its pumps on site
   // ("Waiting · next …") — the 2 h washing starts only after the LAST request of the chain
   const nextOf=new Map(); for(const g of (VD.upcoming||[])){ if(g.trucks===0){ const f=SF(g); if(!nextOf.has(f)) nextOf.set(f,g); } }
+  const SP=allSpares();
   for(const p of pours){
     const need=p.items.map(x=>x.len), got=[], missing=[];
     for(const {len,at} of p.items){
       const ok=j=>!got.includes(j) && !pumpBroken(j,at) &&
         busy[j].every(b=>(b.free!=null && b.free<=at) || b.p.fam===p.fam);
-      // first the pumps its sibling (same client + element) is holding, then the first free one in order
-      let i=PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>at)));
+      // the spare chosen for it leaves its pour at this moment; else first the pumps its sibling (same client + element)
+      // is holding, then the first free one in order
+      const sr=pumpSpares(p.g).find(r=>PUMPS[r.i]===len && !got.includes(+r.i) && !pumpBroken(+r.i,at));
+      if(sr) busy[+sr.i].forEach(b=>{ if(b.p.fam!==p.fam && (b.free==null||b.free>at)) b.free=at; });
+      let i=sr?+sr.i:PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>at)));
       if(i<0) i=PUMPS.findIndex((L,j)=>L===len && ok(j));
       // none free, but the pour has STARTED (or its pumps were sent): the pump is obviously there, so its washing
       // ended early — take the washing one of that length that would be free first, and end its washing at this moment.
@@ -2490,12 +2519,13 @@ function pumpPlan(now){
         if(best>=0){ busy[best].forEach(b=>{ if(b.end!=null && b.free!=null && b.free>at) b.free=at; }); i=best; }
       }
       if(i<0){ missing.push(len); continue; }
-      const hold=p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
-      let free=p.end==null||hold?null:p.end+WASH;
+      const spr=SP.get(i), isSp=!!spr && spr.to!==p.g && String(spr.from)===String(p.g.key);   // this pump is this pour's spare, taken: no washing, no chain
+      const hold=!isSp && p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
+      let free=isSp?p.end:p.end==null||hold?null:p.end+WASH;
       // "Available now": on a pour still running it frees THIS pump at once (a spare pulled out and sent elsewhere —
       // the pour goes on with its other pumps); on a finished pour a top-up truck after the press cancels it
       const rel=pumpRelease(i); if(rel && rel>=at && (p.end==null || rel>=p.last)) free=free==null?rel:Math.min(free,rel);
-      got.push(i); busy[i].push({start:at, free, end:p.end, p, hold});
+      got.push(i); busy[i].push({start:at, free, end:p.end, p, hold, spare:isSp?spr:null});
     }
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
   }
@@ -2528,7 +2558,9 @@ function pumpPlan(now){
       else if(ahead&&cur.end!=null&&now<cur.end){ st='on'; until=cur.free; }   // still pouring then (expected end later)
       else { st='wash'; until=cur.free; } }
     if(note && st==='free') st='down';
-    return {i,len,st,pour,until,note,code,setup,next};
+    // chosen as a spare and not finished with: {to, name} for the pump's label
+    const sp0=SP.get(i), spare=sp0&&(sp0.to.trucks===0||!pourDone(sp0.to))&&(st==='free'||pour===sp0.to||(pour&&String(pour.key)===String(sp0.from)))?sp0:null;
+    return {i,len,st,pour,until,note,code,setup,next,spare};
   });
   // operators: the busy pumps keep theirs; what is left goes to the free pumps BIGGEST first (63 → 59 → 56 → 48),
   // the rest have none
@@ -2659,7 +2691,7 @@ function requestTimes(){
 // -> Map(pour -> {cls:'ok'|'warn'|'bad', html})
 function upcomingPumpCheck(now){
   now=now||Date.now();
-  const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
+  const PPn=pumpPlan(now), base=PPn.state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
   const picks=new Map(); out.picks=picks;   // request -> the pump indexes it gets (for the timeline)
   const short=new Map(); out.short=short;   // request -> the pumps it asks for but an earlier request has then (the timeline shows the clash)
   const claimedBy=new Map();   // pump -> the (earlier) request that took it
@@ -2680,13 +2712,19 @@ function upcomingPumpCheck(now){
   const list=(VD.upcoming||[]).map(g=>{ const at=(RT.get(g)||{}).at; return {g,i:rowOf(g),t:at!=null?at:now,u:at==null?1:0}; })
     .sort((a,b)=>(a.t-b.t)||(a.u-b.u)||(a.i-b.i)).map(x=>x.g);
   const site=g=>(g.client?g.client+' ':'')+g.elem;
+  const RS=new Map(), shortOf=new Map();   // pump chosen as a spare -> the request it waits for · request -> the lengths it is short of
+  for(const g of (VD.upcoming||[])) for(const r of pumpSpares(g)) RS.set(+r.i,g);
   for(const g of list){
     const need=pumpReq(g.pumps); if(!need.length) continue;
     const fam=SF(g), got=new Set(), res=[], state=stateFor(g);   // per requested pump: {len, kind, s}
     for(const len of need){
+      // the spare chosen for it: that pump, whatever it is doing now
+      const sr=pumpSpares(g).find(r=>PUMPS[r.i]===len && !got.has(+r.i) && !pumpBroken(+r.i)), srS=sr&&state.find(s=>s.i===+sr.i);
+      if(srS){ got.add(srS.i); claimed.set(srS.i,fam); claimedBy.set(srS.i,g); claimedTill.set(srS.i,tillOf(g));
+        res.push({len, kind:srS.pour===g?'sent':'ok', s:srS}); continue; }
       // (a pump already SENT to another request — setting up there — is that request's; not up for grabs)
       const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!held(s.i,g) || claimed.get(s.i)===fam)
-        && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam));
+        && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam) && !(RS.has(s.i) && RS.get(s.i)!==g));
       // a pump on / washing after the same client + element = this request just carries on with it
       const own=s=>s.pour===g;                       // already sent to this request
       const sib=s=>!own(s) && !s.note && s.pour && SF(s.pour)===fam && (s.st==='on'||s.st==='wash');
@@ -2709,6 +2747,7 @@ function upcomingPumpCheck(now){
     picks.set(g,res.filter(r=>r.s&&r.kind!=='taken'&&r.kind!=='none'&&r.kind!=='down').map(r=>r.s.i));
     short.set(g,res.filter(r=>r.kind==='taken').map(r=>r.s.i));
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
+    shortOf.set(g,bad.map(r=>r.len));
     if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(allPumpsLabel(g,need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
       if(sameOn){ out.set(g,{cls:'ok', html:`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(allPumpsLabel(g,need))}</b>`}); continue; }
@@ -2729,6 +2768,21 @@ function upcomingPumpCheck(now){
       return rs.length>1 ? `${L}: ${okN} of ${rs.length} free · ${uniq}` : `${L} ${uniq}`; });
     out.set(g,{cls:bad.every(r=>r.kind==='wash'||r.kind==='taken')?'warn':'bad', html:parts.join('<br>')});
   }
+  // the spares chosen for each request (Undo), and for the lengths it is short of: pumps of that length on a RUNNING pour
+  // with 2 pumps or more of any lengths (one alone has no spare) that has not given its spare yet and was not marked "No spare".
+  // The app can't tell which pump is the spare there: the user picks the request, then the pump itself.
+  const given=new Set([...allSpares().values()].filter(r=>r.to.trucks===0||!pourDone(r.to)).map(r=>String(r.from)));
+  for(const g of list){ const v=out.get(g); if(!v) continue;
+    const k=encodeURIComponent(spareKey(g)), lens=shortOf.get(g)||[];
+    const c0=base.filter(s=>lens.includes(s.len) && s.st==='on' && !s.setup && !s.next && !s.note && s.pour && s.pour.trucks>0
+      && SF(s.pour)!==SF(g) && !RS.has(s.i) && !given.has(String(s.pour.key)));
+    const two=c0.filter(s=>((PPn.byPour.get(s.pour)||{}).got||[]).length>=2);
+    const cands=two.filter(s=>!noSpare(s.pour)), off=[...new Set(two.filter(s=>noSpare(s.pour)).map(s=>s.pour))];
+    v.spareN=cands.length;
+    const opts=[...new Set(cands.map(s=>s.pour))].map(p=>`<div class="uc-spp-r"><span class="uc-spp-n">${esc(site(p))}</span>${cands.filter(s=>s.pour===p).map(s=>`<button type="button" class="uc-spu" data-k="${k}" data-i="${s.i}" data-from="${encodeURIComponent(p.key)}" data-name="${encodeURIComponent(site(p))}" title="Only if this pump is the spare there — it has not poured, so no washing">${pumpCode(s.i)}</button>`).join('')}<button type="button" class="uc-spn" data-p="${encodeURIComponent(noSpareKey(p))}" title="This request has no spare: take it off this list on every card">No spare</button></div>`).join('')
+      +off.map(p=>`<div class="uc-spp-r uc-spp-off"><span>${esc(site(p))} — no spare</span><button type="button" class="uc-spx uc-spy" data-p="${encodeURIComponent(noSpareKey(p))}">↶ Undo</button></div>`).join('');
+    v.html+=pumpSpares(g).map(r=>`<div class="uc-spr">🔁 <b>${pumpCode(r.i)}</b> — spare of <b>${esc(r.name)}</b> · no washing <button type="button" class="uc-spx" data-k="${k}" data-i="${r.i}">↶ Undo</button></div>`).join('')
+      +(cands.length||off.length?`<div class="uc-spw"><button type="button" class="uc-spo${spareOpen===k?' on':''}" data-k="${k}">🔁 Use a spare ${spareOpen===k?'▴':'▾'}</button>${spareOpen===k?`<div class="uc-spp"><div class="uc-spp-h">Which request, which pump? Tap the one that is the spare:</div>${opts}</div>`:''}</div>`:''); }
   return out;
 }
 let pumpEditing=null;            // index of the note box being typed in — a refresh must not wipe it
@@ -2772,6 +2826,7 @@ function renderPumps(){
               : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">from</span> <b>${esc(site(s.pour))}</b> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
               : s.st==='down' ? '<span class="pm-k">Breakdown</span>'
               : s.noop ? '<span class="pm-k">Available</span> <span class="tc-dim">· no operator</span>' : '<span class="pm-k">Available</span>';
+    const sparePart=s.spare?`<div class="pm-spr">🔁 ${pumpCode(s.i)} ${s.pour===s.spare.to?`spare of <b>${esc(s.spare.name)}</b>`:`spare — goes to <b>${esc(site(s.spare.to))}</b>`}</div>`:'';
     const editing=pumpEditing===String(s.i);
     const pn=pumpNote(s.i), d=editing&&pumpDraft?pumpDraft:{code:pn.code, text:pn.text};
     const editor=`<div class="pm-edit"><select class="pm-code" title="Which pump (code)"><option value="">code…</option>${codesFor(s.len).map(c=>`<option${c===d.code?' selected':''}>${c}</option>`).join('')}</select>
@@ -2780,7 +2835,7 @@ function renderPumps(){
       <div class="pm-top"><div class="pm-len">${s.len}${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
       <div class="pm-btns">${!editing&&(s.st==='on'||s.st==='wash')?`<button class="pm-free" data-i="${s.i}" title="Free this pump now (finished early / pulled out to another site)">✓</button>`:''}${!editing&&s.st==='free'&&pumpRelease(s.i)&&Date.now()-pumpRelease(s.i)<UNDO_FREE?`<button class="pm-undo" data-i="${s.i}" title="Undo — put this pump back on its pour">↶ Undo</button>`:''}<button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div></div>
       <div class="pm-mid">${editing?editor
-        :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div></div>`; }).join('');
+        :`<div class="pm-st">${txt}</div>${sparePart}${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div></div>`; }).join('');
   area.innerHTML=`<div class="pm-head">${counts}<div class="pm-ctls">${opsCtl}${washCtl}</div></div>`+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
   const wb=area.querySelector('.pm-wash-btn:not(.pm-ops-btn)'); if(wb) wb.addEventListener('click',()=>{ pumpWashOpen=!pumpWashOpen; pumpOpsOpen=false; renderPumps(); });
   const ob=area.querySelector('.pm-ops-btn'); if(ob) ob.addEventListener('click',()=>{ pumpOpsOpen=!pumpOpsOpen; pumpWashOpen=false; renderPumps(); });
@@ -3235,7 +3290,7 @@ function renderSummary(){
     return `<div class="ap${isOpen?' open':''}${g.carried>0?' carry-row':''}" data-k="${encodeURIComponent(g.key)}" style="--ec:${EL_EDGE[i%EL_EDGE.length]}">
       <div class="ap-hd ap-tog" title="Tap to open / close the details">${g.client?`<span class="ap-cl">${esc(g.client)}</span>`:''}<span class="ap-el">${esc(g.elem||'—')}</span><span class="ap-st">${esc(plantsLabel(g.plant))}</span>
         <span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span>${stopTag}${carryBadge(g,true)}<span class="ap-last">last truck ${timeShort(g.endMax)}</span><span class="ap-chev">${isOpen?'▴':'▾'}</span></div>
-      ${!isOpen?`<div class="ap-sum">
+      ${spareOutHtml(g)}${!isOpen?`<div class="ap-sum">
         <span class="ap-s"><b style="color:var(--cyan)">${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</span>
         ${g.rejected>0?`<span class="ap-s" style="color:var(--rose)">⛔ <b>${fmt(g.rejected,0)}</b> m³</span>`:''}
         <span class="ap-s">⚡ <b style="${rc?`color:${rc}`:''}">${avg!=null?fmt(avg,0):'—'}</b> m³/h</span>
@@ -3826,16 +3881,20 @@ function plantTimeline(now){
         list.push({g:h, s:ns, e:ns+d, kind:'plan', fromHold:true, txt:`${ns<=now+60000?'from now':'≈'+timeShort(ns)} · ${nameOf(h)} (same pumps) · ≈${timeShort(ns+d)}`});
         cur=ns+d; last=h; }
       list.push({g:last, s:cur, e:cur+WASH, kind:'wash', txt:`washing → ${timeShort(cur+WASH)}`}); return true; };
-    PUMPS.forEach((len,i)=>{ if(pumpBroken(i)) return; const code=`${len}${PUMPS.filter(L=>L===len).length>1?' #'+PUMPS.slice(0,i+1).filter(L=>L===len).length:''}`;   // by length (the app tracks pumps by length)
+    PUMPS.forEach((len,i)=>{ if(pumpBroken(i)) return; const code=pumpCode(i);   // by length (the app tracks pumps by length)
       const list=[]; pumps.set(i,list); list.lab=code;
       for(const b of (PP.busy[i]||[])){ const g=b.p.g, ex=g.finishAvg!=null?g.finishAvg:g.finishTgt;
         const runE=b.end!=null?b.end:Math.max(now,ex!=null?ex:now), live=b.end==null&&!b.p.setup;
         // the next of its chain ALREADY on this pump (started before this one's washing would end): the pump never went washing between them
         const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&o.start>b.start&&(b.free==null||o.start<b.free)).sort((x,y)=>x.start-y.start)[0];
+        // its spare, taken by another request: on this pour until it leaves for that one (its time, or when it was sent) — no washing
+        if(b.spare){ const to=b.spare.to, t0=RT.get(to), mv=to.trucks>0||pumpSent(to).length?(b.free!=null?b.free:now):Math.max(t0?t0.at:now,now), e=Math.min(runE,mv);
+          list.push({g, s:b.start, e, now:live&&mv>now?now:null, kind:b.end!=null||mv<=now?'done':'run', txt:`${nameOf(g)} · spare → ${nameOf(to)}`}); continue; }
+        const spOf=(pumpSpares(g).find(r=>+r.i===i)||{}).name;   // the spare chosen for this request
         if(b.p.setup){ const {ps,pe}=sentPour(g,b.start,now);   // sent, no truck yet: setting up -> its pour -> washing
-          list.push({g, s:b.start, e:pe, kind:'plan', setup:true, txt:`setting up · ${nameOf(g)} · pour ≈${timeShort(ps)} → ≈${timeShort(pe)}`});
+          list.push({g, s:b.start, e:pe, kind:'plan', setup:true, txt:`setting up · ${nameOf(g)}${spOf?` · spare of ${esc(spOf)}`:''} · pour ≈${timeShort(ps)} → ≈${timeShort(pe)}`});
           if(!chainTail(list,i,b.p.fam,pe)) list.push({g, s:pe, e:pe+WASH, kind:'wash', txt:`washing → ${timeShort(pe+WASH)}`}); continue; }
-        else list.push({g, s:b.start, e:nx&&b.end!=null?Math.min(runE,nx.start):runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
+        else list.push({g, s:b.start, e:nx&&b.end!=null?Math.min(runE,nx.start):runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${spOf?` · spare of ${esc(spOf)}`:''}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
         if(nx) continue;
         // kept on site for the rest of its chain — also while this pour still runs (its pumps don't go washing between
         // them): each request for qty ÷ rate, not started yet = it moves with now, then washing. No rate: waiting to the end.
@@ -3848,7 +3907,8 @@ function plantTimeline(now){
       ix.forEach(i=>{ const l=pumps.get(i); if(!l) return;
         if(l.some(x=>x.fromHold&&x.g===g)) return;   // already drawn from its chain's pumps (above)
         if(l.some(x=>x.g===g&&x.setup)) return;   // already drawn from its sent pumps (above)
-        l.push({g, s:s0, e:e0, kind:'plan', late:lateOf(g,t), txt:`${whenTxt(g,t)}${nameOf(g)}`}); }); }
+        const sn=(pumpSpares(g).find(r=>+r.i===i)||{}).name;
+        l.push({g, s:s0, e:e0, kind:'plan', late:lateOf(g,t), txt:`${whenTxt(g,t)}${nameOf(g)}${sn?` · spare of ${esc(sn)}`:''}`}); }); }
     // a planned request washes after it too — unless the next of its chain follows on the same pump
     for(const l of pumps.values()) l.filter(x=>x.kind==='plan'&&!x.fromHold&&!x.setup).forEach(x=>{
       if(l.some(y=>y.kind==='plan'&&y.g!==x.g&&SF(y.g)===SF(x.g)&&y.s>x.s&&y.s<x.e+WASH)) return;
@@ -3966,6 +4026,7 @@ function renderPlantTimeline(kind){
     const k=c.p+'|'+pl.g.key, s1=Math.max(c.a.s,c.b.s), e1=Math.min(c.a.e,c.b.e); let G=cgBy.get(k);
     if(!G){ G={p:c.p, pl, os:[], s0:s1, e0:e1}; cgBy.set(k,G); CG.push(G); }
     G.os.push(o); G.s0=Math.min(G.s0,s1); G.e0=Math.max(G.e0,e1); });
+  const UCs=PU&&CG.length?upcomingPumpCheck():new Map();   // a spare on a running pour can solve it (its Upcoming card)
   const warn=CG.length?`<div class="ptl-warn">${CG.map(c=>{
       if(c.hold){ const x=c.a, alt=entries.filter(([lab,l])=>lab!==c.p&&!l.hold&&!busyIn(l,x.s,x.e)).map(([lab])=>esc(lab));
         return `<div class="ptl-cl"><div class="ptl-cl-h">⏸ <b>${esc(c.p)}</b> is on HOLD (not shown above) — but a request is planned on it</div>
@@ -3977,7 +4038,7 @@ function renderPlantTimeline(kind){
       return `<div class="ptl-cl"><div class="ptl-cl-h">⚠ <b>${esc(c.p)}</b> is needed twice <b>${timeShort(s0)} → ${timeShort(e0)}</b> (${ovTxt(e0-s0)})</div>
         ${[...byG.values()].map(L=>`<div>• <b>${nmOf(L[0])}</b> — ${L.map(doing).join(', then ')}</div>`).join('')}
         <div>• <b>${nmOf(pl)}</b> — ${doing(pl)}</div>
-        <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(till)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}</div></div>`; }).join('')}</div>`:'';
+        <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(till)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}${(UCs.get(pl.g)||{}).spareN?' · or 🔁 use a spare (on its Upcoming card)':''}</div></div>`; }).join('')}</div>`:'';
   const np=!PU&&T.noPlant.length?`<div class="ptl-np"><div>🏭 <b>No plant chosen yet</b> — free for the whole pour (tap = choose it):</div>${T.noPlant.map(x=>`<div class="np-r"><span>${nmOf(x)} <small>${timeShort(x.s)} → ≈${timeShort(x.e)}</small></span>${x.sug.length?x.sug.map(p=>`<button type="button" class="np-sug" data-k="${encodeURIComponent(plantKey(x.g))}" data-p="${esc(p)}">${esc(p)}</button>`).join(''):'<small class="np-none">no plant free for its whole pour</small>'}</div>`).join('')}</div>`:'';
   box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
@@ -4222,7 +4283,7 @@ function renderOrigActive(open){
   el('activeList').innerHTML = list.length ? list.map(g=>{
     const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
     return `<div class="apy${g.carried>0?' carry-row':''}">
-      <div class="apy-el">${g.elem||'—'}<span class="p">${plantsLabel(g.plant)}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div class="apy-el">${g.elem||'—'}<span class="p">${plantsLabel(g.plant)}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}${spareOutHtml(g)}</div>
       <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
       <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
       <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc,0)+' m³/h':'—'}</div>
@@ -4294,7 +4355,7 @@ function renderUpcoming(){
   const sendChips=p=>{ const need=pumpReq(p.pumps), sc=siteChips(p); if(!need.length&&!sc) return '';
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
-      const no=!on && !(freeNow[len]>0);
+      const no=!on && !(freeNow[len]>0) && !pumpSpares(p).some(r=>PUMPS[r.i]===len);   // (the spare chosen for it can always leave)
       return `<button class="uc-snd${on?' on':''}${no?' no':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}"${no?' data-no="1"':''} title="${on?'Sent — tap to undo':no?`Every ${len} is on a pour or broken down right now`:'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}${no?' <small>· busy now</small>':''}</button>`; }).join('')}${sc}</div>`; };
   // chains (same client + element, poured one after the other) become ONE card; its place = its first request
   const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
@@ -4368,6 +4429,19 @@ function renderUpcoming(){
     for(const k of keys){ if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k]; }
     stSet(KEY_PUMP,PUMPNOTE); renderUpcoming();
     for(const k of keys) await syncPush('pump',k,val); }));
+  // 🔁 a spare on a running pour taken for this request / taken back
+  const setSpares=async(k,list)=>{ const val=list.length?JSON.stringify(list):''; if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k];
+    stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,val); };
+  const sparesAt=k=>{ try{ return JSON.parse(PUMPNOTE[k]||'[]'); }catch(e){ return []; } };
+  A.querySelectorAll('.uc-spo').forEach(b=>b.addEventListener('click',()=>{ spareOpen=spareOpen===b.dataset.k?null:b.dataset.k; renderUpcoming(); }));
+  A.querySelectorAll('.uc-spu').forEach(b=>b.addEventListener('click',()=>{ const k=decodeURIComponent(b.dataset.k), i=+b.dataset.i, name=decodeURIComponent(b.dataset.name);
+    if(!confirm(`Is ${pumpCode(i)} the spare of ${name}?\nIt will be counted as not poured there: no washing.`)) return;
+    spareOpen=null; setSpares(k,sparesAt(k).concat({i, from:decodeURIComponent(b.dataset.from), name, at:Date.now(), by:ME||''})); }));
+  A.querySelectorAll('.uc-spx:not(.uc-spy)').forEach(b=>b.addEventListener('click',()=>{ const k=decodeURIComponent(b.dataset.k);
+    setSpares(k,sparesAt(k).filter(r=>+r.i!==+b.dataset.i)); }));
+  const setNoSpare=async(k,val)=>{ if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,val); };
+  A.querySelectorAll('.uc-spn').forEach(b=>b.addEventListener('click',()=>setNoSpare(decodeURIComponent(b.dataset.p),'1')));
+  A.querySelectorAll('.uc-spy').forEach(b=>b.addEventListener('click',()=>setNoSpare(decodeURIComponent(b.dataset.p),'')));
   el('upcomingArea').querySelectorAll('.uc-snd').forEach(b=>b.addEventListener('click',async()=>{
     const k=decodeURIComponent(b.dataset.k), len=+b.dataset.len;
     if(b.dataset.no==='1'){ alert(`كل مضخات ${len} لسه شغالة على صبّة أو عطلانة دلوقتي.\nلو هتجيبها من موقع تاني، اعملها Available الأول من صفحة Pumps (علامة ✓) وبعدين ابعتها.`); return; }
