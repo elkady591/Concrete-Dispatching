@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000009">
+<meta name="app-build" content="20261102-000010">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1120,6 +1120,10 @@
   .ptl-bar.done,.ptl-bar.stop{background:rgba(148,163,184,.28);color:var(--ink,inherit)}
   .ptl-bar.plan{background:repeating-linear-gradient(45deg,rgba(167,139,250,.32) 0 6px,rgba(167,139,250,.14) 6px 12px);border:1.5px dashed var(--violet)}
   .ptl-bar.plan.late{background:repeating-linear-gradient(45deg,rgba(251,191,36,.35) 0 6px,rgba(251,191,36,.14) 6px 12px);border-color:var(--amber)}
+  .ptl-bar.plan.chn:not(.late){background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--chc) 34%,transparent) 0 6px,color-mix(in srgb,var(--chc) 16%,transparent) 6px 12px);border-color:var(--chc)}
+  .ptl-bar.run.chn{background:color-mix(in srgb,var(--chc) 35%,transparent)}
+  .ptl-bar.run.chn .ptl-done{background:var(--chc)}
+  .ptl-free.pl{border:0;background:transparent}
   .ptl-bar.clash{box-shadow:0 0 0 2px var(--rose) inset}
   .ptl-bar.wash{background:repeating-linear-gradient(45deg,rgba(251,146,60,.32) 0 6px,rgba(251,146,60,.12) 6px 12px);border:1.5px solid #fb923c;color:#fdba74}
   .ptl-sep{height:24px;border-top:2px solid var(--line2)}.ptl-sep .ptl-lab{font-size:10px;color:var(--faint);letter-spacing:.08em}
@@ -3985,6 +3989,7 @@ function tlDetail(x,PU,clashes){
   const gt=el('tlGoT'); if(gt) gt.onclick=()=>{ o.style.display='none'; logKey=g.key; view='pours'; saveCfg(); renderViewTabs(); applyView(); renderAllPours(); const tl=el('truckLog'); if(tl&&tl.scrollIntoView) tl.scrollIntoView({behavior:'smooth',block:'start'}); };
   const gu=el('tlGoU'); if(gu) gu.onclick=()=>{ o.style.display='none'; view='upcoming'; saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); };
 }
+const TL_CHAIN=['#6366f1','#10b981','#ec4899','#0ea5e9','#84cc16','#a855f7'];   // pumps timeline: a color per chain
 function renderPlantTimeline(kind){
   if(!kind){ renderPlantTimeline('plants'); renderPlantTimeline('pumps'); return; }
   const PU=kind==='pumps', box=el(PU?'pumpTimeline':'plantTimeline'), S=TLS[kind]; if(!box) return;
@@ -3993,18 +3998,32 @@ function renderPlantTimeline(kind){
   const hours=Math.ceil((W.e-W.s)/3600000), width=hours*TL_PXH;
   const h0=new Date(W.s); h0.setMinutes(0,0,0); const ticks=[]; for(let t=h0.getTime(); t<=W.e; t+=3600000) if(t>=W.s) ticks.push(t);
   const LANE=32, ITEMS=[];   // the bars drawn, by index (tap = its details)
+  // pumps page: one color per chain (same client + element, or linked), short labels; the full text stays in the bar's title and details
+  const SFk=PU?pumpShareFam():null, chainC=new Map();
+  const chainOf=x=>{ const f=SFk(x.g); if(!chainC.has(f)) chainC.set(f,{c:TL_CHAIN[chainC.size%TL_CHAIN.length], n:(x.g.client?x.g.client+' ':'')+x.g.elem}); return chainC.get(f); };
+  const shortTxt=(x,w)=>{ if(w<34) return ''; const g=x.g, t=x.txt.replace(/<[^>]+>/g,''), sp=/spare (of|→)/.test(t)?' · spare':'', q=g.required!=null?g.required:g.planReq;
+    if(x.kind==='wash') return x.txt;
+    if(x.kind==='stop') return 'waiting';
+    if(x.kind==='plan'){ const m=t.match(/^⏰ (\S+ \S+) pumps/); return `${x.setup?'setting up · ':m?`⏰ ${m[1]} · `:''}${esc(g.elem)}${q>0?` · ${fmt(q,0)} m³`:''}${sp}`; }
+    const e=t.match(/≈\S+ \S+/); return `${esc(g.elem)}${sp}${e?' · '+e[0]:''}`; };
   const bar=x=>{ const ix=ITEMS.push(x)-1, l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.off||0)+(x.lane||0)*LANE;
     const done=x.now!=null?Math.max(0,Math.min(100,Math.round((X(x.now)-l)/w*100))):null;
-    const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind;
-    return `<div class="ptl-bar ${cls}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px" data-i="${ix}" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${x.txt}</span></div>`; };
-  const freeB=([s,e])=>`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
+    const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind, ch=PU&&(x.kind==='plan'||x.kind==='run')?chainOf(x).c:null;
+    return `<div class="ptl-bar ${cls}${ch?' chn':''}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px${ch?`;--chc:${ch}`:''}" data-i="${ix}" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${PU?shortTxt(x,w):x.txt}</span></div>`; };
+  // pumps page: an empty place = free; only the last one is written (when it is free for good)
+  const freeB=([s,e])=>PU?(e>=W.e?`<div class="ptl-free pl" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}</span></div>`:'')
+    :`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
   const row=(p,list)=>{ const ends=[], off=list.hold?14:0; list.forEach(x=>{ x.row=p; x.off=off; });   // on hold: the HOLD label gets its own line on top   // first line whose last bar ended before this one starts (in px, so touching bars share a line)
     list.slice().sort((a,b)=>a.s-b.s).forEach(x=>{ const l=X(x.s); let k=ends.findIndex(e=>e<=l+1); if(k<0){ k=ends.length; ends.push(0); } x.lane=k; ends[k]=Math.max(l+6,X(x.e)); });
     const h=40+off+Math.max(0,ends.length-1)*LANE;
     const hb=list.hold?`<div class="ptl-hold" style="left:${X(Math.max(list.hold.since,W.s))}px;width:${X(W.e)-X(Math.max(list.hold.since,W.s))}px"><span>⏸ HOLD${list.hold.by?' · '+esc(list.hold.by):''}</span></div>`:'';
     return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab${list.hold?' hd':''}">${esc(p)}${list.hold?'<small>⏸ HOLD</small>':''}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${hb}${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
   const tlAt=S.at, nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
-  const entries=PU?[...T.pumps.values()].map(l=>[l.lab,l]):[...T.rows.entries()].filter(([p,l])=>!l.hold);   // on hold = not drawn
+  // pumps on the same chain sit together: by what each is planned for next (else what it is on), groups in fleet order
+  const groupOf=l=>{ const y=l.find(x=>x.kind==='plan')||l.find(x=>x.kind==='run')||l.find(x=>x.kind==='wash'); return y?SFk(y.g):null; };
+  const pumpRows=()=>{ const L=[...T.pumps.values()], first=new Map(); L.forEach((l,i)=>{ const k=groupOf(l); if(k!=null&&!first.has(k)) first.set(k,i); });
+    const rank=l=>{ const k=groupOf(l); return k==null?1e9:first.get(k); }; return L.map((l,i)=>[l,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(([l])=>[l.lab,l]); };
+  const entries=PU?pumpRows():[...T.rows.entries()].filter(([p,l])=>!l.hold);   // on hold = not drawn
   const winChips=[['now12','Next 12 h'],['now24','Next 24 h']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
     +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select class="ptl-from"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
   const AT=tlAt!=null?tlAtMoment(entries,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length&&!o.held).map(o=>o.p):[];
