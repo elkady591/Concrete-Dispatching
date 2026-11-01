@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000016">
+<meta name="app-build" content="20261102-000017">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2484,7 +2484,7 @@ function famChain(fam,SF,RT){ const at=g=>{ const t=RT.get(g); return t?t.at:Inf
 function pumpPlan(now){
   now=now||Date.now(); const SF=pumpShareFam(), WASH=washHours()*3600000;
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
-  const pours=(VD.summary||[]).filter(g=>pumpReq(g.pumps).length && (ts(g).length ||
+  const pours=(VD.summary||[]).filter(g=>pumpNeed(g).length && (ts(g).length ||
       (g.trucks===0 && pumpSent(g).some(x=>now-x.t<SENT_STALE)))).map(g=>{
     const a=ts(g), sent=pumpSent(g), s0=sent.length?Math.min(...sent.map(x=>x.t)):null;
     // each pump is taken at ITS moment: a pump sent later is looked for when it was sent, the rest at the first truck
@@ -2493,7 +2493,7 @@ function pumpPlan(now){
       return out.sort((x,y)=>x.at-y.at); };
     if(!a.length) return {g, start:s0, last:s0, end:null, fam:SF(g), setup:true, items:items(sent.map(x=>x.len))};
     const fin=!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
-    return {g, start:s0!=null?Math.min(s0,...a):Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:SF(g), items:items(pumpReq(g.pumps))}; }).sort((a,b)=>a.start-b.start);
+    return {g, start:s0!=null?Math.min(s0,...a):Math.min(...a), last:Math.max(...a), end:fin?Math.max(...a):null, fam:SF(g), items:items(pumpNeed(g))}; }).sort((a,b)=>a.start-b.start);
   const busy=PUMPS.map(()=>[]);   // per pump: [{start, free, end, p}]
   const byPour=new Map();
   // a finished pour whose chain sibling (same client + element) has not started yet keeps its pumps on site
@@ -2655,11 +2655,21 @@ function pourLinks(PRm){
 }
 // Which pours SHARE pumps: same client + element, plus an "after" link when it asks for the same pumps
 // -> function(pour) -> family key
+// a request with NO pumps written, on the same client + element as one that started with pumps: it goes on with that one's
+// pumps while they are still on site (it started / is due before their washing would end) -> that pour, else null
+function pumpFrom(g){ if(pumpReq(g.pumps).length||!String(g.elem||'').trim()||g.elem===NOEL) return null;
+  const f=pumpFam(g), lastOf=h=>Math.max(0,...(h.loads||[]).map(l=>l.t).filter(t=>t!=null)), a=(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
+  const at=a.length?Math.min(...a):Date.now(), WASH=washHours()*3600000;
+  return (VD.summary||[]).filter(h=>h!==g&&pumpFam(h)===f&&h.trucks>0&&pumpReq(h.pumps).length&&(!pourDone(h)||at<=lastOf(h)+WASH)).sort((x,y)=>lastOf(y)-lastOf(x))[0]||null; }
+// the pumps a pour works with: its own, else the ones it goes on with
+const pumpNeed=g=>{ const n=pumpReq(g.pumps); if(n.length) return n; const h=pumpFrom(g); return h?pumpReq(h.pumps):n; };
 function pumpShareFam(){
   const L=pourLinks(), memo=new Map();
   const same=(a,b)=>pumpReq(a.pumps).slice().sort().join(',')===pumpReq(b.pumps).slice().sort().join(',');
-  const f=(g,d)=>{ if(memo.has(g)) return memo.get(g); const p=L.get(g);
-    const k=(p && d<8 && pumpReq(g.pumps).length && same(g,p)) ? f(p,d+1) : pumpFam(g); memo.set(g,k); return k; };
+  const f=(g,d)=>{ if(memo.has(g)) return memo.get(g); const p=L.get(g), h=d<8?pumpFrom(g):null;
+    // (a sibling of the same element that follows an "after" link with the same pumps: this one is on that chain too)
+    const sib=d<8&&pumpReq(g.pumps).length?(VD.summary||[]).find(o=>o!==g&&pumpFam(o)===pumpFam(g)&&L.has(o)&&same(g,o)):null;
+    const k=h ? f(h,d+1) : (p && d<8 && pumpReq(g.pumps).length && same(g,p)) ? f(p,d+1) : sib ? f(sib,d+1) : pumpFam(g); memo.set(g,k); return k; };
   return g=>f(g,0);
 }
 // Planned time of each pour -> Map(pour -> {time:'HH:MM', at:ms, est, after})
@@ -3912,7 +3922,7 @@ function plantTimeline(now){
       for(const b of (PP.busy[i]||[])){ const g=b.p.g, ex=g.finishAvg!=null?g.finishAvg:g.finishTgt;
         const runE=b.end!=null?b.end:Math.max(now,ex!=null?ex:now), live=b.end==null&&!b.p.setup;
         // the next of its chain ALREADY on this pump (started before this one's washing would end): the pump never went washing between them
-        const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&o.start>b.start&&(b.free==null||o.start<b.free)&&!(o.p.setup&&b.end==null)).sort((x,y)=>x.start-y.start)[0];
+        const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&(o.start>b.start||(o.start===b.start&&b.end!=null&&o.end==null))&&(b.free==null||o.start<b.free)&&!(o.p.setup&&b.end==null)&&!(o.end!=null&&b.end!=null&&o.end<=b.end)).sort((x,y)=>x.start-y.start)[0];
         // its spare, taken by another request: on this pour until it leaves for that one (its time, or when it was sent) — no washing
         if(b.spare){ const to=b.spare.to, t0=RT.get(to), mv=to.trucks>0||pumpSent(to).length?(b.free!=null?b.free:now):Math.max(t0?t0.at:now,now), e=Math.min(runE,mv);
           list.push({g, s:b.start, e, now:live&&mv>now?now:null, kind:b.end!=null||mv<=now?'done':'run', txt:`${nameOf(g)} · spare → ${nameOf(to)}`}); continue; }
@@ -3925,7 +3935,7 @@ function plantTimeline(now){
         if(nx) continue;
         // kept on site for the rest of its chain — also while this pour still runs (its pumps don't go washing between
         // them): each request for qty ÷ rate, not started yet = it moves with now, then washing. No rate: waiting to the end.
-        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&(b.end==null?!o.p.setup&&o.start>=b.start:o.start>=b.start||o.p.setup))) continue;   // its sibling on this pump goes on: that one draws what follows
+        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&(b.end==null?!o.p.setup&&o.end==null&&(o.start>b.start||(o.start===b.start&&PP.busy[i].indexOf(o)>PP.busy[i].indexOf(b))):o.start>=b.start||o.p.setup))) continue;   // its sibling on this pump goes on: that one draws what follows
         if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now),b.end==null)) continue;
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
@@ -4439,8 +4449,8 @@ function renderUpcoming(){
           const more=u.map((g,k)=>{ if(!k) return ''; const was=pumpReq(u[k-1].pumps).slice(), add=pumpReq(g.pumps).filter(L=>{ const j=was.indexOf(L); if(j<0) return true; was.splice(j,1); return false; }).filter(L=>addedPumps(g).includes(L));
             return add.length?`<div class="uc-same">#${k+1} needs one more: <b>${esc(pumpLabel(add))}</b>${sendChips(g,add)}</div>`:''; }).join('');
           if(more) return more;
-          // the ones after it with NO pumps written start without them; the pumps go washing once #1 finishes
-          if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} without pumps — they wash after #1 finishes</div>`;
+          // the ones after it with NO pumps written go on with the pumps of #1 (user 2026-11-01): the washing comes after them
+          if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} no pumps written — ${u.length>2?'continue':'continues'} with the same pumps</div>`;
           if(rest.every(g=>pumpReq(g.pumps).slice().sort().join()===pumpReq(p.pumps).slice().sort().join())) return `<div class="uc-same">${n}${u.length>2?' continue':' continues'} with the same pumps</div>`;
           return ''; })():''}</div>`:''}
     </div>`; };
