@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000018">
+<meta name="app-build" content="20261102-000020">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -528,7 +528,9 @@
   .dp-paste textarea{width:100%;min-height:140px;margin-top:8px;background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--ink);border-radius:12px;padding:10px;font-family:var(--mono);font-size:12px}
   .dp-pbtn{display:flex;gap:8px;margin-top:8px}
   @media(max-width:640px){ .dp-grid{grid-template-columns:1fr} .dp-grand{margin-inline-start:0} }
-  .pr-tabs{display:inline-flex;margin-bottom:14px}
+  .pr-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .pr-tabs{display:inline-flex}
+  .pr-month{width:auto;font:inherit;font-size:13px;font-weight:800;padding:6px 10px;border-radius:10px;cursor:pointer}
   .dp-wrap .dp-paste{margin:0 0 14px}
   .dp-wrap .dp-paste textarea{margin-top:0;min-height:0}
   .dp-pbtn{align-items:center;flex-wrap:wrap}
@@ -2500,8 +2502,10 @@ function pumpPlan(now){
   // ("Waiting · next …") — the 2 h washing starts only after the LAST request of the chain
   const nextOf=new Map(); for(const g of (VD.upcoming||[])){ if(g.trucks===0){ const f=SF(g); if(!nextOf.has(f)) nextOf.set(f,g); } }
   const SP=allSpares();
+  // how many pumps of this length the rest of a chain still asks for (no pumps written = it goes on with all of them)
+  const chainWants=(fam,len)=>Math.max(0,...(VD.upcoming||[]).filter(h=>h.trucks===0&&SF(h)===fam).map(h=>{ const n=pumpReq(h.pumps); return n.length?n.filter(L=>L===len).length:Infinity; }));
   for(const p of pours){
-    const need=p.items.map(x=>x.len), got=[], missing=[];
+    const need=p.items.map(x=>x.len), got=[], missing=[], kept={};
     for(const {len,at} of p.items){
       const ok=j=>!got.includes(j) && !pumpBroken(j,at) &&
         busy[j].every(b=>(b.free!=null && b.free<=at) || b.p.fam===p.fam);
@@ -2509,7 +2513,8 @@ function pumpPlan(now){
       // is holding, then the first free one in order
       const sr=pumpSpares(p.g).find(r=>PUMPS[r.i]===len && !got.includes(+r.i) && !pumpBroken(+r.i,at));
       if(sr) busy[+sr.i].forEach(b=>{ if(b.p.fam!==p.fam && (b.free==null||b.free>at)) b.free=at; });
-      let i=sr?+sr.i:PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>at)));
+      let i=sr?+sr.i:PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && b.keep && (b.free==null||b.free>at)));   // (the ones kept for it first; the rest of the sibling's go washing)
+      if(i<0&&!sr) i=PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>at)));
       if(i<0) i=PUMPS.findIndex((L,j)=>L===len && ok(j));
       // none free, but the pour has STARTED (or its pumps were sent): the pump is obviously there, so its washing
       // ended early — take the washing one of that length that would be free first, and end its washing at this moment.
@@ -2524,12 +2529,13 @@ function pumpPlan(now){
       }
       if(i<0){ missing.push(len); continue; }
       const spr=SP.get(i), isSp=!!spr && spr.to!==p.g && String(spr.from)===String(p.g.key);   // this pump is this pour's spare, taken: no washing, no chain
-      const hold=!isSp && p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
+      const keep=!isSp && (kept[len]||0)<chainWants(p.fam,len); if(keep) kept[len]=(kept[len]||0)+1;   // the rest of its chain needs this pump: no washing yet
+      const hold=keep && p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
       let free=isSp?p.end:p.end==null||hold?null:p.end+WASH;
       // "Available now": on a pour still running it frees THIS pump at once (a spare pulled out and sent elsewhere —
       // the pour goes on with its other pumps); on a finished pour a top-up truck after the press cancels it
       const rel=pumpRelease(i); if(rel && rel>=at && (p.end==null || rel>=p.last)) free=free==null?rel:Math.min(free,rel);
-      got.push(i); busy[i].push({start:at, free, end:p.end, p, hold, spare:isSp?spr:null});
+      got.push(i); busy[i].push({start:at, free, end:p.end, p, hold, keep, spare:isSp?spr:null});
     }
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
   }
@@ -2545,10 +2551,11 @@ function pumpPlan(now){
   const freeOf=b=>{
     if(b.hold && b.free==null){ if(!ahead) return null;   // kept on site for the next of its chain: it starts now (or at its time)
       const c=chainEnd(b.p.fam,Date.now()); return c==null?null:c+WASH; }
-    if(b.p.setup){ if(!ahead||b.free!=null) return b.free; const c=chainEnd(b.p.fam,Date.now());   // (it stays for the rest of its chain)
+    if(b.p.setup){ if(!ahead||b.free!=null) return b.free; const c=b.keep?chainEnd(b.p.fam,Date.now()):null;   // (it stays for the rest of its chain)
       return (c!=null?c:sentPour(b.p.g,b.start,Date.now()).pe)+WASH; }
     if(b.free!=null||!ahead||b.end!=null) return b.free;
     const g=b.p.g, e=g.finishAvg!=null?g.finishAvg:g.finishTgt; if(e==null) return null;
+    if(!b.keep) return Math.max(e,Date.now())+WASH;   // the rest of its chain doesn't ask for this pump
     const c=chainEnd(b.p.fam,Math.max(e,Date.now())); return c==null?null:c+WASH; };
   const state=PUMPS.map((len,i)=>{
     const pn=pumpNote(i), note=pn.text||(pn.code?'Breakdown':''), code=pn.code;
@@ -2565,7 +2572,7 @@ function pumpPlan(now){
     if(note && st==='free') st='down';
     // chosen as a spare and not finished with: {to, name} for the pump's label
     const sp0=SP.get(i), spare=sp0&&(sp0.to.trucks===0||!pourDone(sp0.to))&&(st==='free'||pour===sp0.to||(pour&&String(pour.key)===String(sp0.from)))?sp0:null;
-    return {i,len,st,pour,until,note,code,setup,next,spare};
+    return {i,len,st,pour,until,note,code,setup,next,spare,keep:!!(cur&&cur.keep)};
   });
   // operators: the busy pumps keep theirs; what is left goes to the free pumps BIGGEST first (63 → 59 → 56 → 48),
   // the rest have none
@@ -2607,7 +2614,7 @@ function sentPour(g,sentAt,now,tt){ const t=tt!==undefined?tt:requestTimes().get
   // an "after …" request never starts before the one it waits for. Next of its chain with pumps already on site: it starts
   // right after it with those; a pump added to it just joins them, the pour does not wait for it
   // (the one before already finished, same thing: the pumps not marked sent are the ones still there)
-  const onSite=t&&(t.after?pumpFam(t.after)===pumpFam(g)&&pumpReq(g.pumps).some(L=>pumpReq(t.after.pumps).includes(L)):t.afterDone&&pumpSent(g).length<pumpReq(g.pumps).length);
+  const SFs=pumpShareFam(), onSite=t&&(t.after?SFs(t.after)===SFs(g)&&pumpReq(g.pumps).some(L=>pumpReq(t.after.pumps).includes(L)):t.afterDone&&pumpSent(g).length<pumpReq(g.pumps).length);
   const ps=Math.max(sibRunEnd(g), onSite?Math.max(now,t.at):Math.max(now, sentAt+PUMP_LOAD_AFTER, t?(t.est?t.at:pourStartAt(g,t)):0)); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
 // plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
 function planRowsOf(){
@@ -2653,7 +2660,8 @@ function pourLinks(PRm){
   }
   return out;
 }
-// Which pours SHARE pumps: same client + element, plus an "after" link when it asks for the same pumps
+// Which pours SHARE pumps: same client + element, plus an "after" link when it asks for any of the same pumps
+// (those stay on site for it; one the next request does not ask for goes washing, one only it asks for is sent)
 // -> function(pour) -> family key
 // a request with NO pumps written, on the same client + element as one that started with pumps: it goes on with that one's
 // pumps while they are still on site (it started / is due before their washing would end) -> that pour, else null
@@ -2665,11 +2673,11 @@ function pumpFrom(g){ if(pumpReq(g.pumps).length||!String(g.elem||'').trim()||g.
 const pumpNeed=g=>{ const n=pumpReq(g.pumps); if(n.length) return n; const h=pumpFrom(g); return h?pumpReq(h.pumps):n; };
 function pumpShareFam(){
   const L=pourLinks(), memo=new Map();
-  const same=(a,b)=>pumpReq(a.pumps).slice().sort().join(',')===pumpReq(b.pumps).slice().sort().join(',');
+  const shares=(a,b)=>{ const B=pumpReq(b.pumps); return pumpReq(a.pumps).some(L=>B.includes(L)); };
   const f=(g,d)=>{ if(memo.has(g)) return memo.get(g); const p=L.get(g), h=d<8?pumpFrom(g):null;
     // (a sibling of the same element that follows an "after" link with the same pumps: this one is on that chain too)
-    const sib=d<8&&pumpReq(g.pumps).length?(VD.summary||[]).find(o=>o!==g&&pumpFam(o)===pumpFam(g)&&L.has(o)&&same(g,o)):null;
-    const k=h ? f(h,d+1) : (p && d<8 && pumpReq(g.pumps).length && same(g,p)) ? f(p,d+1) : sib ? f(sib,d+1) : pumpFam(g); memo.set(g,k); return k; };
+    const sib=d<8&&pumpReq(g.pumps).length?(VD.summary||[]).find(o=>o!==g&&pumpFam(o)===pumpFam(g)&&L.has(o)&&shares(g,o)):null;
+    const k=h ? f(h,d+1) : (p && d<8 && shares(g,p)) ? f(p,d+1) : sib ? f(sib,d+1) : pumpFam(g); memo.set(g,k); return k; };
   return g=>f(g,0);
 }
 // Planned time of each pour -> Map(pour -> {time:'HH:MM', at:ms, est, after})
@@ -2753,7 +2761,8 @@ function upcomingPumpCheck(now){
       // a pump on / washing after the same client + element = this request just carries on with it
       const own=s=>s.pour===g;                       // already sent to this request
       const sib=s=>!own(s) && !s.note && s.pour && SF(s.pour)===fam && (s.st==='on'||s.st==='wash');
-      const pick=cand.find(own) || cand.find(s=>sib(s) || (claimed.get(s.i)===fam && s.st!=='down'))
+      const pick=cand.find(own) || cand.find(s=>sib(s)&&s.keep)   // (3 pumps and the next asks for 2 of them: the ones the pump plan kept for it, the third goes washing)
+        || cand.find(s=>sib(s) || (claimed.get(s.i)===fam && s.st!=='down'))
         || cand.find(s=>s.st==='free'&&!s.noop)
         || cand.filter(s=>s.st==='wash' && !s.note).sort((a,b)=>a.until-b.until)[0]
         || cand.find(s=>s.st==='on' && !s.note)
@@ -4978,9 +4987,49 @@ function parseProdTable(rows, titleRe){
   }
   return days.length ? {title:String(rows[r0][c0]||'').trim(), cols, days, total} : null;
 }
+/* Past months on the Production tab. The sheet's two tables only hold the current month, so an older month is worked
+   out from the raw station tabs exactly like the sheet's own formula (a truck, departure inside the day, not waste /
+   rejected). /export?format=csv ignores the tabs' date filter but is ~5.7 MB for the five tabs, so it is only read
+   when a past month is picked, and kept until the app is closed. */
+const PROD_RAW=[['L1','1986911208'],['L2','209421387'],['V3','429772700'],['V4','1305687134'],['V5','921955628']];
+const PROD_MONS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let prodMonth='', PRODHIST=null, prodHistBusy=false, prodHistErr=false;   // prodMonth '' = current month, the default
+function prodMonths(){ const n=new Date(), out=[];
+  for(let y=n.getFullYear(),m=n.getMonth();y>2025||(y===2025&&m>=4);m--){ if(m<0){ m=11; y--; }
+    out.push({v:out.length?`${y}-${pad(m+1)}`:'', label:`${PROD_MONS[m]} ${y}`}); }
+  return out; }
+async function loadProdHist(){
+  if(PRODHIST||prodHistBusy) return; prodHistBusy=true; prodHistErr=false;
+  try{
+    const id=el('sheetId').value.trim(), EXCL=/waste|rejected\s*&?\s*transferred|مرفوض|هالك/i, h={};
+    const csvs=await Promise.all(PROD_RAW.map(async p=>{ const r=await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${p[1]}`,{cache:'no-store'});
+      if(!r.ok) throw new Error('tab '+p[0]); return r.text(); }));
+    const add=(w,t,k,q)=>{ const d=new Date(t), ym=d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1), n=d.getUTCDate(), o=h[ym]||(h[ym]=[{},{}]);
+      (o[w][n]||(o[w][n]=[0,0,0,0,0]))[k]+=q; };   // UTC only so the 8-hour shift never crosses a clock change
+    csvs.forEach((txt,k)=>{ const rows=txt.split(/\r?\n/).map(parseCsvLine);
+      const hr=rows.slice(0,5).findIndex(x=>x.some(c=>/^departure/i.test(c.trim()))); if(hr<0) throw new Error('no header');
+      const fi=re=>rows[hr].findIndex(c=>re.test(c.trim())), c={date:fi(/^date$/i), tk:fi(/truck/i), q:fi(/qm3/i), dep:fi(/^departure/i), fu:fi(/^follow/i)};
+      if(Object.values(c).some(i=>i<0)) throw new Error('no columns');
+      for(let i=hr+1;i<rows.length;i++){ const x=rows[i];
+        if(!String(x[c.tk]||'').trim()) continue;
+        const d=String(x[c.date]||'').trim().match(/^(\d+)\/(\d+)\/(\d{4})$/), t=String(x[c.dep]||'').trim().match(/^(\d+):(\d+)(?::\d+)?\s*([AP])M$/i);
+        if(!d||!t) continue;
+        const q=Number(String(x[c.q]||'').replace(/,/g,'')); if(!q) continue;
+        if(EXCL.test(String(x[c.fu]||''))) continue;
+        const at=Date.UTC(+d[3],d[1]-1,+d[2],t[1]%12+(/p/i.test(t[3])?12:0),+t[2]);
+        add(0,at-8*3600000,k,q); add(1,at,k,q); } });
+    PRODHIST=h;
+  }catch(e){ prodHistErr=true; }
+  prodHistBusy=false; if(view==='production') renderProduction();
+}
+// one month in the same shape as parseProdTable: w 0 = 8 AM : 8 AM, 1 = 12 AM : 12 AM. Empty stations show — like the sheet
+function prodHistTbl(ym,w){ const [y,m]=ym.split('-').map(Number), src=(PRODHIST[ym]||[{},{}])[w], tot=[0,0,0,0,0], days=[], sum=a=>a.reduce((s,v)=>s+v,0), nz=a=>a.map(v=>v||null);
+  for(let n=1;n<=new Date(y,m,0).getDate();n++){ const a=src[n]||[0,0,0,0,0]; a.forEach((v,i)=>tot[i]+=v);
+    days.push({label:`${n}-${PROD_MONS[m-1]}`, day:n, mon:'', vals:nz([...a,sum(a)])}); }
+  return {cols:[...PROD_RAW.map(p=>p[0]),'Total'], days, total:nz([...tot,sum(tot)])}; }
 function renderProduction(){
   const area=el('productionArea'); if(!area)return;
-  const ae=document.activeElement; if(ae&&(ae.id==='dpMsg'||ae.id==='dpDay')) return;   // typing / picking in Daily program
+  const ae=document.activeElement; if(ae&&(ae.id==='dpMsg'||ae.id==='dpDay'||ae.id==='prMonth')) return;   // typing / picking in Daily program, or the month list is open
   if(!PRODTBL[0]&&!PRODTBL[1]){ area.innerHTML='<div class="muted" style="font-size:13px;padding:10px 2px">Production tables not available yet — pull the sheet.</div>'; return; }
   const now=new Date();
   const MON=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][now.getMonth()];
@@ -5008,9 +5057,18 @@ function renderProduction(){
   const days=(PROD8.today||PROD8.yesterday)?`<div class="pd-grid">${day(PROD8.today,'Today')}${day(PROD8.yesterday,'Yesterday')}</div>`:'';
   // two tabs: the sheet's production tables | Daily program (check the stations' WhatsApp messages)
   const tabs=`<div class="spot-tabs pr-tabs"><span class="spot-tab ${prodTab!=='dp'?'active':''}" data-pt="prod">Production</span><span class="spot-tab ${prodTab==='dp'?'active':''}" data-pt="dp">Daily program</span></div>`;
-  area.innerHTML=tabs+(prodTab==='dp'?dpHtml()
+  const months=prodMonths(), monSel=prodTab==='dp'?'':`<select id="prMonth" class="pr-month" aria-label="Month">${months.map(m=>`<option value="${m.v}"${m.v===prodMonth?' selected':''}>${m.label}</option>`).join('')}</select>`;
+  const pastName=prodMonth?(months.find(m=>m.v===prodMonth)||{}).label:'';
+  if(prodMonth&&!PRODHIST&&!prodHistBusy&&!prodHistErr) loadProdHist();
+  const past=!prodMonth?'':PRODHIST?`<div class="prod-grid">${one(prodHistTbl(prodMonth,0),`Production ${pastName} · 8 AM : 8 AM`)}${one(prodHistTbl(prodMonth,1),`Production ${pastName} · 12 AM : 12 AM`)}</div>`
+    :prodHistErr?`<div class="muted" style="font-size:13px;padding:10px 2px">Couldn't read the station tabs. <button class="btn" id="prRetry">Try again</button></div>`
+    :`<div class="muted" style="font-size:13px;padding:10px 2px"><span class="spin"></span> Reading ${pastName} from the station tabs…</div>`;
+  area.innerHTML=`<div class="pr-bar">${tabs}${monSel}</div>`+(prodTab==='dp'?dpHtml()
+    :prodMonth?past
     :days+`<div class="prod-grid">${one(PRODTBL[0],'Production MTD · 8 AM : 8 AM')}${one(PRODTBL[1],'Production MTD · 12 AM : 12 AM')}</div>`);
   area.querySelectorAll('[data-pt]').forEach(t=>t.addEventListener('click',()=>{ prodTab=t.dataset.pt; try{ localStorage.setItem('cmpour:prodtab',prodTab); }catch(e){} renderProduction(); }));
+  const ms=el('prMonth'); if(ms) ms.addEventListener('change',()=>{ prodMonth=ms.value; ms.blur(); renderProduction(); });
+  const rt=el('prRetry'); if(rt) rt.addEventListener('click',()=>{ prodHistErr=false; renderProduction(); });
   if(prodTab==='dp') dpWire();
 }
 let prodTab=(()=>{ try{ return localStorage.getItem('cmpour:prodtab')||'prod'; }catch(e){ return 'prod'; } })();
