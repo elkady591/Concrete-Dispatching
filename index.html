@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000017">
+<meta name="app-build" content="20261102-000018">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3114,7 +3114,8 @@ function renderTrucks(){
   area.querySelectorAll('.pr-sb').forEach(b=>b.addEventListener('click',()=>{ prodSort=b.dataset.ps; try{ localStorage.setItem('cmpour:prodsort',prodSort); }catch(e){} renderTrucks(); }));
   { const ni=el('tpN'); if(ni) ni.addEventListener('change',async()=>{ planN=Math.max(1,parseInt(ni.value)||15);
       PUMPNOTE['TPN']=String(planN); stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPN',String(planN)); });
-    const cb=el('tpCopy'); if(cb) cb.addEventListener('click',async()=>{ const txt='العربيات اللي شغالة النهاردة ان شاء الله\n'+TP_PICK.join('\n');
+    const mixersTxt=n=>n===1?'خلاطة واحدة':n===2?'خلاطتين':n<=10?n+' خلاطات':n+' خلاطة';
+    const cb=el('tpCopy'); if(cb) cb.addEventListener('click',async()=>{ const txt='الخلاطات اللي شغالة النهاردة ان شاء الله\n'+mixersTxt(TP_PICK.length)+'\n\n'+TP_PICK.join('\n');
       let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){} cb.textContent=ok?'Copied ✓':'Copy failed'; });
     area.querySelectorAll('.tp-c[data-tk],.tp-x[data-tk]').forEach(c=>c.addEventListener('click',()=>c.dataset.fx?tpForce(c.dataset.tk):tpToggle(c.dataset.tk)));
     area.querySelectorAll('.tp-in[data-in]').forEach(c=>c.addEventListener('click',()=>tpForce(c.dataset.in)));
