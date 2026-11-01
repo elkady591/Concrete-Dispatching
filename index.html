@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000020">
+<meta name="app-build" content="20261102-000021">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -531,6 +531,7 @@
   .pr-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}
   .pr-tabs{display:inline-flex}
   .pr-month{width:auto;font:inherit;font-size:13px;font-weight:800;padding:6px 10px;border-radius:10px;cursor:pointer}
+  .pr-sort .pr-month{margin-inline-start:auto}
   .dp-wrap .dp-paste{margin:0 0 14px}
   .dp-wrap .dp-paste textarea{margin-top:0;min-height:0}
   .dp-pbtn{align-items:center;flex-wrap:wrap}
@@ -2960,6 +2961,7 @@ window.openView=async function(v, sub){
 };
 function renderTrucks(){
   const area=el('trucksArea'); if(!area)return;
+  if((document.activeElement||{}).id==='tkMonth') return;   // the month list is open
   const t=TRUCKS;
   if(!t||!t.ok){ area.innerHTML='<div class="muted" style="font-size:13px;padding:10px 2px">Truck tracking data not available yet — pull the sheet.</div>'; return; }
   // a loaded truck's ES -> "CLIENT ELEMENT" from the plan (e.g. "TREST 10UJA"); unknown ES -> the ES itself
@@ -3017,7 +3019,6 @@ function renderTrucks(){
     const p=TRUCK_PROD, rows=p.rows||[];
     if(!rows.length) body='<div class="muted" style="font-size:13px;padding:10px 2px">Productivity data not available — check the "Productivity" tab in the trucks sheet.</div>';
     else{
-      const tot=k=>rows.reduce((s,r)=>s+(r[k]||0),0);
       const month=new Date().toLocaleString('en-US',{month:'long',year:'numeric'});
       // 🗓 today's trucks: the N with the LOWEST month-to-date m³ (so the ones that worked little get the work), never a
       // Breakdown truck (On hold is fine) — listed by number, with a Copy for the WhatsApp message
@@ -3054,24 +3055,30 @@ function renderTrucks(){
           <button class="btn sm alt" id="tpSheet" type="button" title="Copy the note column (Q) for all ${ORD.length} trucks, in the sheet's order — click the note cell of the first truck (${esc(ORD[0].truck)}) and paste">📋 Copy for the sheet</button>
           <div class="muted" style="font-size:11.5px;margin-top:4px">Paste in column <b>Q</b> (the note) on the row of truck ${esc(ORD[0].truck)} — ${ORD.length} rows: empty for today's, HOLD for the rest, Breakdown keeps its note. The ✓ and the number fill by themselves.</div></div>`:''}</div>`;
       // sorted by m³ (the sheet's first table) or by trips (its "Total Trips" table; else by the Trips column)
-      const byTr=prodSort==='trips', TO=p.tripOrder||[], tIdx=new Map(TO.map((o,i)=>[String(o.tm),i])), tOf=new Map(TO.map(o=>[String(o.tm),o.trips]));
+      // (a past month changes this table only — Trucks for today above always counts the current month)
+      const mons=prodMonths(), pastName=tkMonth?(mons.find(m=>m.v===tkMonth)||{}).label:'', q=tkMonth&&PRODHIST?truckHist(tkMonth):p, qr=q.rows;
+      if(tkMonth&&!PRODHIST&&!prodHistBusy&&!prodHistErr) loadProdHist();
+      const byTr=prodSort==='trips', TO=q.tripOrder||[], tIdx=new Map(TO.map((o,i)=>[String(o.tm),i])), tOf=new Map(TO.map(o=>[String(o.tm),o.trips]));
       const tripsOf=r=>tOf.has(String(r.tm))?tOf.get(String(r.tm)):r.trips;
-      const shownR=byTr?rows.slice().sort((a,b)=>(tIdx.has(String(a.tm))?tIdx.get(String(a.tm)):1e9)-(tIdx.has(String(b.tm))?tIdx.get(String(b.tm)):1e9)||tripsOf(b)-tripsOf(a)||b.q-a.q):rows;
-      const tbl=`<div class="pr-sort"><span class="muted">Sort by</span><button type="button" class="pr-sb${byTr?'':' on'}" data-ps="m3">m³ loaded</button><button type="button" class="pr-sb${byTr?' on':''}" data-ps="trips">Trips</button></div>
-        <div class="muted" style="font-size:12px;margin-bottom:8px">${month} · month to date · ${rows.length} truck mixers · most ${byTr?'trips':'m³'} first</div>
+      const shownR=byTr?qr.slice().sort((a,b)=>(tIdx.has(String(a.tm))?tIdx.get(String(a.tm)):1e9)-(tIdx.has(String(b.tm))?tIdx.get(String(b.tm)):1e9)||tripsOf(b)-tripsOf(a)||b.q-a.q):qr;
+      const qTot=k=>qr.reduce((s,r)=>s+(r[k]||0),0);
+      const tkBar=`<div class="pr-sort"><span class="muted">Sort by</span><button type="button" class="pr-sb${byTr?'':' on'}" data-ps="m3">m³ loaded</button><button type="button" class="pr-sb${byTr?' on':''}" data-ps="trips">Trips</button><select id="tkMonth" class="pr-month" aria-label="Month">${mons.map(m=>`<option value="${m.v}"${m.v===tkMonth?' selected':''}>${m.label}</option>`).join('')}</select></div>`;
+      const tbl=tkBar+(tkMonth&&!PRODHIST?(prodHistErr?`<div class="muted" style="font-size:13px;padding:10px 2px">Couldn't read the station tabs. <button class="btn" id="tkRetry">Try again</button></div>`
+          :`<div class="muted" style="font-size:13px;padding:10px 2px"><span class="spin"></span> Reading ${pastName} from the station tabs…</div>`)
+        :`<div class="muted" style="font-size:12px;margin-bottom:8px">${tkMonth?pastName:month+' · month to date'} · ${qr.length} truck mixers · most ${byTr?'trips':'m³'} first</div>
         <div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th>TM</th><th${byTr?'':' class="pr-on"'}>Loaded (m³)</th><th${byTr?' class="pr-on"':''}>Trips</th><th>Not fully loaded</th>${p.plants.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead>
+        <thead><tr><th>#</th><th>TM</th><th${byTr?'':' class="pr-on"'}>Loaded (m³)</th><th${byTr?' class="pr-on"':''}>Trips</th><th>Not fully loaded</th>${q.plants.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead>
         <tbody>${shownR.map((r,i)=>`<tr>
           <td class="num muted">${i+1}</td>
           <td style="font-family:var(--mono);font-weight:800">${esc(r.tm)}</td>
           <td class="num" style="font-weight:${byTr?500:800}">${fmt(r.q,0)}</td>
           <td class="num" style="font-weight:${byTr?800:500}">${fmt(tripsOf(r),0)}</td>
           <td class="num" style="color:${r.partial>0?'var(--amber)':'var(--faint)'}">${fmt(r.partial,0)}</td>
-          ${p.plants.map((n,j)=>`<td class="num muted">${r.byPlant&&r.byPlant[j]!=null?fmt(r.byPlant[j],0):'—'}</td>`).join('')}
+          ${q.plants.map((n,j)=>`<td class="num muted">${r.byPlant&&r.byPlant[j]!=null?fmt(r.byPlant[j],0):'—'}</td>`).join('')}
         </tr>`).join('')}
-        <tr style="font-weight:800"><td></td><td>Total</td><td class="num">${fmt(tot('q'),0)}</td><td class="num">${fmt(tot('trips'),0)}</td><td class="num">${fmt(tot('partial'),0)}</td>
-          ${p.plants.map((n,j)=>`<td class="num">${fmt(rows.reduce((s,r)=>s+((r.byPlant&&r.byPlant[j])||0),0),0)}</td>`).join('')}</tr>
-        </tbody></table></div>`;
+        <tr style="font-weight:800"><td></td><td>Total</td><td class="num">${fmt(qTot('q'),0)}</td><td class="num">${fmt(qTot('trips'),0)}</td><td class="num">${fmt(qTot('partial'),0)}</td>
+          ${q.plants.map((n,j)=>`<td class="num">${fmt(qr.reduce((s,r)=>s+((r.byPlant&&r.byPlant[j])||0),0),0)}</td>`).join('')}</tr>
+        </tbody></table></div>`);
       body=truckTab==='plan'?tpBox:tbl;
     }
   } else if(truckTab==='loaded'){
@@ -3121,6 +3128,8 @@ function renderTrucks(){
   }
   area.innerHTML=counts+tabs+body;
   area.querySelectorAll('.pr-sb').forEach(b=>b.addEventListener('click',()=>{ prodSort=b.dataset.ps; try{ localStorage.setItem('cmpour:prodsort',prodSort); }catch(e){} renderTrucks(); }));
+  { const ms=el('tkMonth'); if(ms) ms.addEventListener('change',()=>{ tkMonth=ms.value; ms.blur(); renderTrucks(); });
+    const rt=el('tkRetry'); if(rt) rt.addEventListener('click',()=>{ prodHistErr=false; renderTrucks(); }); }
   { const ni=el('tpN'); if(ni) ni.addEventListener('change',async()=>{ planN=Math.max(1,parseInt(ni.value)||15);
       PUMPNOTE['TPN']=String(planN); stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPN',String(planN)); });
     const mixersTxt=n=>n===1?'خلاطة واحدة':n===2?'خلاطتين':n<=10?n+' خلاطات':n+' خلاطة';
@@ -4993,7 +5002,7 @@ function parseProdTable(rows, titleRe){
    when a past month is picked, and kept until the app is closed. */
 const PROD_RAW=[['L1','1986911208'],['L2','209421387'],['V3','429772700'],['V4','1305687134'],['V5','921955628']];
 const PROD_MONS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-let prodMonth='', PRODHIST=null, prodHistBusy=false, prodHistErr=false;   // prodMonth '' = current month, the default
+let prodMonth='', tkMonth='', PRODHIST=null, prodHistBusy=false, prodHistErr=false;   // Production / Trucks Productivity month: '' = current month, the default
 function prodMonths(){ const n=new Date(), out=[];
   for(let y=n.getFullYear(),m=n.getMonth();y>2025||(y===2025&&m>=4);m--){ if(m<0){ m=11; y--; }
     out.push({v:out.length?`${y}-${pad(m+1)}`:'', label:`${PROD_MONS[m]} ${y}`}); }
@@ -5004,24 +5013,32 @@ async function loadProdHist(){
     const id=el('sheetId').value.trim(), EXCL=/waste|rejected\s*&?\s*transferred|مرفوض|هالك/i, h={};
     const csvs=await Promise.all(PROD_RAW.map(async p=>{ const r=await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${p[1]}`,{cache:'no-store'});
       if(!r.ok) throw new Error('tab '+p[0]); return r.text(); }));
-    const add=(w,t,k,q)=>{ const d=new Date(t), ym=d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1), n=d.getUTCDate(), o=h[ym]||(h[ym]=[{},{}]);
+    const add=(w,t,k,q)=>{ const d=new Date(t), ym=d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1), n=d.getUTCDate(), o=h[ym]||(h[ym]=[{},{},{}]);
       (o[w][n]||(o[w][n]=[0,0,0,0,0]))[k]+=q; };   // UTC only so the 8-hour shift never crosses a clock change
     csvs.forEach((txt,k)=>{ const rows=txt.split(/\r?\n/).map(parseCsvLine);
       const hr=rows.slice(0,5).findIndex(x=>x.some(c=>/^departure/i.test(c.trim()))); if(hr<0) throw new Error('no header');
       const fi=re=>rows[hr].findIndex(c=>re.test(c.trim())), c={date:fi(/^date$/i), tk:fi(/truck/i), q:fi(/qm3/i), dep:fi(/^departure/i), fu:fi(/^follow/i)};
       if(Object.values(c).some(i=>i<0)) throw new Error('no columns');
-      for(let i=hr+1;i<rows.length;i++){ const x=rows[i];
-        if(!String(x[c.tk]||'').trim()) continue;
+      for(let i=hr+1;i<rows.length;i++){ const x=rows[i], tk=String(x[c.tk]||'').trim();
+        if(!tk) continue;
         const d=String(x[c.date]||'').trim().match(/^(\d+)\/(\d+)\/(\d{4})$/), t=String(x[c.dep]||'').trim().match(/^(\d+):(\d+)(?::\d+)?\s*([AP])M$/i);
-        if(!d||!t) continue;
-        const q=Number(String(x[c.q]||'').replace(/,/g,'')); if(!q) continue;
+        if(!d) continue;
+        const q=Number(String(x[c.q]||'').replace(/,/g,''))||0;
+        // per truck, like the "Productivity" tab: by the Date column, every trip counted (rejected too)
+        if(+tk>0){ const ym=d[3]+'-'+pad(+d[1]), o=h[ym]||(h[ym]=[{},{},{}]), r=o[2][tk]||(o[2][tk]={tm:tk,q:0,trips:0,partial:0,byPlant:[0,0,0,0,0]});
+          r.q+=q; r.trips++; r.byPlant[k]++; if(q>0&&q<10) r.partial++; }
+        if(!t||!q) continue;
         if(EXCL.test(String(x[c.fu]||''))) continue;
         const at=Date.UTC(+d[3],d[1]-1,+d[2],t[1]%12+(/p/i.test(t[3])?12:0),+t[2]);
         add(0,at-8*3600000,k,q); add(1,at,k,q); } });
     PRODHIST=h;
   }catch(e){ prodHistErr=true; }
-  prodHistBusy=false; if(view==='production') renderProduction();
+  prodHistBusy=false; if(view==='production') renderProduction(); if(view==='trucks') renderTrucks();
 }
+// one month of the truck mixers table, in the same shape as TRUCK_PROD
+function truckHist(ym){ const src=(PRODHIST[ym]||[])[2]||{};
+  return {plants:['Liebherr 1','Liebherr 2','Vurmak 3','Vurmak 4','Vurmak 5'], tripOrder:[],
+    rows:Object.values(src).map(r=>Object.assign({},r,{byPlant:r.byPlant.map(v=>v||null)})).sort((a,b)=>b.q-a.q)}; }
 // one month in the same shape as parseProdTable: w 0 = 8 AM : 8 AM, 1 = 12 AM : 12 AM. Empty stations show — like the sheet
 function prodHistTbl(ym,w){ const [y,m]=ym.split('-').map(Number), src=(PRODHIST[ym]||[{},{}])[w], tot=[0,0,0,0,0], days=[], sum=a=>a.reduce((s,v)=>s+v,0), nz=a=>a.map(v=>v||null);
   for(let n=1;n<=new Date(y,m,0).getDate();n++){ const a=src[n]||[0,0,0,0,0]; a.forEach((v,i)=>tot[i]+=v);
