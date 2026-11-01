@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000015">
+<meta name="app-build" content="20261102-000016">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5121,7 +5121,8 @@ function dpCompare(s,m){
     if(o){ o.q+=L.q; o.n+=L.n; o.trucks=o.trucks.concat(L.trucks||[]); } else exBy.set(k,{...L, code:k, trucks:(L.trucks||[]).slice()}); });
   const extra=[...exBy.values()].concat(unk.filter(u=>!u.used));
   // same element twice in the sheet (not in the message) -> one line each is fine
-  return {rows, extra, start:{mq:m.start, sq:s.start}, total:{mq:m.total, sq:s.total}};
+  // the message's total = its Total line, else its lines added up (as the All stations table does) — not "no message"
+  return {rows, extra, start:{mq:m.start, sq:s.start}, total:{mq:m.total!=null?m.total:m.lines.reduce((a,l)=>a+l.q,0), sq:s.total}};
 }
 const fq=v=>fmt(v,Math.abs(v-Math.round(v))>=0.05?1:0);   // 35.5 stays 35.5, 36 stays 36
 function dpHtml(){
