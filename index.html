@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000016">
+<meta name="app-build" content="20261102-000017">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3404,16 +3404,21 @@ const KEY_HOLDSEEN='cmpour:holdseen';
 let HOLDSEEN={};
 // how long a loaded truck has been out (the sheet's "Time Elapsed", H:MM) -> minutes, or null
 const outMins=x=>{ const m=String(x.elapsed||'').trim().match(/^(-?)(\d+):(\d{1,2})/); return m?(m[1]?0:(+m[2])*60+(+m[3])):null; };
-// the day the truck LEFT (now − time out): a departure written as a time only gets it, so the same trip keeps the
-// same id every day (a Skip stays) and the same truck at the same minute another day is a new one
-const depDay=x=>{ const mn=outMins(x), d=new Date(Date.now()-(mn||0)*60000); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
-const holdId=x=>`${x.flag==='down'?'down':'hold'}|${x.truck}|${x.dep}${/\d{4}|\d{1,2}\/\d{1,2}/.test(String(x.dep||''))?'':'#'+depDay(x)}`;
 const HOLD_FRESH=3*60;   // only a trip out for 3 h or less is a new sighting — an older one still "loaded" in the sheet is stale
-function rememberHolds(){ let ch=false;
-  for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold'||x.flag==='down')){ const id=holdId(x), mn=outMins(x);
-    if(!HOLDSEEN[id] && (mn==null||mn<=HOLD_FRESH)){ HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flag:x.flag, flagNote:x.flagNote||'', seen:Date.now()}; ch=true; } }
-  for(const id in HOLDSEEN){ if(SKIP[id] && Date.now()-HOLDSEEN[id].seen>7*86400000){ delete HOLDSEEN[id]; ch=true; } }   // skipped + a week old
-  if(ch) stSet(KEY_HOLDSEEN,HOLDSEEN); }
+// One trip = one alert with ONE id for good: flag | truck | departure (the sheet writes the departure as a time only).
+// While the sheet lists it, it is the same trip — whatever day it is, whether the app was open or not, and whatever its
+// "time out" says (that clock goes round every 24 h). Its Skip is kept under that id. (The same truck leaving at the
+// very same minute another day would count as the same trip — rare.) A trip first seen 3 h or more after it left is
+// stale sheet data, not a new event: no alert.
+const holdKey=x=>`${x.flag==='down'?'down':'hold'}|${x.truck}|${x.dep}`;
+function rememberHolds(){ let ch=false; const now=Date.now();
+  for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold'||x.flag==='down')){ const id=holdKey(x), e=HOLDSEEN[id];
+    if(e){ if(now-(e.last||0)>5*60000){ e.last=now; ch=true; } continue; }   // the same trip, still listed
+    const mn=outMins(x); if(mn!=null && mn>HOLD_FRESH) continue;
+    HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flag:x.flag, flagNote:x.flagNote||'', seen:now, last:now}; ch=true; }
+  // forgotten only when skipped, a week old and off the loaded list for a day (its Skip goes with it)
+  for(const id in HOLDSEEN){ const e=HOLDSEEN[id]; if(SKIP[id] && now-e.seen>7*86400000 && now-(e.last||e.seen)>86400000){ delete HOLDSEEN[id]; delete SKIP[id]; ch=true; } }
+  if(ch){ stSet(KEY_HOLDSEEN,HOLDSEEN); stSet(KEY_SKIP,SKIP); } }
 let showSkipped=false;
 const gapId=(p,r)=>`gap|${p.key}|${r.l.t}`;
 const flagId=(p,l,f)=>`f|${f}|${p.key}|${l.k}|${l.t}`;
@@ -3670,9 +3675,9 @@ function collectChecks(pours){
         det:`More than 3 hours since it left${x.dep?' at '+esc(x.dep):''} — call the driver / the site`}}); }
   // a truck the user put ON HOLD (parked on purpose) or marked BREAKDOWN that has been loaded anyway
   rememberHolds();
-  for(const x of Object.values(HOLDSEEN)){ const st=esc(x.plant||''), site=x.es?(()=>{ const n=esName(x.es); return n&&n.k?(n.c?n.c+' ':'')+n.k:'ES '+x.es; })():'';
+  for(const [hid,x] of Object.entries(HOLDSEEN)){ const st=esc(x.plant||''), site=x.es?(()=>{ const n=esName(x.es); return n&&n.k?(n.c?n.c+' ':'')+n.k:'ES '+x.es; })():'';
     const dn=x.flag==='down', ST=dn?'BREAKDOWN':'ON HOLD';
-    items.push({id:holdId(x), kind:dn?'Breakdown truck loaded':'Hold truck loaded', cls:'rejd',
+    items.push({id:hid, kind:dn?'Breakdown truck loaded':'Hold truck loaded', cls:'rejd',
       txt:`TM ${esc(x.truck)} is ${ST} but was loaded${st?' at '+st:''}${x.dep?' · '+esc(x.dep):''}${x.q?' · '+fmt(x.q,0)+' m³':''}${site?' · '+esc(site):''}`,
       ui:{sev:'red', icon:dn?'🔧':'⏸', head:`${ST} truck loaded`, tags:[CT('TM '+esc(x.truck),'tk'), ...(st?[CT(st,'st')]:[]), ...(x.q?[CT(fmt(x.q,0)+' m³')]:[]), ...(site?[CT(esc(site),'el')]:[])],
         det:`${dn?'You marked it broken down':'You put it on hold'}${x.flagNote?' ('+esc(x.flagNote)+')':''} — it left the plant${x.dep?' at '+esc(x.dep):''}`}}); }
@@ -5576,13 +5581,13 @@ function requireAuth(){
   // ids keyed by the day they were SEEN (build 2026-10-29) made one trip a new alert every day: the copies of one trip
   // become ONE alert again (kept until it is skipped — user's rule), skipped if any copy was
   { const by=new Map(); let ch=false;
-    for(const k of Object.keys(HOLDSEEN)){ const m=k.match(/^(.*)@\d{4}-\d{2}-\d{2}$/); if(!m) continue;
+    for(const k of Object.keys(HOLDSEEN)){ const m=k.match(/^(.*)[@#]\d{4}-\d{2}-\d{2}$/); if(!m) continue;
       const e=HOLDSEEN[k], o=by.get(m[1]); if(!o||e.seen<o.e.seen) by.set(m[1],{e, sk:(o&&o.sk)||SKIP[k]}); else if(SKIP[k]) o.sk=o.sk||SKIP[k];
       delete HOLDSEEN[k]; delete SKIP[k]; ch=true; }
-    for(const [base,{e,sk}] of by){ const d=new Date(e.seen), nk=`${base}#${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-      if(!HOLDSEEN[nk]) HOLDSEEN[nk]=e; if(sk) SKIP[nk]=sk; }
+    for(const [base,{e,sk}] of by){ if(!HOLDSEEN[base]) HOLDSEEN[base]=e; if(sk) SKIP[base]=sk; }
+    for(const k in HOLDSEEN) if(!HOLDSEEN[k].last){ HOLDSEEN[k].last=Date.now(); ch=true; }   // (copies kept before "last" existed)
     if(ch){ stSet(KEY_HOLDSEEN,HOLDSEEN); stSet(KEY_SKIP,SKIP); } }
-  for(const k in SKIP){ if(Date.now()-SKIP[k]>7*86400000) delete SKIP[k]; }   // reviewed-check marks expire after a week
+  for(const k in SKIP){ if(/^(hold|down)\|/.test(k)) continue; if(Date.now()-SKIP[k]>7*86400000) delete SKIP[k]; }   // reviewed-check marks expire after a week (a hold / breakdown truck's goes with its alert)
   const savedCfg=await stGet(KEY_CFG);
   if(savedCfg){
     if(savedCfg.sheetId)el('sheetId').value=savedCfg.sheetId;
