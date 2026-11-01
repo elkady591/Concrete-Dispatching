@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000006">
+<meta name="app-build" content="20261102-000015">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -739,6 +739,18 @@
   .uc-snd.on{color:#0b1020;background:var(--cyan);border:1px solid var(--cyan)}
   .uc-snd.no{opacity:.55;border-style:solid;border-color:rgba(251,113,133,.45);color:var(--rose);cursor:not-allowed}
   .uc-snd.no small{font-weight:600}
+  .uc-spr,.pm-spr{font-size:12.5px;font-weight:700;color:var(--cyan);margin-top:4px}
+  .uc-spw{margin-top:6px}
+  .uc-spu,.uc-spo,.uc-spx{font:inherit;font-size:12px;font-weight:800;color:var(--accent);background:transparent;border:1px dashed var(--accent);border-radius:99px;padding:3px 10px;cursor:pointer}
+  .uc-spo.on{border-style:solid}
+  .uc-spu{font-family:var(--mono);border-style:solid}
+  .uc-spx{color:var(--muted);border-color:var(--line2);margin-inline-start:6px;padding:1px 8px}
+  .uc-spp{margin-top:6px;padding:8px 10px;border:1px solid var(--line2);border-radius:12px}
+  .uc-spp-h{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .uc-spp-r{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0}
+  .uc-spp-n{font-size:12.5px;font-weight:800;margin-inline-end:4px}
+  .uc-spn{font:inherit;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:1px dashed var(--line2);border-radius:99px;padding:3px 10px;cursor:pointer}
+  .uc-spp-off{font-size:12px;color:var(--muted)}
   .uc-late{font-family:inherit;font-size:12px;font-weight:800;color:#fb923c;border:1px solid rgba(251,146,60,.5);background:rgba(251,146,60,.1);border-radius:99px;padding:1px 9px}
   .vtab .pm-alert{color:#fb923c;margin-inline-start:4px}
   .pm-chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -1108,6 +1120,10 @@
   .ptl-bar.done,.ptl-bar.stop{background:rgba(148,163,184,.28);color:var(--ink,inherit)}
   .ptl-bar.plan{background:repeating-linear-gradient(45deg,rgba(167,139,250,.32) 0 6px,rgba(167,139,250,.14) 6px 12px);border:1.5px dashed var(--violet)}
   .ptl-bar.plan.late{background:repeating-linear-gradient(45deg,rgba(251,191,36,.35) 0 6px,rgba(251,191,36,.14) 6px 12px);border-color:var(--amber)}
+  .ptl-bar.plan.chn:not(.late){background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--chc) 34%,transparent) 0 6px,color-mix(in srgb,var(--chc) 16%,transparent) 6px 12px);border-color:var(--chc)}
+  .ptl-bar.run.chn{background:color-mix(in srgb,var(--chc) 35%,transparent)}
+  .ptl-bar.run.chn .ptl-done{background:var(--chc)}
+  .ptl-free.pl{border:0;background:transparent}
   .ptl-bar.clash{box-shadow:0 0 0 2px var(--rose) inset}
   .ptl-bar.wash{background:repeating-linear-gradient(45deg,rgba(251,146,60,.32) 0 6px,rgba(251,146,60,.12) 6px 12px);border:1.5px solid #fb923c;color:#fdba74}
   .ptl-sep{height:24px;border-top:2px solid var(--line2)}.ptl-sep .ptl-lab{font-size:10px;color:var(--faint);letter-spacing:.08em}
@@ -2375,6 +2391,19 @@ function pumpFam(g){ return String(g.client||'').trim().toLowerCase()+'|'+
 // "Available now" pressed on a busy/washing pump: stored as PUMPNOTE['r<i>'] = ms. It frees the pump from
 // that moment — but only for the pour it was on; a truck that loads AFTER the press (a top-up) cancels it.
 function pumpRelease(i){ const v=+String(PUMPNOTE['r'+i]||'').trim(); return v>0?v:0; }
+// A SPARE taken from a running pour for another request (the "Use … spare of …" button on the Upcoming card): it never
+// poured, so it needs no washing. PUMPNOTE['SP|<request id>'] = JSON [{i: pump index, from: pour key, name: pour name, at, by}]
+const spareKey=g=>'SP|'+(g.esId||g.key);
+function pumpSpares(g){ try{ const v=JSON.parse(PUMPNOTE[spareKey(g)]||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+const pumpCode=i=>`${PUMPS[i]}${PUMPS.filter(L=>L===PUMPS[i]).length>1?' #'+PUMPS.slice(0,+i+1).filter(L=>L===PUMPS[i]).length:''}`;   // "63 #2": the same names as the timeline
+let spareOpen=null;   // the Upcoming card whose "Use a spare" list is open (its spareKey, encoded)
+// "No spare" pressed for a running pour: PUMPNOTE['NS|<request id>'] = '1' — it leaves the spare lists of every card
+const noSpareKey=g=>'NS|'+(g.esId||g.key), noSpare=g=>!!PUMPNOTE[noSpareKey(g)];
+// pump index -> its record + to (the request taking it)
+function allSpares(){ const out=new Map(); for(const g of (VD.summary||[])) for(const r of pumpSpares(g)) out.set(+r.i,Object.assign({to:g},r)); return out; }
+// on the card of the pour it was taken from
+function spareOutHtml(g){ return [...allSpares().entries()].filter(([i,r])=>String(r.from)===String(g.key)&&(r.to.trucks===0||!pourDone(r.to)))
+  .map(([i,r])=>`<div class="uc-spr">🔁 <b>${pumpCode(i)}</b> (spare) moved to <b>${esc((r.to.client?r.to.client+' ':'')+r.to.elem)}</b></div>`).join(''); }
 const UNDO_FREE=30*60000;   // the ↶ Undo next to a freed pump stays this long after the ✓
 
 // Pumps already SENT to a request's site before its first truck (they drive there and set up first):
@@ -2470,13 +2499,17 @@ function pumpPlan(now){
   // a finished pour whose chain sibling (same client + element) has not started yet keeps its pumps on site
   // ("Waiting · next …") — the 2 h washing starts only after the LAST request of the chain
   const nextOf=new Map(); for(const g of (VD.upcoming||[])){ if(g.trucks===0){ const f=SF(g); if(!nextOf.has(f)) nextOf.set(f,g); } }
+  const SP=allSpares();
   for(const p of pours){
     const need=p.items.map(x=>x.len), got=[], missing=[];
     for(const {len,at} of p.items){
       const ok=j=>!got.includes(j) && !pumpBroken(j,at) &&
         busy[j].every(b=>(b.free!=null && b.free<=at) || b.p.fam===p.fam);
-      // first the pumps its sibling (same client + element) is holding, then the first free one in order
-      let i=PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>at)));
+      // the spare chosen for it leaves its pour at this moment; else first the pumps its sibling (same client + element)
+      // is holding, then the first free one in order
+      const sr=pumpSpares(p.g).find(r=>PUMPS[r.i]===len && !got.includes(+r.i) && !pumpBroken(+r.i,at));
+      if(sr) busy[+sr.i].forEach(b=>{ if(b.p.fam!==p.fam && (b.free==null||b.free>at)) b.free=at; });
+      let i=sr?+sr.i:PUMPS.findIndex((L,j)=>L===len && ok(j) && busy[j].some(b=>b.p.fam===p.fam && (b.free==null||b.free>at)));
       if(i<0) i=PUMPS.findIndex((L,j)=>L===len && ok(j));
       // none free, but the pour has STARTED (or its pumps were sent): the pump is obviously there, so its washing
       // ended early — take the washing one of that length that would be free first, and end its washing at this moment.
@@ -2490,12 +2523,13 @@ function pumpPlan(now){
         if(best>=0){ busy[best].forEach(b=>{ if(b.end!=null && b.free!=null && b.free>at) b.free=at; }); i=best; }
       }
       if(i<0){ missing.push(len); continue; }
-      const hold=p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
-      let free=p.end==null||hold?null:p.end+WASH;
+      const spr=SP.get(i), isSp=!!spr && spr.to!==p.g && String(spr.from)===String(p.g.key);   // this pump is this pour's spare, taken: no washing, no chain
+      const hold=!isSp && p.end!=null && !p.setup && nextOf.has(p.fam) ? nextOf.get(p.fam) : null;
+      let free=isSp?p.end:p.end==null||hold?null:p.end+WASH;
       // "Available now": on a pour still running it frees THIS pump at once (a spare pulled out and sent elsewhere —
       // the pour goes on with its other pumps); on a finished pour a top-up truck after the press cancels it
       const rel=pumpRelease(i); if(rel && rel>=at && (p.end==null || rel>=p.last)) free=free==null?rel:Math.min(free,rel);
-      got.push(i); busy[i].push({start:at, free, end:p.end, p, hold});
+      got.push(i); busy[i].push({start:at, free, end:p.end, p, hold, spare:isSp?spr:null});
     }
     byPour.set(p.g,{need,got,missing,start:p.start,end:p.end});
   }
@@ -2511,7 +2545,8 @@ function pumpPlan(now){
   const freeOf=b=>{
     if(b.hold && b.free==null){ if(!ahead) return null;   // kept on site for the next of its chain: it starts now (or at its time)
       const c=chainEnd(b.p.fam,Date.now()); return c==null?null:c+WASH; }
-    if(b.p.setup){ if(!ahead||b.free!=null) return b.free; return sentPour(b.p.g,b.start,Date.now()).pe+WASH; }
+    if(b.p.setup){ if(!ahead||b.free!=null) return b.free; const c=chainEnd(b.p.fam,Date.now());   // (it stays for the rest of its chain)
+      return (c!=null?c:sentPour(b.p.g,b.start,Date.now()).pe)+WASH; }
     if(b.free!=null||!ahead||b.end!=null) return b.free;
     const g=b.p.g, e=g.finishAvg!=null?g.finishAvg:g.finishTgt; if(e==null) return null;
     const c=chainEnd(b.p.fam,Math.max(e,Date.now())); return c==null?null:c+WASH; };
@@ -2528,7 +2563,9 @@ function pumpPlan(now){
       else if(ahead&&cur.end!=null&&now<cur.end){ st='on'; until=cur.free; }   // still pouring then (expected end later)
       else { st='wash'; until=cur.free; } }
     if(note && st==='free') st='down';
-    return {i,len,st,pour,until,note,code,setup,next};
+    // chosen as a spare and not finished with: {to, name} for the pump's label
+    const sp0=SP.get(i), spare=sp0&&(sp0.to.trucks===0||!pourDone(sp0.to))&&(st==='free'||pour===sp0.to||(pour&&String(pour.key)===String(sp0.from)))?sp0:null;
+    return {i,len,st,pour,until,note,code,setup,next,spare};
   });
   // operators: the busy pumps keep theirs; what is left goes to the free pumps BIGGEST first (63 → 59 → 56 → 48),
   // the rest have none
@@ -2545,7 +2582,8 @@ const PUMP_SEND_LATE=30*60000, PUMP_LOAD_AFTER=90*60000;
 // when a not-started request's POUR (first truck) begins, from its time t (requestTimes): with pumps and its own time
 // = t + 1½ h (the time is for sending the pumps); "after …" estimates and requests without pumps = t itself
 // (after the previous one of its chain finished = its pumps are already on site: no 1½ h)
-const pourStartAt=(g,t)=>t?t.at+(!t.est&&!t.afterDone&&pumpReq(g.pumps).length?PUMP_LOAD_AFTER:0):null;
+// (stationary / spider pumps only count the same: "(4.4)-(4.6)-Spider" at 8:00 = the plants start ≈9:30)
+const pourStartAt=(g,t)=>t?t.at+(!t.est&&!t.afterDone&&(pumpReq(g.pumps).length||isSiteP(g.pumps))?PUMP_LOAD_AFTER:0):null;
 // pumps SENT to a request that has no truck yet: its pour starts about 1½ h after they left (or at its own pour time if
 // later; never before now) and lasts quantity ÷ rate (1 h when unknown) -> {ps, pe}
 const firstSentAt=g=>{ const s=pumpSent(g); return s.length?Math.min(...s.map(x=>x.t)):null; };
@@ -2553,15 +2591,24 @@ const firstSentAt=g=>{ const s=pumpSent(g); return s.length?Math.min(...s.map(x=
 // pumps are already on site): {send: its time, load: the first truck due = 1½ h after the pumps left (after its time
 // if not sent yet)} — else null (then its time is simply when it starts)
 function pumpTimes(g,t){ if(!t||t.est||t.afterDone||!pumpReq(g.pumps).length) return null;
-  const fs=firstSentAt(g); return {send:t.at, load:Math.max(t.at, fs!=null?fs:t.at)+PUMP_LOAD_AFTER, sent:fs!=null}; }
+  const fs=firstSentAt(g), load=Math.max(t.at, fs!=null?fs:t.at)+PUMP_LOAD_AFTER; return {send:t.at, load:fs!=null?Math.max(load,sibRunEnd(g)):load, sent:fs!=null}; }
 // minutes late of a not-started request (0 = not late): pumps not sent 30 min after its time / no truck after the
 // load time / (no pumps to send) not started 30 min after its time
 function lateMins(g,t,now){ if(!t||t.est||g.trucks>0) return 0; const pt=pumpTimes(g,t);
   if(pt) return !pt.sent?(now-t.at>=PUMP_SEND_LATE?Math.round((now-t.at)/60000):0):(now>=pt.load?Math.round((now-pt.load)/60000):0);
-  return now-t.at>=LATE_START?Math.round((now-t.at)/60000):0; }
+  const due=pourStartAt(g,t); return now-due>=LATE_START?Math.round((now-due)/60000):0; }
 // (tt = its time when the caller has it — requestTimes itself passes it, else this would call requestTimes in a loop)
+// the end of a sibling (same pumps on the same site) that is pouring NOW — it may have started before this one, out of
+// the plan's order: the pumps are on it, this one comes after it (0 = none)
+function sibRunEnd(g){ const SF=pumpShareFam(), f=SF(g); let e=0;
+  for(const h of (VD.summary||[])) if(h!==g&&h.trucks>0&&!pourDone(h)&&SF(h)===f){ const x=h.finishAvg!=null?h.finishAvg:h.finishTgt; if(x>e) e=x; }
+  return e; }
 function sentPour(g,sentAt,now,tt){ const t=tt!==undefined?tt:requestTimes().get(g), q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate;
-  const ps=Math.max(now, sentAt+PUMP_LOAD_AFTER, t&&!t.est?pourStartAt(g,t):0); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
+  // an "after …" request never starts before the one it waits for. Next of its chain with pumps already on site: it starts
+  // right after it with those; a pump added to it just joins them, the pour does not wait for it
+  // (the one before already finished, same thing: the pumps not marked sent are the ones still there)
+  const onSite=t&&(t.after?pumpFam(t.after)===pumpFam(g)&&pumpReq(g.pumps).some(L=>pumpReq(t.after.pumps).includes(L)):t.afterDone&&pumpSent(g).length<pumpReq(g.pumps).length);
+  const ps=Math.max(sibRunEnd(g), onSite?Math.max(now,t.at):Math.max(now, sentAt+PUMP_LOAD_AFTER, t?(t.est?t.at:pourStartAt(g,t)):0)); return {ps, pe:ps+(q>0&&r>0?q/r*3600000:3600000)}; }
 // plan row + plan index of every pour (same matching everywhere: ES first, else code / split base)
 function planRowsOf(){
   const out=new Map(), used=new Set();
@@ -2658,9 +2705,10 @@ function requestTimes(){
 // -> Map(pour -> {cls:'ok'|'warn'|'bad', html})
 function upcomingPumpCheck(now){
   now=now||Date.now();
-  const base=pumpPlan(now).state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
+  const PPn=pumpPlan(now), base=PPn.state, claimed=new Map(), out=new Map();   // pump -> family of the request that took it
   const picks=new Map(); out.picks=picks;   // request -> the pump indexes it gets (for the timeline)
   const short=new Map(); out.short=short;   // request -> the pumps it asks for but an earlier request has then (the timeline shows the clash)
+  const toSend=new Map(); out.toSend=toSend;   // request -> the lengths that are NOT already on site with its chain (a pump added to a request that carries on)
   const claimedBy=new Map();   // pump -> the (earlier) request that took it
   // …until when: that request's pour end + the washing — a later request may have the pump after it (no rate = all day)
   const claimedTill=new Map(), WASHc=washHours()*3600000;
@@ -2679,13 +2727,19 @@ function upcomingPumpCheck(now){
   const list=(VD.upcoming||[]).map(g=>{ const at=(RT.get(g)||{}).at; return {g,i:rowOf(g),t:at!=null?at:now,u:at==null?1:0}; })
     .sort((a,b)=>(a.t-b.t)||(a.u-b.u)||(a.i-b.i)).map(x=>x.g);
   const site=g=>(g.client?g.client+' ':'')+g.elem;
+  const RS=new Map(), shortOf=new Map();   // pump chosen as a spare -> the request it waits for · request -> the lengths it is short of
+  for(const g of (VD.upcoming||[])) for(const r of pumpSpares(g)) RS.set(+r.i,g);
   for(const g of list){
     const need=pumpReq(g.pumps); if(!need.length) continue;
     const fam=SF(g), got=new Set(), res=[], state=stateFor(g);   // per requested pump: {len, kind, s}
     for(const len of need){
+      // the spare chosen for it: that pump, whatever it is doing now
+      const sr=pumpSpares(g).find(r=>PUMPS[r.i]===len && !got.has(+r.i) && !pumpBroken(+r.i)), srS=sr&&state.find(s=>s.i===+sr.i);
+      if(srS){ got.add(srS.i); claimed.set(srS.i,fam); claimedBy.set(srS.i,g); claimedTill.set(srS.i,tillOf(g));
+        res.push({len, kind:srS.pour===g?'sent':'ok', s:srS}); continue; }
       // (a pump already SENT to another request — setting up there — is that request's; not up for grabs)
       const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!held(s.i,g) || claimed.get(s.i)===fam)
-        && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam));
+        && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam) && !(RS.has(s.i) && SF(RS.get(s.i))!==fam));   // (a spare stays with the whole chain of its request)
       // a pump on / washing after the same client + element = this request just carries on with it
       const own=s=>s.pour===g;                       // already sent to this request
       const sib=s=>!own(s) && !s.note && s.pour && SF(s.pour)===fam && (s.st==='on'||s.st==='wash');
@@ -2705,12 +2759,17 @@ function upcomingPumpCheck(now){
       res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
+    // a pump marked sent to it stays "sent" also while it is on a sibling of the same site (a sibling started first)
+    const snt=pumpSent(g).map(x=>x.len); res.forEach(r=>{ const j=snt.indexOf(r.len); if(j>=0&&(r.kind==='sent'||r.kind==='same'||r.kind==='ok')){ snt.splice(j,1); r.kind='sent'; } });
     picks.set(g,res.filter(r=>r.s&&r.kind!=='taken'&&r.kind!=='none'&&r.kind!=='down').map(r=>r.s.i));
     short.set(g,res.filter(r=>r.kind==='taken').map(r=>r.s.i));
+    toSend.set(g,res.filter(r=>r.kind!=='same').map(r=>r.len));
     const bad=res.filter(r=>r.kind!=='ok' && r.kind!=='same' && r.kind!=='sent');
+    shortOf.set(g,bad.map(r=>r.len));
     if(res.every(r=>r.kind==='sent')){ out.set(g,{cls:'ok', html:`Pumps sent: <b>${esc(allPumpsLabel(g,need))}</b> — setting up`}); continue; }
     if(!bad.length){ const sameOn=res.find(r=>r.kind==='same');
-      if(sameOn){ out.set(g,{cls:'ok', html:`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(allPumpsLabel(g,need))}</b>`}); continue; }
+      if(sameOn){ const lens=k=>res.filter(r=>k(r.kind)).map(r=>r.len), add=lens(k=>k==='ok'), gone=lens(k=>k==='sent');   // a pump added to it is not "the same": it has to be sent
+        out.set(g,{cls:'ok', html:`Continues after <b>${esc(sameOn.after)}</b> with the same pumps: <b>${esc(allPumpsLabel(g,lens(k=>k==='same')))}</b>${add.length?`<br>+ New pump to send: <b>${esc(pumpLabel(add))}</b>`:''}${gone.length?`<br>+ <b>${esc(pumpLabel(gone))}</b> sent — joins them`:''}`}); continue; }
       // a timed request is checked with the pumps as they will be AT its time: say so, and what the ones that are
       // not free yet are doing now (else "ready" next to "no free" chips reads as a contradiction)
       const t=RT.get(g), later=state!==base, busy=later?res.map(r=>({r, n:base.find(x=>x.i===r.s.i)})).filter(o=>o.n&&!(o.n.st==='free'&&!o.n.noop)):[];
@@ -2728,6 +2787,22 @@ function upcomingPumpCheck(now){
       return rs.length>1 ? `${L}: ${okN} of ${rs.length} free · ${uniq}` : `${L} ${uniq}`; });
     out.set(g,{cls:bad.every(r=>r.kind==='wash'||r.kind==='taken')?'warn':'bad', html:parts.join('<br>')});
   }
+  // the spares chosen for each request (Undo), and for the lengths it is short of: pumps of that length on a RUNNING pour
+  // that still keeps 2 pumps or more of any lengths (one alone has no spare) and was not marked "No spare". A pump it gave
+  // already leaves the list, the pour stays: it may have more than one spare.
+  // The app can't tell which pump is the spare there: the user picks the request, then the pump itself.
+  const keeps=p=>base.filter(s=>s.pour===p&&s.st==='on'&&!RS.has(s.i)).length;
+  for(const g of list){ const v=out.get(g); if(!v) continue;
+    const k=encodeURIComponent(spareKey(g)), lens=shortOf.get(g)||[];
+    const c0=base.filter(s=>lens.includes(s.len) && s.st==='on' && !s.setup && !s.next && !s.note && s.pour && s.pour.trucks>0
+      && SF(s.pour)!==SF(g) && !RS.has(s.i));
+    const two=c0.filter(s=>keeps(s.pour)>=2);
+    const cands=two.filter(s=>!noSpare(s.pour)), off=[...new Set(two.filter(s=>noSpare(s.pour)).map(s=>s.pour))];
+    v.spareN=cands.length;
+    const opts=[...new Set(cands.map(s=>s.pour))].map(p=>`<div class="uc-spp-r"><span class="uc-spp-n">${esc(site(p))}</span>${cands.filter(s=>s.pour===p).map(s=>`<button type="button" class="uc-spu" data-k="${k}" data-i="${s.i}" data-from="${encodeURIComponent(p.key)}" data-name="${encodeURIComponent(site(p))}" title="Only if this pump is the spare there — it has not poured, so no washing">${pumpCode(s.i)}</button>`).join('')}<button type="button" class="uc-spn" data-p="${encodeURIComponent(noSpareKey(p))}" title="This request has no spare: take it off this list on every card">No spare</button></div>`).join('')
+      +off.map(p=>`<div class="uc-spp-r uc-spp-off"><span>${esc(site(p))} — no spare</span><button type="button" class="uc-spx uc-spy" data-p="${encodeURIComponent(noSpareKey(p))}">↶ Undo</button></div>`).join('');
+    v.html+=pumpSpares(g).map(r=>`<div class="uc-spr">🔁 <b>${pumpCode(r.i)}</b> — spare of <b>${esc(r.name)}</b> · no washing <button type="button" class="uc-spx" data-k="${k}" data-i="${r.i}">↶ Undo</button></div>`).join('')
+      +(cands.length||off.length?`<div class="uc-spw"><button type="button" class="uc-spo${spareOpen===k?' on':''}" data-k="${k}">🔁 Use a spare ${spareOpen===k?'▴':'▾'}</button>${spareOpen===k?`<div class="uc-spp"><div class="uc-spp-h">Which request, which pump? Tap the one that is the spare:</div>${opts}</div>`:''}</div>`:''); }
   return out;
 }
 let pumpEditing=null;            // index of the note box being typed in — a refresh must not wipe it
@@ -2771,6 +2846,7 @@ function renderPumps(){
               : s.st==='wash' ? `<span class="pm-k">Washing</span> <span class="tc-dim">from</span> <b>${esc(site(s.pour))}</b> <span class="tc-dim">→ ${timeShort(s.until)}</span>`
               : s.st==='down' ? '<span class="pm-k">Breakdown</span>'
               : s.noop ? '<span class="pm-k">Available</span> <span class="tc-dim">· no operator</span>' : '<span class="pm-k">Available</span>';
+    const sparePart=s.spare?`<div class="pm-spr">🔁 ${pumpCode(s.i)} ${s.pour===s.spare.to?`spare of <b>${esc(s.spare.name)}</b>`:`spare — goes to <b>${esc(site(s.spare.to))}</b>`}</div>`:'';
     const editing=pumpEditing===String(s.i);
     const pn=pumpNote(s.i), d=editing&&pumpDraft?pumpDraft:{code:pn.code, text:pn.text};
     const editor=`<div class="pm-edit"><select class="pm-code" title="Which pump (code)"><option value="">code…</option>${codesFor(s.len).map(c=>`<option${c===d.code?' selected':''}>${c}</option>`).join('')}</select>
@@ -2779,7 +2855,7 @@ function renderPumps(){
       <div class="pm-top"><div class="pm-len">${s.len}${s.note&&s.st!=='down'?'<span class="pm-bd">Breakdown</span>':''}</div>
       <div class="pm-btns">${!editing&&(s.st==='on'||s.st==='wash')?`<button class="pm-free" data-i="${s.i}" title="Free this pump now (finished early / pulled out to another site)">✓</button>`:''}${!editing&&s.st==='free'&&pumpRelease(s.i)&&Date.now()-pumpRelease(s.i)<UNDO_FREE?`<button class="pm-undo" data-i="${s.i}" title="Undo — put this pump back on its pour">↶ Undo</button>`:''}<button class="pm-ed${s.note?' on':''}" data-i="${s.i}" title="Breakdown note">✎</button></div></div>
       <div class="pm-mid">${editing?editor
-        :`<div class="pm-st">${txt}</div>${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div></div>`; }).join('');
+        :`<div class="pm-st">${txt}</div>${sparePart}${(pn.code||pn.text)?`<div class="pm-nt">${pn.code?`<span class="pm-code-tag">${esc(pn.code)}</span>`:''}${esc(pn.text)}</div>`:''}`}</div></div>`; }).join('');
   area.innerHTML=`<div class="pm-head">${counts}<div class="pm-ctls">${opsCtl}${washCtl}</div></div>`+warn+(rows?`<div class="pm-list">${rows}</div>`:'<div class="muted" style="font-size:13px;padding:12px 2px">No pumps in this group right now.</div>');
   const wb=area.querySelector('.pm-wash-btn:not(.pm-ops-btn)'); if(wb) wb.addEventListener('click',()=>{ pumpWashOpen=!pumpWashOpen; pumpOpsOpen=false; renderPumps(); });
   const ob=area.querySelector('.pm-ops-btn'); if(ob) ob.addEventListener('click',()=>{ pumpOpsOpen=!pumpOpsOpen; pumpWashOpen=false; renderPumps(); });
@@ -3234,7 +3310,7 @@ function renderSummary(){
     return `<div class="ap${isOpen?' open':''}${g.carried>0?' carry-row':''}" data-k="${encodeURIComponent(g.key)}" style="--ec:${EL_EDGE[i%EL_EDGE.length]}">
       <div class="ap-hd ap-tog" title="Tap to open / close the details">${g.client?`<span class="ap-cl">${esc(g.client)}</span>`:''}<span class="ap-el">${esc(g.elem||'—')}</span><span class="ap-st">${esc(plantsLabel(g.plant))}</span>
         <span class="st ${g.status}"><span class="d"></span>${stLabel[g.status]}</span>${stopTag}${carryBadge(g,true)}<span class="ap-last">last truck ${timeShort(g.endMax)}</span><span class="ap-chev">${isOpen?'▴':'▾'}</span></div>
-      ${!isOpen?`<div class="ap-sum">
+      ${spareOutHtml(g)}${!isOpen?`<div class="ap-sum">
         <span class="ap-s"><b style="color:var(--cyan)">${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</span>
         ${g.rejected>0?`<span class="ap-s" style="color:var(--rose)">⛔ <b>${fmt(g.rejected,0)}</b> m³</span>`:''}
         <span class="ap-s">⚡ <b style="${rc?`color:${rc}`:''}">${avg!=null?fmt(avg,0):'—'}</b> m³/h</span>
@@ -3698,13 +3774,14 @@ function collectChecks(pours){
               det:'The pumps were sent — the first truck was due about 1½ h after they left'}}); }
         continue; }
       if(pumpSent(g).length && !t.afterDone) continue;
-      if(now-t.at<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
+      const due=pourStartAt(g,t); if(now<due) continue;   // stationary / spider pumps: the plants start 1½ h after its time
+      if(now-due<LATE_START) items.push({id:`due|${id}`, kind:'Request due', cls:'',
         txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time} — start this one`:`planned ${t.time} — it is time to start`}${g.pumps&&pumpReq(g.pumps).length?` · pumps ${esc(pumpLabel(pumpReq(g.pumps)))}`:''}`,
         ui:{sev:'blue', icon:'🔔', head:'Time to start', at:t.at, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk'), ...(g.pumps&&pumpReq(g.pumps).length?[CT('pumps '+esc(pumpLabel(pumpReq(g.pumps))))]:[])],
           det:t.afterDone?'The request before it has finished — start this one':'Its planned time has come'}});
       else items.push({id:`late|${id}`, kind:'Late start', cls:'gap',
-        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time}`:`planned ${t.time}`} — not started yet (${mins(now-t.at)} late)`,
-        ui:{sev:'red', icon:'🕒', head:`Not started — ${mins(now-t.at)} late`, at:t.at, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk')],
+        txt:`${nm} · ${t.afterDone?`the request before it finished at ${t.time}`:`planned ${t.time}`} — not started yet (${mins(now-due)} late)`,
+        ui:{sev:'red', icon:'🕒', head:`Not started — ${mins(now-due)} late`, at:due, tags:[elTag(g), CT((t.afterDone?'after ':'planned ')+t.time,'tk')],
           det:'No truck has left for it yet'}}); } }catch(e){}
   return items;
 }
@@ -3820,7 +3897,8 @@ function plantTimeline(now){
   try{ const PP=pumpPlan(now), UC=upcomingPumpCheck(now), UP=UC.picks||new Map(), SH=UC.short||new Map(), SF=pumpShareFam();
     // the rest of a pour's chain on pump i: each request after the other (the same pumps stay on site), then the washing.
     // Returns false when no request of the chain is left for this pump.
-    const chainTail=(list,i,fam,from)=>{ const Q=famChain(fam,SF,RT).filter(h=>!(PP.busy[i]||[]).some(o=>o.p.g===h) && (!pumpReq(h.pumps).length||pumpReq(h.pumps).some(L=>String(L)===String(PUMPS[i]))) && (!UP.get(h)||UP.get(h).includes(i)));
+    // (withSent: also the requests of the chain whose pumps were sent — they wait behind a sibling that started before them)
+    const chainTail=(list,i,fam,from,withSent)=>{ const Q=famChain(fam,SF,RT).filter(h=>!(PP.busy[i]||[]).some(o=>o.p.g===h&&!(withSent&&o.p.setup)) && (!pumpReq(h.pumps).length||pumpReq(h.pumps).some(L=>String(L)===String(PUMPS[i]))) && (!UP.get(h)||UP.get(h).includes(i)));
       if(!Q.length) return false; let cur=from, last=null;
       for(const h of Q){ const th=RT.get(h), d=dur(h), hs=firstSentAt(h);
         if(!d){ list.push({g:h, s:cur, e:W.e, kind:'stop', txt:`waiting on site for ${nameOf(h)} · no rate`}); return true; }
@@ -3829,21 +3907,26 @@ function plantTimeline(now){
         list.push({g:h, s:ns, e:ns+d, kind:'plan', fromHold:true, txt:`${ns<=now+60000?'from now':'≈'+timeShort(ns)} · ${nameOf(h)} (same pumps) · ≈${timeShort(ns+d)}`});
         cur=ns+d; last=h; }
       list.push({g:last, s:cur, e:cur+WASH, kind:'wash', txt:`washing → ${timeShort(cur+WASH)}`}); return true; };
-    PUMPS.forEach((len,i)=>{ if(pumpBroken(i)) return; const code=`${len}${PUMPS.filter(L=>L===len).length>1?' #'+PUMPS.slice(0,i+1).filter(L=>L===len).length:''}`;   // by length (the app tracks pumps by length)
+    PUMPS.forEach((len,i)=>{ if(pumpBroken(i)) return; const code=pumpCode(i);   // by length (the app tracks pumps by length)
       const list=[]; pumps.set(i,list); list.lab=code;
       for(const b of (PP.busy[i]||[])){ const g=b.p.g, ex=g.finishAvg!=null?g.finishAvg:g.finishTgt;
         const runE=b.end!=null?b.end:Math.max(now,ex!=null?ex:now), live=b.end==null&&!b.p.setup;
         // the next of its chain ALREADY on this pump (started before this one's washing would end): the pump never went washing between them
-        const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&o.start>b.start&&(b.free==null||o.start<b.free)).sort((x,y)=>x.start-y.start)[0];
+        const nx=(PP.busy[i]||[]).filter(o=>o!==b&&o.p.fam===b.p.fam&&o.start>b.start&&(b.free==null||o.start<b.free)&&!(o.p.setup&&b.end==null)).sort((x,y)=>x.start-y.start)[0];
+        // its spare, taken by another request: on this pour until it leaves for that one (its time, or when it was sent) — no washing
+        if(b.spare){ const to=b.spare.to, t0=RT.get(to), mv=to.trucks>0||pumpSent(to).length?(b.free!=null?b.free:now):Math.max(t0?t0.at:now,now), e=Math.min(runE,mv);
+          list.push({g, s:b.start, e, now:live&&mv>now?now:null, kind:b.end!=null||mv<=now?'done':'run', txt:`${nameOf(g)} · spare → ${nameOf(to)}`}); continue; }
+        const spOf=(pumpSpares(g).find(r=>+r.i===i)||{}).name;   // the spare chosen for this request
+        if(b.p.setup&&(PP.busy[i]||[]).some(o=>o.p.fam===b.p.fam&&!o.p.setup&&o.end==null)) continue;   // a sibling is pouring on this pump: that one draws what follows
         if(b.p.setup){ const {ps,pe}=sentPour(g,b.start,now);   // sent, no truck yet: setting up -> its pour -> washing
-          list.push({g, s:b.start, e:pe, kind:'plan', setup:true, txt:`setting up · ${nameOf(g)} · pour ≈${timeShort(ps)} → ≈${timeShort(pe)}`});
+          list.push({g, s:b.start, e:pe, kind:'plan', setup:true, txt:`setting up · ${nameOf(g)}${spOf?` · spare of ${esc(spOf)}`:''} · pour ≈${timeShort(ps)} → ≈${timeShort(pe)}`});
           if(!chainTail(list,i,b.p.fam,pe)) list.push({g, s:pe, e:pe+WASH, kind:'wash', txt:`washing → ${timeShort(pe+WASH)}`}); continue; }
-        else list.push({g, s:b.start, e:nx&&b.end!=null?Math.min(runE,nx.start):runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
+        else list.push({g, s:b.start, e:nx&&b.end!=null?Math.min(runE,nx.start):runE, now:live?now:null, kind:b.end!=null?'done':'run', txt:`${nameOf(g)}${spOf?` · spare of ${esc(spOf)}`:''}${live&&ex!=null?' · ≈'+timeShort(ex):''}`});
         if(nx) continue;
         // kept on site for the rest of its chain — also while this pour still runs (its pumps don't go washing between
         // them): each request for qty ÷ rate, not started yet = it moves with now, then washing. No rate: waiting to the end.
-        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&o.start>=b.start)) continue;   // its sibling on this pump goes on: that one draws what follows
-        if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now))) continue;
+        if(b.free==null && (PP.busy[i]||[]).some(o=>o!==b&&o.p.fam===b.p.fam&&(b.end==null?!o.p.setup&&o.start>=b.start:o.start>=b.start||o.p.setup))) continue;   // its sibling on this pump goes on: that one draws what follows
+        if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now),b.end==null)) continue;
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
     for(const g of (VD.upcoming||[])){ const ix=[...(UP.get(g)||[]),...(SH.get(g)||[])]; if(!ix.length) continue;   // also a pump an earlier request has then: drawn there, it shows as a clash
@@ -3851,7 +3934,9 @@ function plantTimeline(now){
       ix.forEach(i=>{ const l=pumps.get(i); if(!l) return;
         if(l.some(x=>x.fromHold&&x.g===g)) return;   // already drawn from its chain's pumps (above)
         if(l.some(x=>x.g===g&&x.setup)) return;   // already drawn from its sent pumps (above)
-        l.push({g, s:s0, e:e0, kind:'plan', late:lateOf(g,t), txt:`${whenTxt(g,t)}${nameOf(g)}`}); }); }
+        if(l.some(x=>x.kind==='stop'&&/no rate/.test(x.txt)&&x.g!==g&&SF(x.g)===SF(g))) return;   // the chain stops on one with no rate: its end is unknown, nothing to draw after it
+        const sn=(pumpSpares(g).find(r=>+r.i===i)||{}).name;
+        l.push({g, s:s0, e:e0, kind:'plan', late:lateOf(g,t), txt:`${whenTxt(g,t)}${nameOf(g)}${sn?` · spare of ${esc(sn)}`:''}`}); }); }
     // a planned request washes after it too — unless the next of its chain follows on the same pump
     for(const l of pumps.values()) l.filter(x=>x.kind==='plan'&&!x.fromHold&&!x.setup).forEach(x=>{
       if(l.some(y=>y.kind==='plan'&&y.g!==x.g&&SF(y.g)===SF(x.g)&&y.s>x.s&&y.s<x.e+WASH)) return;
@@ -3864,13 +3949,13 @@ function plantTimeline(now){
   // a plant on HOLD: held from its "since" to the end of the window; whatever is planned on it then is a clash
   for(const [p,list] of rows){ const v=PUMPNOTE[phKey(p)]; if(v) list.hold={since:+String(v).split('|')[0]||now, by:String(v).split('|')[1]||''}; }
   // 4) clashes (a planned request on a plant still busy then) + free gaps from now on
-  const clashes=[];
+  const clashes=[], SFc=pumpShareFam();
   for(const [p,list] of rows){ if(!list.hold) continue; const hs=Math.max(list.hold.since,W.s);
     list.filter(x=>x.kind==='plan'&&x.e>hs).forEach(x=>{ x.clash=true; clashes.push({p, a:x, b:null, hold:true, ov:x.e-Math.max(x.s,hs)}); }); }
   for(const [p,list] of [...rows,...[...pumps].map(([i,l])=>['P'+i,l])]){ list.sort((a,b)=>a.s-b.s);
     // a PLANT on two requests at once is on purpose (user's rule): no clash — only a pump can't be in two places
     if(/^P\d+$/.test(p)) for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const a=list[i], b=list[j];
-      if(a.g===b.g) continue;
+      if(a.g===b.g||SFc(a.g)===SFc(b.g)) continue;   // the same site: the pump is not in two places
       if(a.kind!=='plan'&&b.kind!=='plan') continue; if(a.kind==='done'||b.kind==='done'||a.kind==='stop'||b.kind==='stop') continue;
       const ov=Math.min(a.e,b.e)-Math.max(a.s,b.s); if(ov<5*60000) continue;
       a.clash=b.clash=true; clashes.push({p:/^P\d+$/.test(p)?'Pump '+list.lab:p, a, b, ov}); }
@@ -3927,6 +4012,7 @@ function tlDetail(x,PU,clashes){
   const gt=el('tlGoT'); if(gt) gt.onclick=()=>{ o.style.display='none'; logKey=g.key; view='pours'; saveCfg(); renderViewTabs(); applyView(); renderAllPours(); const tl=el('truckLog'); if(tl&&tl.scrollIntoView) tl.scrollIntoView({behavior:'smooth',block:'start'}); };
   const gu=el('tlGoU'); if(gu) gu.onclick=()=>{ o.style.display='none'; view='upcoming'; saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0); };
 }
+const TL_CHAIN=['#6366f1','#10b981','#ec4899','#0ea5e9','#84cc16','#a855f7'];   // pumps timeline: a color per chain
 function renderPlantTimeline(kind){
   if(!kind){ renderPlantTimeline('plants'); renderPlantTimeline('pumps'); return; }
   const PU=kind==='pumps', box=el(PU?'pumpTimeline':'plantTimeline'), S=TLS[kind]; if(!box) return;
@@ -3935,23 +4021,38 @@ function renderPlantTimeline(kind){
   const hours=Math.ceil((W.e-W.s)/3600000), width=hours*TL_PXH;
   const h0=new Date(W.s); h0.setMinutes(0,0,0); const ticks=[]; for(let t=h0.getTime(); t<=W.e; t+=3600000) if(t>=W.s) ticks.push(t);
   const LANE=32, ITEMS=[];   // the bars drawn, by index (tap = its details)
+  // pumps page: one color per chain (same client + element, or linked), short labels; the full text stays in the bar's title and details
+  const SFk=PU?pumpShareFam():null, chainC=new Map();
+  const chainOf=x=>{ const f=SFk(x.g); if(!chainC.has(f)) chainC.set(f,{c:TL_CHAIN[chainC.size%TL_CHAIN.length], n:(x.g.client?x.g.client+' ':'')+x.g.elem}); return chainC.get(f); };
+  const shortTxt=(x,w)=>{ if(w<34) return ''; const g=x.g, t=x.txt.replace(/<[^>]+>/g,''), sp=/spare (of|→)/.test(t)?' · spare':'', q=g.required!=null?g.required:g.planReq;
+    if(x.kind==='wash') return x.txt;
+    if(x.kind==='stop') return 'waiting';
+    if(x.kind==='plan'){ const m=t.match(/^⏰ (\S+ \S+) pumps/); return `${x.setup?'setting up · ':m?`⏰ ${m[1]} · `:''}${esc(g.elem)}${q>0?` · ${fmt(q,0)} m³`:''}${sp}`; }
+    const e=t.match(/≈\S+ \S+/); return `${esc(g.elem)}${sp}${e?' · '+e[0]:''}`; };
   const bar=x=>{ const ix=ITEMS.push(x)-1, l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.off||0)+(x.lane||0)*LANE;
     const done=x.now!=null?Math.max(0,Math.min(100,Math.round((X(x.now)-l)/w*100))):null;
-    const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind;
-    return `<div class="ptl-bar ${cls}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px" data-i="${ix}" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${x.txt}</span></div>`; };
-  const freeB=([s,e])=>`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
+    const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind, ch=PU&&(x.kind==='plan'||x.kind==='run')?chainOf(x).c:null;
+    return `<div class="ptl-bar ${cls}${ch?' chn':''}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px${ch?`;--chc:${ch}`:''}" data-i="${ix}" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${PU?shortTxt(x,w):x.txt}</span></div>`; };
+  // pumps page: an empty place = free; only the last one is written (when it is free for good)
+  const freeB=([s,e])=>PU?(e>=W.e?`<div class="ptl-free pl" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}</span></div>`:'')
+    :`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
   const row=(p,list)=>{ const ends=[], off=list.hold?14:0; list.forEach(x=>{ x.row=p; x.off=off; });   // on hold: the HOLD label gets its own line on top   // first line whose last bar ended before this one starts (in px, so touching bars share a line)
     list.slice().sort((a,b)=>a.s-b.s).forEach(x=>{ const l=X(x.s); let k=ends.findIndex(e=>e<=l+1); if(k<0){ k=ends.length; ends.push(0); } x.lane=k; ends[k]=Math.max(l+6,X(x.e)); });
     const h=40+off+Math.max(0,ends.length-1)*LANE;
     const hb=list.hold?`<div class="ptl-hold" style="left:${X(Math.max(list.hold.since,W.s))}px;width:${X(W.e)-X(Math.max(list.hold.since,W.s))}px"><span>⏸ HOLD${list.hold.by?' · '+esc(list.hold.by):''}</span></div>`:'';
     return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab${list.hold?' hd':''}">${esc(p)}${list.hold?'<small>⏸ HOLD</small>':''}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${hb}${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
   const tlAt=S.at, nowX=now>=W.s&&now<=W.e?X(now):null, atX=tlAt!=null&&tlAt>=W.s&&tlAt<=W.e?X(tlAt):null;
-  const entries=PU?[...T.pumps.values()].map(l=>[l.lab,l]):[...T.rows.entries()].filter(([p,l])=>!l.hold);   // on hold = not drawn
+  // pumps on the same chain sit together: by what each is planned for next (else what it is on), groups in fleet order
+  const groupOf=l=>{ const y=l.find(x=>x.kind==='plan')||l.find(x=>x.kind==='run')||l.find(x=>x.kind==='wash'); return y?SFk(y.g):null; };
+  const pumpRows=()=>{ const L=[...T.pumps.values()], first=new Map(); L.forEach((l,i)=>{ const k=groupOf(l); if(k!=null&&!first.has(k)) first.set(k,i); });
+    const rank=l=>{ const k=groupOf(l); return k==null?1e9:first.get(k); }; return L.map((l,i)=>[l,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(([l])=>[l.lab,l]); };
+  const entries=PU?pumpRows():[...T.rows.entries()].filter(([p,l])=>!l.hold);   // on hold = not drawn
   const winChips=[['now12','Next 12 h'],['now24','Next 24 h']].map(([v,l])=>`<button type="button" class="ptl-w${tlWin===v?' on':''}" data-w="${v}">${l}</button>`).join('')
     +`<label class="ptl-w${/:/.test(tlWin)?' on':''}">From <select class="ptl-from"><option value="">…</option>${CUT_DAILY.map(v=>`<option value="${v}"${v===tlWin?' selected':''}>${timeShort(atHM(v,now))}</option>`).join('')}</select></label>`;
+  const qtyRate=g=>{ const q=g.required!=null?g.required:g.planReq, r=g.rateManual!=null?g.rateManual:g.planRate; return `${q>0?fmt(q,0):'—'} m³ · ${r>0?fmt(r,0):'—'} m³/h`; };
   const AT=tlAt!=null?tlAtMoment(entries,tlAt):null, freeAt=AT?AT.filter(o=>!o.on.length&&!o.held).map(o=>o.p):[];
   const atPanel=AT?`<div class="ptl-at"><div class="ptl-at-h"><b>At ${cutLabel(tlAt)}</b>${freeAt.length?` · free: <b class="ok">${freeAt.map(esc).join(', ')}</b>`:(PU?' · no pump free':' · no plant free')}<button type="button" class="ptl-x">✕</button></div>
-      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.held?' hdc':o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.held?'<div class="hd">⏸ On hold</div>':''}${o.on.length?o.on.map(x=>`<div class="${x.kind}">${x.kind==='wash'?'washing':x.kind==='stop'?'waiting':''}${x.kind==='wash'||x.kind==='stop'?' <small>after</small> ':''}${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):(o.held?'':'<div class="ok">Free</div>')}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))}</small>`:''}</div>`).join('')}</div></div>`:'';
+      <div class="ptl-at-g">${AT.map(o=>`<div class="ptl-at-c${o.held?' hdc':o.on.length?' busy':' fr'}"><b>${esc(o.p)}</b>${o.held?'<div class="hd">⏸ On hold</div>':''}${o.on.length?o.on.map(x=>`<div class="${x.kind}">${x.kind==='wash'?'washing':x.kind==='stop'?'waiting':''}${x.kind==='wash'||x.kind==='stop'?' <small>after</small> ':''}${esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''))}${x.kind==='run'||x.kind==='plan'?`<small>${qtyRate(x.g)}</small>`:''}<small> till ≈${timeShort(x.e)}</small></div>`).join(''):(o.held?'':'<div class="ok">Free</div>')}${o.next?`<small class="muted">next ${timeShort(o.next.s)} · ${esc((o.next.g.client?o.next.g.client+' ':'')+(o.next.g.elem||''))} · ${qtyRate(o.next.g)}</small>`:''}</div>`).join('')}</div></div>`:'';
   const CL=T.clashes.filter(c=>/^Pump /.test(c.p)===PU);
   // each clash in full: where, when the two overlap, what each one is doing, and what can be done about it
   const nmOf=x=>esc((x.g.client?x.g.client+' ':'')+(x.g.elem||''));
@@ -3969,6 +4070,7 @@ function renderPlantTimeline(kind){
     const k=c.p+'|'+pl.g.key, s1=Math.max(c.a.s,c.b.s), e1=Math.min(c.a.e,c.b.e); let G=cgBy.get(k);
     if(!G){ G={p:c.p, pl, os:[], s0:s1, e0:e1}; cgBy.set(k,G); CG.push(G); }
     G.os.push(o); G.s0=Math.min(G.s0,s1); G.e0=Math.max(G.e0,e1); });
+  const UCs=PU&&CG.length?upcomingPumpCheck():new Map();   // a spare on a running pour can solve it (its Upcoming card)
   const warn=CG.length?`<div class="ptl-warn">${CG.map(c=>{
       if(c.hold){ const x=c.a, alt=entries.filter(([lab,l])=>lab!==c.p&&!l.hold&&!busyIn(l,x.s,x.e)).map(([lab])=>esc(lab));
         return `<div class="ptl-cl"><div class="ptl-cl-h">⏸ <b>${esc(c.p)}</b> is on HOLD (not shown above) — but a request is planned on it</div>
@@ -3980,8 +4082,8 @@ function renderPlantTimeline(kind){
       return `<div class="ptl-cl"><div class="ptl-cl-h">⚠ <b>${esc(c.p)}</b> is needed twice <b>${timeShort(s0)} → ${timeShort(e0)}</b> (${ovTxt(e0-s0)})</div>
         ${[...byG.values()].map(L=>`<div>• <b>${nmOf(L[0])}</b> — ${L.map(doing).join(', then ')}</div>`).join('')}
         <div>• <b>${nmOf(pl)}</b> — ${doing(pl)}</div>
-        <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(till)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}</div></div>`; }).join('')}</div>`:'';
-  const np=!PU&&T.noPlant.length?`<div class="ptl-np"><div>🏭 <b>No plant chosen yet</b> — free for the whole pour (tap = choose it):</div>${T.noPlant.map(x=>`<div class="np-r"><span>${nmOf(x)} <small>${timeShort(x.s)} → ≈${timeShort(x.e)}</small></span>${x.sug.length?x.sug.map(p=>`<button type="button" class="np-sug" data-k="${encodeURIComponent(plantKey(x.g))}" data-p="${esc(p)}">${esc(p)}</button>`).join(''):'<small class="np-none">no plant free for its whole pour</small>'}</div>`).join('')}</div>`:'';
+        <div class="ptl-cl-do">→ ${alt.length?`move ${nmOf(pl)} to <b>${alt.join(', ')}</b> (free then), or `:''}start it at ≈<b>${timeShort(till)}</b>${alt.length?'':` · no other ${PU?'pump of that size':'plant'} is free then`}${(UCs.get(pl.g)||{}).spareN?' · or 🔁 use a spare (on its Upcoming card)':''}</div></div>`; }).join('')}</div>`:'';
+  const np=!PU&&T.noPlant.length?`<div class="ptl-np"><div>🏭 <b>No plant chosen yet</b> — free for the whole pour (tap = choose it):</div>${T.noPlant.map(x=>`<div class="np-r"><span>${nmOf(x)} <small>${qtyRate(x.g)} · ${timeShort(x.s)} → ≈${timeShort(x.e)}</small></span>${x.sug.length?x.sug.map(p=>`<button type="button" class="np-sug" data-k="${encodeURIComponent(plantKey(x.g))}" data-p="${esc(p)}">${esc(p)}</button>`).join(''):'<small class="np-none">no plant free for its whole pour</small>'}</div>`).join('')}</div>`:'';
   box.innerHTML=`<div class="card ptl-card"><div class="ptl-head"><h3 style="margin:0">${PU?'🚚 Pumps timeline':'🏭 Plants timeline'}</h3><span class="muted">${esc(W.lab)}</span></div>
     <div class="ptl-wins">${winChips}</div>
     ${PU?'':`<div class="ph-chips"><span class="muted">🏭 Plant hold</span>${PLANT_LIST().map(p=>`<button type="button" class="ph-c${plantHeld(p)?' hd':''}" data-ph="${esc(p)}" title="${plantHeld(p)?'On HOLD — tap to take it back':'Tap to put it on HOLD'}">${plantHeld(p)?`<s>${esc(p)}</s> ⏸`:esc(p)}</button>`).join('')}<span class="muted ph-hint">${PLANT_LIST().some(plantHeld)?`on hold: ${PLANT_LIST().filter(plantHeld).map(esc).join(', ')} — not in the timeline · tap to take back`:'tap a plant = put it on hold (every device)'}</span></div>`}
@@ -4225,7 +4327,7 @@ function renderOrigActive(open){
   el('activeList').innerHTML = list.length ? list.map(g=>{
     const bc=barClass(g.status); const pct=g.pct!=null?Math.min(100,g.pct):0;
     return `<div class="apy${g.carried>0?' carry-row':''}">
-      <div class="apy-el">${g.elem||'—'}<span class="p">${plantsLabel(g.plant)}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div class="apy-el">${g.elem||'—'}<span class="p">${plantsLabel(g.plant)}</span>${carryBadge(g,true)}${(g.client||g.mix)?`<div class="sub">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}${spareOutHtml(g)}</div>
       <div><div class="bar"><i class="${bc}" style="width:${pct}%"></i></div><div class="pct">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</div></div>
       <div class="apy-num"><b>${fmt(g.delivered,0)}</b> / ${g.required!=null?fmt(g.required,0):'—'} m³</div>
       <div class="apy-rate">${g.rateCalc!=null?fmt(g.rateCalc,0)+' m³/h':'—'}</div>
@@ -4270,7 +4372,7 @@ function renderUpcoming(){
   // no time = due now (same order the pumps are handed out in upcomingPumpCheck)
   const sorted=rest.slice().sort((a,b)=>{ const ta=RT.get(a), tb=RT.get(b), xa=ta?ta.at:now, xb=tb?tb.at:now;
     return (xa-xb)||((ta?0:1)-(tb?0:1))||((pIdx.get(a)??1e9)-(pIdx.get(b)??1e9)); });
-  const PC=upcomingPumpCheck();
+  const PC=upcomingPumpCheck(), addedPumps=g=>PC.toSend.get(g)||[];
   const dayLbl=t=>{ const d=new Date(t), n=new Date(); return d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `; };
   // one small chip per requested pump inside the pump box: tap = "sent to site" (tap again = undo)
   // 🏭 one chip per plant; lit = planned for this card's requests
@@ -4294,15 +4396,16 @@ function renderUpcoming(){
   // …can be sent: Available (even with no operator counted — if it left, it has one) or washing after a finished pour
   // (the washing is cut short when it is sent). Still on a running pour / setting up / Breakdown = free it first.
   const freeNow={}; pumpPlan(Date.now()).state.forEach(s=>{ if(s.st==='free'||s.st==='wash') freeNow[s.len]=(freeNow[s.len]||0)+1; });
-  const sendChips=p=>{ const need=pumpReq(p.pumps), sc=siteChips(p); if(!need.length&&!sc) return '';
+  // (lens = only these lengths: a request that carries on sends just the pumps added to it)
+  const sendChips=(p,lens)=>{ const need=lens||pumpReq(p.pumps), sc=lens&&carriesOn(p)?'':siteChips(p); if(!need.length&&!sc) return '';
     const sent=pumpSent(p), left={}; sent.forEach(x=>{ left[x.len]=(left[x.len]||0)+1; });
     return `<div class="uc-sends">🚚 ${need.map(len=>{ const on=left[len]>0; if(on) left[len]--;
-      const no=!on && !(freeNow[len]>0);
+      const no=!on && !(freeNow[len]>0) && !pumpSpares(p).some(r=>PUMPS[r.i]===len);   // (the spare chosen for it can always leave)
       return `<button class="uc-snd${on?' on':''}${no?' no':''}" data-k="${encodeURIComponent(sentKey(p))}" data-len="${len}" data-on="${on?1:0}"${no?' data-no="1"':''} title="${on?'Sent — tap to undo':no?`Every ${len} is on a pour or broken down right now`:'Tap when this pump leaves for the site'}">${on?'✓ ':''}${len}${no?' <small>· busy now</small>':''}</button>`; }).join('')}${sc}</div>`; };
   // chains (same client + element, poured one after the other) become ONE card; its place = its first request
   const CH=pourChains(), site=g=>(g.client?g.client+' ':'')+g.elem;
   // carries on with the pumps of the pour before it (same element, or an "after" link asking for the same pumps)
-  // -> nothing to send: the 🚚 chips are left out
+  // -> only the pumps that are not there yet (added to it) get a 🚚 chip
   const SFu=pumpShareFam(), LKu=pourLinks();
   const carriesOn=p=>!!(CH.get(p)||{}).prev || (LKu.has(p) && SFu(p)===SFu(LKu.get(p)));
   // the one it waits for: same client + element -> just its quantity ("after the 72 m³"), else its name
@@ -4318,7 +4421,7 @@ function renderUpcoming(){
     const late=lateMins(p,rt,now);   // the same rule as the Data checks (pumpTimes / lateMins)
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
     return `
-    <div class="ucard${multi?' chain':''}">${timeLine(rt,late,sent.length,p)}
+    <div class="ucard${multi?' chain':''}">${timeLine(rt,late,rt&&rt.est&&carriesOn(p)?0:sent.length,p)}
       <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}${u.some(g=>g.app)?' <span class="uc-app" title="Added in the app — not in the sheet">App</span>':''}</div>
       ${u.filter(g=>g.app).map(g=>{ const m=APP_MAYBE.get(g.app);
         return (m?`<div class="uc-maybe">⚠ Same as sheet request? <b>${esc(m.client||'')} ${esc(m.code)}</b> · ${fmt(m.req,0)} m³ (here ${fmt(g.planReq,0)} m³)
@@ -4331,7 +4434,11 @@ function renderUpcoming(){
         ${p.tem?('<span class="um">Temperature: <b>'+esc(String(p.tem).replace(/\s+/g,' '))+'</b></span><br>'):''}
         <span class="um">Rate: <b>${p.planRate?fmt(p.planRate,0):'—'} m³/h</b></span>
         ${p.mix?('<br><span class="um">Grade: <b>'+esc(p.mix)+'</b></span>'):''}
-      </div>${plantChips(u)}${!pc&&!carriesOn(p)&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)?'':sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+      </div>${plantChips(u)}${!pc&&!carriesOn(p)&&siteChips(p)?`<div class="uc-pump">${sendChips(p)}</div>`:''}${pc?`<div class="uc-pump ${pc.cls}">${pc.html}${carriesOn(p)||addedPumps(p).length<pumpReq(p.pumps).length?sendChips(p,addedPumps(p)):sendChips(p)}${multi?(()=>{ const rest=u.slice(1), n=`#2${u.length>2?'–#'+u.length:''}`;
+          // a later request of the card that asks for one pump more than the one before it: that pump gets its own 🚚 chip
+          const more=u.map((g,k)=>{ if(!k) return ''; const was=pumpReq(u[k-1].pumps).slice(), add=pumpReq(g.pumps).filter(L=>{ const j=was.indexOf(L); if(j<0) return true; was.splice(j,1); return false; }).filter(L=>addedPumps(g).includes(L));
+            return add.length?`<div class="uc-same">#${k+1} needs one more: <b>${esc(pumpLabel(add))}</b>${sendChips(g,add)}</div>`:''; }).join('');
+          if(more) return more;
           // the ones after it with NO pumps written start without them; the pumps go washing once #1 finishes
           if(rest.every(g=>!pumpReq(g.pumps).length)) return `<div class="uc-same">${n} without pumps — they wash after #1 finishes</div>`;
           if(rest.every(g=>pumpReq(g.pumps).slice().sort().join()===pumpReq(p.pumps).slice().sort().join())) return `<div class="uc-same">${n}${u.length>2?' continue':' continues'} with the same pumps</div>`;
@@ -4371,6 +4478,19 @@ function renderUpcoming(){
     for(const k of keys){ if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k]; }
     stSet(KEY_PUMP,PUMPNOTE); renderUpcoming();
     for(const k of keys) await syncPush('pump',k,val); }));
+  // 🔁 a spare on a running pour taken for this request / taken back
+  const setSpares=async(k,list)=>{ const val=list.length?JSON.stringify(list):''; if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k];
+    stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,val); };
+  const sparesAt=k=>{ try{ return JSON.parse(PUMPNOTE[k]||'[]'); }catch(e){ return []; } };
+  A.querySelectorAll('.uc-spo').forEach(b=>b.addEventListener('click',()=>{ spareOpen=spareOpen===b.dataset.k?null:b.dataset.k; renderUpcoming(); }));
+  A.querySelectorAll('.uc-spu').forEach(b=>b.addEventListener('click',()=>{ const k=decodeURIComponent(b.dataset.k), i=+b.dataset.i, name=decodeURIComponent(b.dataset.name);
+    if(!confirm(`Is ${pumpCode(i)} the spare of ${name}?\nIt will be counted as not poured there: no washing.`)) return;
+    spareOpen=null; setSpares(k,sparesAt(k).concat({i, from:decodeURIComponent(b.dataset.from), name, at:Date.now(), by:ME||''})); }));
+  A.querySelectorAll('.uc-spx:not(.uc-spy)').forEach(b=>b.addEventListener('click',()=>{ const k=decodeURIComponent(b.dataset.k);
+    setSpares(k,sparesAt(k).filter(r=>+r.i!==+b.dataset.i)); }));
+  const setNoSpare=async(k,val)=>{ if(val) PUMPNOTE[k]=val; else delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,val); };
+  A.querySelectorAll('.uc-spn').forEach(b=>b.addEventListener('click',()=>setNoSpare(decodeURIComponent(b.dataset.p),'1')));
+  A.querySelectorAll('.uc-spy').forEach(b=>b.addEventListener('click',()=>setNoSpare(decodeURIComponent(b.dataset.p),'')));
   el('upcomingArea').querySelectorAll('.uc-snd').forEach(b=>b.addEventListener('click',async()=>{
     const k=decodeURIComponent(b.dataset.k), len=+b.dataset.len;
     if(b.dataset.no==='1'){ alert(`كل مضخات ${len} لسه شغالة على صبّة أو عطلانة دلوقتي.\nلو هتجيبها من موقع تاني، اعملها Available الأول من صفحة Pumps (علامة ✓) وبعدين ابعتها.`); return; }
