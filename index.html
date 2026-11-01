@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000005">
+<meta name="app-build" content="20261102-000006">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3326,11 +3326,16 @@ let SKIP={};            // checks the user marked as reviewed on this device: {i
 // finished, until the user Skips it (user's rule). {id: {truck, plant, es, q, dep, flag:'hold'|'down', flagNote, seen}}
 const KEY_HOLDSEEN='cmpour:holdseen';
 let HOLDSEEN={};
-// (a departure written as a time only gets the work day, so the same truck at the same minute another day is a new one)
-const holdId=x=>`${x.flag==='down'?'down':'hold'}|${x.truck}|${x.dep}${/\d{4}|\d{1,2}\/\d{1,2}/.test(String(x.dep||''))?'':'@'+workDayStr()}`;
+// how long a loaded truck has been out (the sheet's "Time Elapsed", H:MM) -> minutes, or null
+const outMins=x=>{ const m=String(x.elapsed||'').trim().match(/^(-?)(\d+):(\d{1,2})/); return m?(m[1]?0:(+m[2])*60+(+m[3])):null; };
+// the day the truck LEFT (now − time out): a departure written as a time only gets it, so the same trip keeps the
+// same id every day (a Skip stays) and the same truck at the same minute another day is a new one
+const depDay=x=>{ const mn=outMins(x), d=new Date(Date.now()-(mn||0)*60000); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const holdId=x=>`${x.flag==='down'?'down':'hold'}|${x.truck}|${x.dep}${/\d{4}|\d{1,2}\/\d{1,2}/.test(String(x.dep||''))?'':'#'+depDay(x)}`;
+const HOLD_FRESH=3*60;   // only a trip out for 3 h or less is a new sighting — an older one still "loaded" in the sheet is stale
 function rememberHolds(){ let ch=false;
-  for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold'||x.flag==='down')){ const id=holdId(x);
-    if(!HOLDSEEN[id]){ HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flag:x.flag, flagNote:x.flagNote||'', seen:Date.now()}; ch=true; } }
+  for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold'||x.flag==='down')){ const id=holdId(x), mn=outMins(x);
+    if(!HOLDSEEN[id] && (mn==null||mn<=HOLD_FRESH)){ HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flag:x.flag, flagNote:x.flagNote||'', seen:Date.now()}; ch=true; } }
   for(const id in HOLDSEEN){ if(SKIP[id] && Date.now()-HOLDSEEN[id].seen>7*86400000){ delete HOLDSEEN[id]; ch=true; } }   // skipped + a week old
   if(ch) stSet(KEY_HOLDSEEN,HOLDSEEN); }
 let showSkipped=false;
@@ -5447,6 +5452,7 @@ function requireAuth(){
   DONE_ORDER=(await stGet(KEY_DONE_ORDER))||[];
   SKIP=(await stGet(KEY_SKIP))||{};
   HOLDSEEN=(await stGet(KEY_HOLDSEEN))||{};
+  for(const k in HOLDSEEN) if(/@\d{4}-\d{2}-\d{2}$/.test(k)) delete HOLDSEEN[k];   // ids keyed by the day they were SEEN (build 2026-10-29): they came back every day
   for(const k in SKIP){ if(Date.now()-SKIP[k]>7*86400000) delete SKIP[k]; }   // reviewed-check marks expire after a week
   const savedCfg=await stGet(KEY_CFG);
   if(savedCfg){
