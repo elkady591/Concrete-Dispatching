@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000032">
+<meta name="app-build" content="20261102-000033">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -633,6 +633,8 @@
   .tp-c[data-tk]{cursor:pointer} .tp-c[data-tk]:hover{border-color:var(--rose)}
   .tp-c.fx{border-color:color-mix(in srgb,var(--accent) 65%,transparent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
   .tp-c.out{border-color:color-mix(in srgb,var(--cyan) 60%,transparent);background:color-mix(in srgb,var(--cyan) 10%,transparent)} .tp-c.out small{color:var(--cyan)}
+  .tp-c.nw{border:2px solid var(--green);padding:4px 3px;background:color-mix(in srgb,var(--green) 20%,transparent)} .tp-c.nw small{color:var(--green);font-weight:800}
+  .tp-nwl{margin-top:8px;font-size:12.5px;color:var(--green);font-weight:700}
   .tp-hl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .tp-in{font:700 13px var(--mono);border:1px dashed rgba(245,158,11,.6);color:var(--amber);border-radius:9px;padding:3px 9px;cursor:pointer}
   .tp-in small{font-size:10px;opacity:.75}
@@ -2949,7 +2951,7 @@ async function tpToggle(tk){ const s=tpExcluded(), C=TP_CTX; s.has(tk)?s.delete(
   if(C){ let L=C.L.slice();
     if(s.has(tk)){ L=L.filter(x=>x!==tk); L=L.concat(C.next(1,new Set([...L,tk]))); }        // out: the next lowest takes its place
     else { L.push(tk); const j=[...L].reverse().findIndex(x=>x!==tk&&!C.out.has(x)); if(j>=0) L.splice(L.length-1-j,1); }   // back: the last added goes
-    return tpSave(L,{TPX:v}); }
+    return tpSave(L,{TPX:v, TPA:tpMark(s.has(tk)?C.L:C.L.concat(tk),L)}); }   // (a truck put back was on the list already: not "added")
   if(v) PUMPNOTE['TPX']=v; else delete PUMPNOTE['TPX']; stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPX',v); }
 // trucks the user wants to run whatever their m³ (tap one under HOLD today): always in, they push out the highest-m³ ones;
 // PUMPNOTE['TPI'] = "110,124" — shared, stays until tapped again
@@ -2961,7 +2963,7 @@ async function tpForce(tk){ const s=tpForced(), x=tpExcluded(), C=TP_CTX; s.has(
     if(s.has(tk)){ if(!L.includes(tk)){ L.push(tk);   // run it today: it takes the place of the highest-m³ one
         const cand=L.filter(y=>y!==tk&&!s.has(y)&&!C.out.has(y)).sort((a,b)=>(C.q(b)-C.q(a))); if(cand.length) L=L.filter(y=>y!==cand[0]); } }
     else { L=L.filter(y=>y!==tk); L=L.concat(C.next(1,new Set([...L,tk]))); }   // not forced any more: the next lowest instead
-    return tpSave(L,{TPI:v, TPX:PUMPNOTE['TPX']||''}); }
+    return tpSave(L,{TPI:v, TPX:PUMPNOTE['TPX']||'', TPA:tpMark(C.L,L)}); }
   stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPI',v); await syncPush('pump','TPX',PUMPNOTE['TPX']||''); }
 const tpCount=()=>parseInt(PUMPNOTE['TPN'])||(()=>{ try{ return parseInt(localStorage.getItem('cmpour:planN'))||15; }catch(e){ return 15; } })();
 let planN=15, TP_PICK=[], TP_SHEET='';
@@ -2975,6 +2977,15 @@ function tpList(){ const v=String(PUMPNOTE['TPL']||''), i=v.indexOf('|'); if(i<0
 async function tpSave(L,extra){ const v=workDayStr()+'|'+L.join(','); PUMPNOTE['TPL']=v; if(extra) Object.assign(PUMPNOTE,extra);
   for(const k in (extra||{})) if(extra[k]==='') delete PUMPNOTE[k];
   stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPL',v); for(const k in (extra||{})) await syncPush('pump',k,extra[k]); }
+// a truck added to today's list by hand (OK, the one that comes in for a truck taken out, run anyway) stands out for an
+// hour, then looks like the rest. Shared: PUMPNOTE['TPA'] = "126@ms,133@ms"; the marks end at the 8 AM cut too
+const TP_NEW=3600000;
+function tpAdded(){ const now=Date.now(), cut=lastDailyCut(cutDaily()||'08:00',now), m=new Map();
+  String(PUMPNOTE['TPA']||'').split(',').forEach(x=>{ const [tk,t]=x.split('@'); if(tk&&+t>=cut&&now-t<TP_NEW) m.set(tk,+t); });
+  return m; }
+function tpMark(was,L){ const m=tpAdded(), now=Date.now();
+  L.forEach(tk=>{ if(!was.includes(tk)) m.set(tk,now); }); [...m.keys()].forEach(tk=>{ if(!L.includes(tk)) m.delete(tk); });
+  return [...m].map(([tk,t])=>tk+'@'+t).join(','); }
 let tpPasteOpen=false, tpPasteTxt='';   // the "Paste list" box (this device)
 // the truck numbers in a pasted list: the fleet's (not the count "15 خلاطة", not a date); a broken-down one is left out
 function tpParse(txt,fleet,down){ const F=new Set(fleet.map(String).concat([...down].map(String))), ok=[], bad=[], seen=new Set();
@@ -3084,7 +3095,8 @@ function renderTrucks(){
       // Breakdown = its own note kept, every other truck = "HOLD". Pasted at the note cell of the first truck.
       const pickS=new Set(pick), holdToday=ORD.filter(o=>!pickS.has(String(o.truck))&&!isDownO(o)).map(o=>String(o.truck));
       TP_SHEET=ORD.map(o=>{ const tk=String(o.truck); return pickS.has(tk)?'':isDownO(o)?String(o.note||'').replace(/[\t\r\n]+/g,' '):'HOLD'; }).join('\n');
-      const holdS=new Set((t.hold||[]).map(b=>String(b.truck)));
+      const holdS=new Set((t.hold||[]).map(b=>String(b.truck))), tpNew=tpAdded();
+      [...tpNew.keys()].forEach(tk=>{ if(!pickS.has(tk)) tpNew.delete(tk); });
       const tpBox=`<div class="tp-box"><div class="tp-h"><b>🗓 Trucks for today</b>
           <label class="tp-n">How many <input id="tpN" type="number" min="1" max="${fleet.length}" value="${pick.length}" inputmode="numeric"></label>
           <button class="btn sm" id="tpOk" type="button" title="Add the next lowest / take off the last added — today's list stays">OK</button>
@@ -3096,7 +3108,8 @@ function renderTrucks(){
           ${(()=>{ const P=tpParse(tpPasteTxt,fleet,down); return tpPasteTxt.trim()?`<div class="tp-pv"><b>${P.ok.length} truck${P.ok.length===1?'':'s'}:</b> ${P.ok.map(tk=>`<span class="tp-pc">${esc(tk)}</span>`).join('')}${P.bad.length?`<div class="tp-pbad">⚠ not used: ${P.bad.map(x=>esc(x.tk)+' ('+x.why+')').join(', ')}</div>`:''}</div>`:''; })()}
           <div class="tp-pbtn"><button class="btn sm alt" id="tpPasteX" type="button">Cancel</button><button class="btn sm" id="tpPasteOk" type="button">💾 Save as today's list</button></div></div>`:''}
         <div class="muted" style="font-size:12px;margin:2px 0 8px">Today's list (${workDayStr().slice(5)} · kept until 8 AM) — picked by the lowest m³ this month · Breakdown left out${(t.breakdown||[]).length?' ('+(t.breakdown||[]).map(b=>esc(b.truck)).join(', ')+')':''}</div>
-        <div class="tp-list">${pick.map(tk=>{ const fx=fxS.has(tk), out=outS.has(tk)&&!fx; return `<span class="tp-c${holdS.has(tk)?' hd':''}${fx?' fx':''}${out?' out':''}" data-tk="${esc(tk)}" ${fx?'data-fx="1"':''} title="${fx?'Run by you (📌) — tap to stop forcing it':out?'Out with concrete now — working today (tap to take it out anyway)':'Tap to take it out — the next one comes in'}"><b>${fx?'📌 ':out?'🚚 ':''}${esc(tk)}</b><small>${out?'out now':fmt(qOf.get(tk)||0,0)+' m³'}${holdS.has(tk)?' · hold':''}</small></span>`; }).join('')}</div>
+        <div class="tp-list">${pick.map(tk=>{ const fx=fxS.has(tk), out=outS.has(tk)&&!fx, nw=tpNew.get(tk); return `<span class="tp-c${holdS.has(tk)?' hd':''}${fx?' fx':''}${out?' out':''}${nw?' nw':''}" data-tk="${esc(tk)}" ${fx?'data-fx="1"':''} title="${nw?`Added ${timeShort(nw)} — marked until ${timeShort(nw+TP_NEW)} · `:''}${fx?'Run by you (📌) — tap to stop forcing it':out?'Out with concrete now — working today (tap to take it out anyway)':'Tap to take it out — the next one comes in'}"><b>${fx?'📌 ':out?'🚚 ':''}${esc(tk)}</b><small>${nw?'＋ ':''}${out?'out now':fmt(qOf.get(tk)||0,0)+' m³'}${holdS.has(tk)?' · hold':''}</small></span>`; }).join('')}</div>
+        ${tpNew.size?`<div class="tp-nwl">＋ Added in the last hour: <b>${[...tpNew.keys()].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map(esc).join(' · ')}</b></div>`:''}
         <div class="muted" style="font-size:11.5px;margin-top:6px">Tap a truck to take it out — the next lowest comes in its place · tap a truck under HOLD to run it anyway (📌)</div>
         ${exL.length?`<div class="tp-ex"><b>🚫 Taken out</b> <span class="muted" style="font-size:11px">(stay out until you tap them back)</span> ${exL.map(tk=>`<span class="tp-x" data-tk="${esc(tk)}" title="Tap to put it back">${esc(tk)} ↺</span>`).join('')}</div>`:''}
         ${ORD.length?`<div class="tp-hold"><div><b>⏸ HOLD today (${holdToday.length})</b> <span class="muted" style="font-size:11px">tap one to run it anyway</span>
@@ -3183,7 +3196,7 @@ function renderTrucks(){
     const ok=el('tpOk'), ni=el('tpN'); if(ok&&ni) ok.addEventListener('click',()=>{ const C=TP_CTX; if(!C) return; const n=Math.max(1,parseInt(ni.value)||C.L.length);
       let L=C.L.slice(); if(n>L.length) L=L.concat(C.next(n-L.length,new Set(L)));
       else while(L.length>n){ const j=[...L].reverse().findIndex(x=>!C.out.has(x)); if(j<0) break; L.splice(L.length-1-j,1); }
-      planN=n; tpSave(L,{TPN:String(n)}); });
+      planN=n; tpSave(L,{TPN:String(n), TPA:tpMark(C.L,L)}); });
     if(ni) ni.addEventListener('keydown',e=>{ if(e.key==='Enter'&&ok) ok.click(); });
     // Paste list: the trucks of a pasted message become today's list (the "run anyway" marks go: the list says it all)
     const pb=el('tpPaste'); if(pb) pb.addEventListener('click',()=>{ tpPasteOpen=!tpPasteOpen; renderTrucks(); const ta=el('tpPasteTxt'); if(ta) ta.focus(); });
@@ -3191,11 +3204,11 @@ function renderTrucks(){
     const px=el('tpPasteX'); if(px) px.addEventListener('click',()=>{ tpPasteOpen=false; tpPasteTxt=''; renderTrucks(); });
     const po=el('tpPasteOk'); if(po) po.addEventListener('click',()=>{ const C=TP_CTX; if(!C) return; const P=tpParse(tpPasteTxt,C.fleet,C.down);
       if(!P.ok.length){ alert('No truck number found in it'); return; }
-      tpPasteOpen=false; tpPasteTxt=''; planN=P.ok.length; tpSave(P.ok,{TPN:String(P.ok.length), TPI:''}); });
+      tpPasteOpen=false; tpPasteTxt=''; planN=P.ok.length; tpSave(P.ok,{TPN:String(P.ok.length), TPI:'', TPA:''}); });
     // Reset: pick again from the start (as at 8 AM): the hand changes (taken out / run anyway) go too
     const rs=el('tpReset'); if(rs) rs.addEventListener('click',async()=>{ if(!confirm('Pick today\'s trucks again from the start (by the m³ now)?')) return;
-      for(const k of ['TPL','TPX','TPI']) delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); renderTrucks();
-      for(const k of ['TPX','TPI']) await syncPush('pump',k,''); });
+      for(const k of ['TPL','TPX','TPI','TPA']) delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); renderTrucks();
+      for(const k of ['TPX','TPI','TPA']) await syncPush('pump',k,''); });
     const mixersTxt=n=>n===1?'خلاطة واحدة':n===2?'خلاطتين':n<=10?n+' خلاطات':n+' خلاطة';
     const cb=el('tpCopy'); if(cb) cb.addEventListener('click',async()=>{ const txt='الخلاطات اللي شغالة النهاردة ان شاء الله\n'+mixersTxt(TP_PICK.length)+'\n\n'+TP_PICK.join('\n');
       let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){} cb.textContent=ok?'Copied ✓':'Copy failed'; });
