@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000024">
+<meta name="app-build" content="20261102-000025">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2313,7 +2313,7 @@ function renderViewTabs(){
   // ⚠ on Upcoming when a request's pumps are not ready
   const chkWarn=CHK_ALERT>0?`<span class="pm-alert" title="${CHK_ALERT} data check${CHK_ALERT>1?'s':''} to look at">⚠</span>`:'';
   let upWarn=''; try{ for(const v of upcomingPumpCheck().values()) if(v.cls!=='ok'){ upWarn='<span class="pm-alert" title="Pumps not ready for a request">⚠</span>'; break; } }catch(e){}
-  box.innerHTML=mk('summary','📋 Summary',VD.open.length,'sum','Summary')+mk('pours','🏗️ All Pours'+chkWarn,VD.started.length,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
+  box.innerHTML=mk('summary','📋 Summary',VD.open.length,'sum','Summary')+mk('pours','🏗️ All Pours'+chkWarn,VD.started.filter(g=>!qtyReached(g)).length,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
     // Trucks / Pumps: the number = what is AVAILABLE now (empty trucks · free pumps that have an operator)
     +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks'+(((TRUCKS&&TRUCKS.loaded)||[]).some(x=>outClass(x.elapsed)==='bad')?'<span class="pm-alert" title="CAUTION: a truck out for more than 3 h">⚠</span>':''),(TRUCKS&&TRUCKS.ok)?TRUCKS.available.length:null,'trk','Trucks')
     +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', (()=>{ try{ return pumpPlan(Date.now()).state.filter(s=>s.st==='free'&&!s.noop).length; }catch(e){ return null; } })(),'pmp','Pumps')
@@ -2631,6 +2631,7 @@ function planRowsOf(){
   return out;
 }
 const pourDone=g=>!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
+const qtyReached=g=>g.trucks>0 && g.remaining!=null && g.remaining<=0;   // its quantity reached = finished
 // Chains: requests of the SAME client + element poured one after the other with the same pumps.
 // Members = the ones still running or not started, running first, then plan order.
 // -> Map(pour -> {members, idx (1-based), prev (pour|null), lastDone (ms of the newest finished sibling)})
@@ -3441,12 +3442,13 @@ function renderSummary(){
   // Closed Pours (read-only): each pour the user closed + what it actually poured. A small Re-open per row.
   // Hide = off this list AND off the WhatsApp plan photo, on every device (still counted everywhere else)
   // + the auto-closed ones (no truck for 2 h, quantity not reached): they are finished for the photo too, so list them here
-  const dlAll=(VD.doneList||[]).concat((VD.closed||[]).filter(g=>!DONE[doneKey(g)])).sort((a,b)=>(b.endMax||0)-(a.endMax||0));
+  // + the ones whose quantity is reached (finished, not marked Done)
+  const dlAll=(VD.doneList||[]).concat((VD.closed||[]).filter(g=>!DONE[doneKey(g)]), (VD.started||[]).filter(g=>qtyReached(g)&&!DONE[doneKey(g)]&&g.status!=='closed')).sort((a,b)=>(b.endMax||0)-(a.endMax||0));
   const isAuto=g=>!DONE[doneKey(g)];
   const dl=dlAll.filter(g=>!closedHidden(g)), hid=dlAll.filter(closedHidden);
   if(el('closedCard')) el('closedCard').style.display = dlAll.length ? '' : 'none';
   const closedRow=(g,h)=>`<div class="cl-row${h?' cl-hid':''}">
-      <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${isAuto(g)?`<div class="cl-idle">auto-closed · no truck since ${cutLabel(g.endMax)}${g.required!=null?` · ${fmt(g.delivered,0)} of ${fmt(g.required,0)} m³`:''}</div>`:''}${h&&PUMPNOTE[hideKey(g)]!=='1'?`<div class="cl-auto">auto · finished before ${cutLabel(planCutAt())}</div>`:''}${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
+      <div style="min-width:0"><span style="font-weight:800">${g.elem||'—'}</span><span style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-inline-start:6px">${g.plant||''}</span>${isAuto(g)&&qtyReached(g)?`<div class="cl-idle cl-qty">finished · quantity reached · ${fmt(g.delivered,0)} of ${fmt(g.required,0)} m³ · last truck ${cutLabel(g.endMax)}</div>`:''}${isAuto(g)&&!qtyReached(g)?`<div class="cl-idle">auto-closed · no truck since ${cutLabel(g.endMax)}${g.required!=null?` · ${fmt(g.delivered,0)} of ${fmt(g.required,0)} m³`:''}</div>`:''}${h&&PUMPNOTE[hideKey(g)]!=='1'?`<div class="cl-auto">auto · finished before ${cutLabel(planCutAt())}</div>`:''}${(g.client||g.mix)?`<div style="font-size:11px;color:var(--faint);font-weight:500;margin-top:2px">${[g.client,g.mix].filter(Boolean).join(' · ')}</div>`:''}</div>
       <div class="cl-act"><span style="font-family:var(--mono);font-size:13px"><b style="color:var(--green)">${fmt(g.delivered,0)}</b> m³<span class="cl-pw"> poured</span></span>
         <button class="btn ghost hide-btn" data-h="${encodeURIComponent(hideKey(g))}" data-on="${h?(autoHidden(g)?'0':''):'1'}" title="${h?'Show it again in this list and in the plan photo':'Take it off this list and off the plan photo (every device)'}">${h?'Show':'Hide'}</button>
         ${isAuto(g)?`<button class="btn ghost close-btn" data-e="${encodeURIComponent(doneKey(g))}" title="Close it for good (Done)">✓ Done</button>`
@@ -4212,7 +4214,8 @@ function renderPlantTimeline(kind){
 function renderAllPours(){
   // use the plan-driven pour list (same-name pours split & numbered), started ones only
   // pours marked DONE are left out here, so the tab counts match the rows actually listed
-  const pours=VD.summary.filter(g=>{const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0&&!DONE[doneKey(g)];});
+  // (quantity reached = finished, as if Done — user's rule: it moves to Summary's Closed Pours; a higher Required brings it back)
+  const pours=VD.summary.filter(g=>{const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0&&!DONE[doneKey(g)]&&!qtyReached(g);});
   // a pour's stations = the stations its trucks were actually loaded from (each load carries its station)
   const stationsOf=g=>{ const s=new Set((g.loads||[]).map(l=>l.p).filter(Boolean)); return s.size?[...s]:(g.plant||'').split(/,\s*/).filter(Boolean); };
   const inStation=(g,st)=>stationsOf(g).includes(st);
