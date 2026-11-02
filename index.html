@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000023">
+<meta name="app-build" content="20261102-000024">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1164,6 +1164,10 @@
   .ptl-at-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-top:8px}
   .ptl-at-c{border:1px solid var(--line2);border-radius:10px;padding:7px;font-size:12px}.ptl-at-c b{font-family:var(--mono)}
   .ptl-at-c.busy{border-color:var(--cyan)}.ptl-at-c.fr{border-color:var(--green)}.ptl-at-c .plan{color:var(--violet)}.ptl-at-c .wash{color:#fb923c}.ptl-at-c small{display:block}
+  .tp-paste{border:1px dashed var(--line2);border-radius:12px;padding:10px;margin:6px 0 10px}
+  .tp-paste textarea{width:100%;box-sizing:border-box;font:13px var(--mono);border-radius:8px;padding:8px;background:transparent;color:inherit;border:1px solid var(--line2)}
+  .tp-pv{margin:8px 0;font-size:12.5px}.tp-pc{display:inline-block;font:800 12px var(--mono);padding:2px 8px;margin:2px;border-radius:999px;background:rgba(52,211,153,.15);color:var(--green)}
+  .tp-pbad{color:var(--amber);margin-top:4px} .tp-pbtn{display:flex;gap:8px;justify-content:flex-end}
   .tw-sub{margin:12px 2px 4px;font-size:12px;font-weight:800;color:var(--amber)}
   .trk-kpi .l small{font-size:10px;color:var(--amber);font-weight:800}
   .trk-card .tc-info{min-width:0;flex:1} .trk-card .tc-top{overflow-wrap:anywhere}
@@ -2969,6 +2973,12 @@ function tpList(){ const v=String(PUMPNOTE['TPL']||''), i=v.indexOf('|'); if(i<0
 async function tpSave(L,extra){ const v=workDayStr()+'|'+L.join(','); PUMPNOTE['TPL']=v; if(extra) Object.assign(PUMPNOTE,extra);
   for(const k in (extra||{})) if(extra[k]==='') delete PUMPNOTE[k];
   stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPL',v); for(const k in (extra||{})) await syncPush('pump',k,extra[k]); }
+let tpPasteOpen=false, tpPasteTxt='';   // the "Paste list" box (this device)
+// the truck numbers in a pasted list: the fleet's (not the count "15 خلاطة", not a date); a broken-down one is left out
+function tpParse(txt,fleet,down){ const F=new Set(fleet.map(String).concat([...down].map(String))), ok=[], bad=[], seen=new Set();
+  for(const m of String(txt||'').matchAll(/(?:^|[^\d])(\d{3})(?!\d)/g)){ const tk=m[1]; if(seen.has(tk)) continue; seen.add(tk);
+    if(down.has(tk)) bad.push({tk,why:'Breakdown'}); else if(F.has(tk)) ok.push(tk); else bad.push({tk,why:'not in the fleet'}); }
+  return {ok,bad}; }
 let TP_CTX=null;   // what the list's buttons need from the last draw: {L, next(n, without), down, out, q}
 let CHK_ALERT=0;   // Data checks waiting (act now + to check) -> ⚠ on the All Pours tab
 let truckDown=null;      // broken truck tapped on the Available tab = its reason shows under the chips
@@ -3064,7 +3074,7 @@ function renderTrucks(){
       const keep=L.filter(tk=>!down.has(tk)), add=fleet.filter(tk=>outS.has(tk)&&!keep.includes(tk)&&!exS.has(tk));   // broken down = off · out with concrete = on
       L=keep.concat(add);
       if(fresh||add.length) setTimeout(()=>tpSave(L),0);   // (outside the draw: it re-draws)
-      TP_CTX={L, next, down, out:outS, q:tk=>qOf.get(tk)||0};
+      TP_CTX={L, next, down, out:outS, fleet, q:tk=>qOf.get(tk)||0};
       const pick=L.slice().sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
       TP_PICK=pick;
       // the sheet's NOTE column (Q) only, row by row in the sheet's own order — the checkbox (P) and the number (R) are
@@ -3077,7 +3087,12 @@ function renderTrucks(){
           <label class="tp-n">How many <input id="tpN" type="number" min="1" max="${fleet.length}" value="${pick.length}" inputmode="numeric"></label>
           <button class="btn sm" id="tpOk" type="button" title="Add the next lowest / take off the last added — today's list stays">OK</button>
           <button class="btn sm" id="tpCopy" type="button">📋 Copy</button>
-          <button class="btn sm alt" id="tpReset" type="button" title="Pick again from the start, by the m³ now (it also does this by itself every day at the 8 AM cut)">↺ Reset</button></div>
+          <button class="btn sm alt" id="tpReset" type="button" title="Pick again from the start, by the m³ now (it also does this by itself every day at the 8 AM cut)">↺ Reset</button>
+          <button class="btn sm alt" id="tpPaste" type="button" title="Paste the WhatsApp list — those trucks become today's list">📥 Paste list</button></div>
+        ${tpPasteOpen?`<div class="tp-paste"><div class="muted" style="font-size:12px;margin-bottom:6px">Paste the message ("الخلاطات اللي شغالة النهاردة …") — its truck numbers become today's list, every device</div>
+          <textarea id="tpPasteTxt" rows="5" placeholder="101&#10;103&#10;104 …">${esc(tpPasteTxt)}</textarea>
+          ${(()=>{ const P=tpParse(tpPasteTxt,fleet,down); return tpPasteTxt.trim()?`<div class="tp-pv"><b>${P.ok.length} truck${P.ok.length===1?'':'s'}:</b> ${P.ok.map(tk=>`<span class="tp-pc">${esc(tk)}</span>`).join('')}${P.bad.length?`<div class="tp-pbad">⚠ not used: ${P.bad.map(x=>esc(x.tk)+' ('+x.why+')').join(', ')}</div>`:''}</div>`:''; })()}
+          <div class="tp-pbtn"><button class="btn sm alt" id="tpPasteX" type="button">Cancel</button><button class="btn sm" id="tpPasteOk" type="button">💾 Save as today's list</button></div></div>`:''}
         <div class="muted" style="font-size:12px;margin:2px 0 8px">Today's list (${workDayStr().slice(5)} · kept until 8 AM) — picked by the lowest m³ this month · Breakdown left out${(t.breakdown||[]).length?' ('+(t.breakdown||[]).map(b=>esc(b.truck)).join(', ')+')':''}</div>
         <div class="tp-list">${pick.map(tk=>{ const fx=fxS.has(tk), out=outS.has(tk)&&!fx; return `<span class="tp-c${holdS.has(tk)?' hd':''}${fx?' fx':''}${out?' out':''}" data-tk="${esc(tk)}" ${fx?'data-fx="1"':''} title="${fx?'Run by you (📌) — tap to stop forcing it':out?'Out with concrete now — working today (tap to take it out anyway)':'Tap to take it out — the next one comes in'}"><b>${fx?'📌 ':out?'🚚 ':''}${esc(tk)}</b><small>${out?'out now':fmt(qOf.get(tk)||0,0)+' m³'}${holdS.has(tk)?' · hold':''}</small></span>`; }).join('')}</div>
         <div class="muted" style="font-size:11.5px;margin-top:6px">Tap a truck to take it out — the next lowest comes in its place · tap a truck under HOLD to run it anyway (📌)</div>
@@ -3168,6 +3183,13 @@ function renderTrucks(){
       else while(L.length>n){ const j=[...L].reverse().findIndex(x=>!C.out.has(x)); if(j<0) break; L.splice(L.length-1-j,1); }
       planN=n; tpSave(L,{TPN:String(n)}); });
     if(ni) ni.addEventListener('keydown',e=>{ if(e.key==='Enter'&&ok) ok.click(); });
+    // Paste list: the trucks of a pasted message become today's list (the "run anyway" marks go: the list says it all)
+    const pb=el('tpPaste'); if(pb) pb.addEventListener('click',()=>{ tpPasteOpen=!tpPasteOpen; renderTrucks(); const ta=el('tpPasteTxt'); if(ta) ta.focus(); });
+    const pt=el('tpPasteTxt'); if(pt){ pt.addEventListener('input',()=>{ tpPasteTxt=pt.value; const pos=pt.selectionStart; renderTrucks(); const t2=el('tpPasteTxt'); if(t2){ t2.focus(); t2.setSelectionRange(pos,pos); } }); }
+    const px=el('tpPasteX'); if(px) px.addEventListener('click',()=>{ tpPasteOpen=false; tpPasteTxt=''; renderTrucks(); });
+    const po=el('tpPasteOk'); if(po) po.addEventListener('click',()=>{ const C=TP_CTX; if(!C) return; const P=tpParse(tpPasteTxt,C.fleet,C.down);
+      if(!P.ok.length){ alert('No truck number found in it'); return; }
+      tpPasteOpen=false; tpPasteTxt=''; planN=P.ok.length; tpSave(P.ok,{TPN:String(P.ok.length), TPI:''}); });
     // Reset: pick again from the start (as at 8 AM): the hand changes (taken out / run anyway) go too
     const rs=el('tpReset'); if(rs) rs.addEventListener('click',async()=>{ if(!confirm('Pick today\'s trucks again from the start (by the m³ now)?')) return;
       for(const k of ['TPL','TPX','TPI']) delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); renderTrucks();
