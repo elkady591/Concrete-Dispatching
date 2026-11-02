@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000025">
+<meta name="app-build" content="20261102-000026">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3490,7 +3490,31 @@ const LATE_TOL=1.75;    // with a target rate: late = more than 1.75 × the expe
                         // (a pour simply running a bit under target is not flagged; a hole big enough for a whole truck is)…
 const LATE_MIN=10*60000;// …and at least 10 min past it (so a 6-min interval isn't flagged at 9 min)
 const KEY_SKIP='cmpour:chkskip';
-let SKIP={};            // checks the user marked as reviewed on this device: {id: when}
+let SKIP={};            // checks the user marked as reviewed: {id: when}
+// A Skip belongs to the PERSON, not the device (user's rule): kept in the shared state under the name typed at the
+// start — PUMPNOTE['K|<name>|<check id>'] = when — so a Skip on one of your devices goes on all of them, and someone
+// else's Skip never touches yours. Each device's SKIP = the shared ones of its name (+ what it skipped before this, sent
+// up once). With no name / no sync URL it stays on the device as before.
+const skName=()=>String(ME||'').trim().toLowerCase().replace(/[|\s]+/g,' ');
+const skKey=id=>'K|'+skName()+'|'+id;
+const KEY_SKSYNC='cmpour:skipsync';
+function skipSet(ids,on){ const now=Date.now(), push=[];
+  for(const id of ids){ if(on) SKIP[id]=now; else delete SKIP[id];
+    if(skName()&&syncBase()){ const k=skKey(id), v=on?String(now):''; if(v) PUMPNOTE[k]=v; else delete PUMPNOTE[k]; push.push([k,v]); } }
+  stSet(KEY_SKIP,SKIP); if(push.length) stSet(KEY_PUMP,PUMPNOTE);
+  (async()=>{ for(const [k,v] of push) await syncPush('pump',k,v); })(); }
+// the shared Skips of this name -> SKIP (the first time on a device: its own Skips are sent up, so none is lost)
+function skipsFromShared(){ const nm=skName(); if(!nm||!syncBase()) return;
+  let first=false; try{ first=localStorage.getItem(KEY_SKSYNC)!==nm; }catch(e){}
+  const pre='K|'+nm+'|', shared={}, now=Date.now(), old=[];
+  for(const k in PUMPNOTE){ if(k.indexOf(pre)!==0) continue; const id=k.slice(pre.length), t=+PUMPNOTE[k]||now;
+    if(!/^(hold|down)\|/.test(id) && now-t>7*86400000){ old.push(k); continue; }   // a week old = forgotten (a hold / breakdown truck's goes with its alert)
+    shared[id]=t; }
+  if(first){ const up=Object.keys(SKIP).filter(id=>!(id in shared)); up.forEach(id=>{ shared[id]=SKIP[id]; PUMPNOTE[skKey(id)]=String(SKIP[id]); });
+    try{ localStorage.setItem(KEY_SKSYNC,nm); }catch(e){}
+    if(up.length) (async()=>{ for(const id of up) await syncPush('pump',skKey(id),String(SKIP[id])); })(); }
+  if(old.length){ old.forEach(k=>delete PUMPNOTE[k]); (async()=>{ for(const k of old) await syncPush('pump',k,''); })(); }
+  SKIP=shared; stSet(KEY_SKIP,SKIP); }
 // an ON HOLD or BREAKDOWN truck seen loaded: kept here so its check stays after the truck is back / its request is
 // finished, until the user Skips it (user's rule). {id: {truck, plant, es, q, dep, flag:'hold'|'down', flagNote, seen}}
 const KEY_HOLDSEEN='cmpour:holdseen';
@@ -3510,7 +3534,8 @@ function rememberHolds(){ let ch=false; const now=Date.now();
     const mn=outMins(x); if(mn!=null && mn>HOLD_FRESH) continue;
     HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flag:x.flag, flagNote:x.flagNote||'', seen:now, last:now}; ch=true; }
   // forgotten only when skipped, a week old and off the loaded list for a day (its Skip goes with it)
-  for(const id in HOLDSEEN){ const e=HOLDSEEN[id]; if(SKIP[id] && now-e.seen>7*86400000 && now-(e.last||e.seen)>86400000){ delete HOLDSEEN[id]; delete SKIP[id]; ch=true; } }
+  const gone=[]; for(const id in HOLDSEEN){ const e=HOLDSEEN[id]; if(SKIP[id] && now-e.seen>7*86400000 && now-(e.last||e.seen)>86400000){ delete HOLDSEEN[id]; gone.push(id); ch=true; } }
+  if(gone.length) skipSet(gone,false);
   if(ch){ stSet(KEY_HOLDSEEN,HOLDSEEN); stSet(KEY_SKIP,SKIP); } }
 let showSkipped=false;
 const gapId=(p,r)=>`gap|${p.key}|${r.l.t}`;
@@ -3925,8 +3950,7 @@ function renderCheckList(cb, items){
   cb.querySelectorAll('.rl-ext').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); extendRule(b.dataset.k); }));
   cb.querySelectorAll('.rl-stop').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); if(confirm('Stop this station rule? Trucks already given stay with the request.')) stopRule(b.dataset.k); }));
   cb.querySelectorAll('.chk-skip').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
-    for(const id of decodeURIComponent(b.dataset.id).split('\n')){ if(b.dataset.on==='1') SKIP[id]=Date.now(); else delete SKIP[id]; }
-    stSet(KEY_SKIP,SKIP); renderAllPours(); }));
+    skipSet(decodeURIComponent(b.dataset.id).split('\n'), b.dataset.on==='1'); renderAllPours(); }));   // on every device of this name
   cb.querySelectorAll('.chk-fix:not(.chk-req)').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
     const to=b.dataset.to, k=b.dataset.key, wrong=k.slice(1).split('|')[0];
     const q=k[0]==='x'?(to?'':`Take TM ${k.slice(1).split('|')[1]} off the request it was given?`)
@@ -4729,6 +4753,7 @@ function applyState(st){
   DONE=st.done||{}; REQ=st.req||{}; RATE=st.rate||{};
   stSet(KEY_DONE,DONE); stSet(KEY_REQ,REQ); stSet(KEY_RATE,RATE);   // keep a local cache for offline
   if(st.pump){ PUMPNOTE=st.pump; stSet(KEY_PUMP,PUMPNOTE); }        // older sync script: no pump notes -> keep local
+  try{ skipsFromShared(); }catch(e){}   // this person's Skips, from any of their devices
   try{ renderThemes(); }catch(e){}
   return true;
 }
@@ -4856,7 +4881,7 @@ function askName(force){
       ev.preventDefault();
       const v=inp.value.trim();
       if(v.length<2){ err.textContent='اكتب اسمك من فضلك'; return; }
-      ME=v; try{ localStorage.setItem(KEY_ME,ME); }catch(e){}
+      ME=v; try{ localStorage.setItem(KEY_ME,ME); }catch(e){} try{ skipsFromShared(); }catch(e){}   // this name's Skips
       err.textContent=''; gate.style.display='none';
       const mn=el('meName'); if(mn)mn.textContent=ME;
       syncCall({action:'register', dev:deviceId(), name:ME, ip:MY_IP});   // remember this name against the device
@@ -5760,6 +5785,7 @@ function requireAuth(){
   }
   // restore identity + admin mode BEFORE the first render, so the right controls show from the start
   loadMe();
+  try{ skipsFromShared(); }catch(e){}   // (from the cached state, before the first pull)
   try{ IS_ADMIN = localStorage.getItem(KEY_ADMIN)===ADMIN_HASH; }catch(e){ IS_ADMIN=false; }
   if(['summary','pours','upcoming','trucks','pumps','production','admin'].indexOf(view)<0)view='summary';
   if(view==='admin' && !IS_ADMIN) view='summary';
