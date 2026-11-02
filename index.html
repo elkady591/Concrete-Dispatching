@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000030">
+<meta name="app-build" content="20261102-000032">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -244,8 +244,7 @@
   .ap-pill.ok{color:var(--green);background:rgba(52,211,153,.14)} .ap-pill.bad{color:var(--rose);background:rgba(251,113,133,.14)}
   .ap-hourly{margin-top:8px}
   .ap-bar{height:10px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:10px;overflow:hidden} .ap-bar i{display:block;height:100%;border-radius:99px}
-  .ap-trk{cursor:pointer;text-decoration:underline dotted}.ap-trk.on{color:var(--cyan)}
-  .ap-tl{margin-top:8px;max-height:320px;overflow:auto;font-size:12px}
+  .ap-trk{cursor:pointer}
   .ap-ft{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
   .ap-fs{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .ap-pc{font-family:var(--mono);font-size:20px;font-weight:800;color:var(--cyan)}
@@ -2939,7 +2938,6 @@ function outClass(el){
 let apOpen=new Set((()=>{ try{ return JSON.parse(localStorage.getItem('cmpour:apopen')||'[]'); }catch(e){ return []; } })());
 function saveApOpen(){ try{ localStorage.setItem('cmpour:apopen',JSON.stringify([...apOpen])); }catch(e){} }
 let clAll=false;          // themes 2 / 3: Closed Pours shows the last 3 until 'Show all'
-let apTrucks=new Set();  // Active Pours cards showing their truck list
 let apHourly=new Set();  // Active Pours cards showing their Hourly rate instead of the overview
 let prodSort=(()=>{ try{ return localStorage.getItem('cmpour:prodsort')||'m3'; }catch(e){ return 'm3'; } })();   // Productivity table: 'm3' | 'trips' (this viewer)
 let truckTab='loaded';   // 'loaded' | 'empty' | 'prod'
@@ -3427,16 +3425,15 @@ function renderSummary(){
           ${dF!=null&&!doneQ?`<span class="ap-pill ${dF>=0?'ok':'bad'}">${Math.abs(dF)<1?'on time':Math.abs(dF)>=60?Math.floor(Math.abs(dF)/60)+'h '+(Math.abs(dF)%60)+'m ':Math.abs(dF)+' min '}${Math.abs(dF)<1?'':dF>0?'early':'late'}</span>`:''}</div>
       </div>`}
       <div class="bar ap-bar"><i class="${barClass(g.status)}" style="width:${pct}%"></i></div>
-      <div class="ap-ft"><span class="ap-fs"><b class="ap-pc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</b><span class="ap-fc ap-trk${apTrucks.has(g.key)?' on':''}" data-k="${encodeURIComponent(g.key)}" title="Tap: this pour's trucks">🚛 <b>${g.trucks}</b> trucks ${apTrucks.has(g.key)?'▴':'▾'}</span>${g.hrs?`<span class="ap-fc">⏱ <b>${hLabel(g.hrs)}</b> h</span>`:''}</span>
+      <div class="ap-ft"><span class="ap-fs"><b class="ap-pc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</b><span class="ap-fc ap-trk" data-k="${encodeURIComponent(g.key)}" title="Tap: this pour's trucks in All Pours">🚛 <b>${g.trucks}</b> trucks <span class="go">&#8599;</span></span>${g.hrs?`<span class="ap-fc">⏱ <b>${hLabel(g.hrs)}</b> h</span>`:''}</span>
         <span class="ap-sp"></span><button class="ap-btn ap-hr${hourly?' on':''}" data-k="${encodeURIComponent(g.key)}">${hourly?'Overview':'Hourly rate'}</button>
-        <button class="ap-btn ap-done" data-e="${encodeURIComponent(doneKey(g))}" data-n="${esc(g.elem||'')}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>
-      ${apTrucks.has(g.key)?apTrucksHtml(g):''}`}
+        <button class="ap-btn ap-done" data-e="${encodeURIComponent(doneKey(g))}" data-n="${esc(g.elem||'')}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>`}
     </div>`;
   }).join('') : '<div class="muted" style="font-size:13px;padding:8px 4px">No active pours right now.</div>';
   el('activeList').querySelectorAll('.ap-tog,.ap-sum,.ap-bar-s').forEach(h=>h.addEventListener('click',()=>{ const k=decodeURIComponent(h.closest('.ap').dataset.k); apOpen.has(k)?apOpen.delete(k):apOpen.add(k); saveApOpen(); rerender(); }));
   { const ab=el('apAll'); if(ab){ const allOpen=list.length&&list.every(g=>apOpen.has(g.key)); ab.hidden=list.length<2; ab.textContent=allOpen?'Close all':'Open all';
       ab.onclick=()=>{ list.forEach(g=>allOpen?apOpen.delete(g.key):apOpen.add(g.key)); saveApOpen(); rerender(); }; } }
-  el('activeList').querySelectorAll('.ap-trk').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); const k=decodeURIComponent(b.dataset.k); apTrucks.has(k)?apTrucks.delete(k):apTrucks.add(k); rerender(); }));
+  el('activeList').querySelectorAll('.ap-trk').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); const k=decodeURIComponent(b.dataset.k); goTruckLog(k); }));
   el('activeList').querySelectorAll('.ap-hr').forEach(b=>b.addEventListener('click',()=>{ const k=decodeURIComponent(b.dataset.k); apHourly.has(k)?apHourly.delete(k):apHourly.add(k); rerender(); }));
   el('activeList').querySelectorAll('.ap-done').forEach(b=>b.addEventListener('click',()=>{ if(confirm(`Close ${b.dataset.n||'this pour'}? (Undo can re-open it)`)) toggleDone(decodeURIComponent(b.dataset.e), true); }));
   }
@@ -3488,14 +3485,14 @@ const elName=g=>esc((g&&g.elem)||'—')+((g&&g.client)?' ('+esc(g.client)+')':''
 let NOES=[];            // trucks typed without an ES id (collected by normalizeTab on every pull)
 let REJLIST=[];         // rejected / wasted trucks, one entry each (same pull)
 const rejId=l=>`rej|${l.p}|${l.k}|${l.dk}|${l.t}`;
-// Active Pours: the pour's own truck list (newest first), shown under its card when the 🚛 trucks chip is tapped
-function apTrucksHtml(g){
-  let rows=[]; try{ rows=gapRows(g); }catch(e){ rows=(g.loads||[]).map(l=>({l})); }
-  if(!rows.length) return '<div class="ap-tl muted">No trucks yet.</div>';
-  let no=0; rows.forEach(r=>{ r.no=r.l.rej?'R':String(++no); });
-  return `<div class="ap-tl tbl-wrap"><table class="tl-tbl"><thead><tr><th>#</th><th>Loaded</th><th>Truck</th><th>Station</th><th>m³</th><th>Since prev.</th></tr></thead><tbody>${rows.slice().reverse().map(r=>`<tr class="${r.flag?'gap':''}${r.l.rej?' rej':''}">
-    <td class="num muted">${r.no}</td><td class="num">${loadWhen(r.l)}</td><td class="num" style="font-weight:800">${esc(r.l.k||'—')}</td><td>${esc(r.l.p||'—')}</td><td class="num">${fmt(r.l.q)}</td>
-    <td class="num ${r.flag?'':'muted'}">${r.gap!=null?mins(r.gap):'—'}${r.l.rej?' <span class="tl-flag rejd">Rejected</span>':''}</td></tr>`).join('')}</tbody></table></div>`;
+// Active Pours: the 🚛 trucks chip -> All Pours, with that pour's truck log open
+async function goTruckLog(k){
+  view='pours'; activeTab='ALL'; statusFilter=null; logKey=k;
+  await saveCfg(); renderViewTabs(); applyView(); renderAllPours();
+  const t=el('truckLog'); if(!t||!t.firstElementChild) return;
+  // land just under the sticky tab bar so the "Trucks — element" title shows
+  const bar=document.querySelector('.view-tabs,#viewTabs'); const top=bar?Math.max(0,bar.getBoundingClientRect().bottom):0;
+  window.scrollTo({top:Math.max(0,window.scrollY+t.getBoundingClientRect().top-top-10),behavior:'smooth'});
 }
 let logKey=null;        // the pour whose truck log is open
 const MAX_LOAD=12;      // m³ — one truck above this is flagged
@@ -4453,9 +4450,9 @@ function renderOrigActive(open){
         </div>
         <div class="spot-bar">
           <div class="bar bar-lg"><i class="${bc}" style="width:${pct}%"></i></div>
-          <div class="spot-foot"><div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · <span class="ap-trk${apTrucks.has(sp.key)?' on':''}" id="spotTrk" title="Tap: this pour's trucks">${sp.trucks} trucks ${apTrucks.has(sp.key)?'▴':'▾'}</span>${sp.hrs?' · '+hLabel(sp.hrs)+' h':''}</div>
+          <div class="spot-foot"><div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · <span class="ap-trk" id="spotTrk" title="Tap: this pour's trucks in All Pours">${sp.trucks} trucks &#8599;</span>${sp.hrs?' · '+hLabel(sp.hrs)+' h':''}</div>
           <button class="spot-done" data-e="${encodeURIComponent(doneKey(sp))}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>
-        </div>${apTrucks.has(sp.key)?apTrucksHtml(sp):''}`;
+        </div>`;
     el('spot').innerHTML=`
       <div class="spot ${isActive?'livepour':''}">
         <div class="spot-head">
@@ -4473,7 +4470,7 @@ function renderOrigActive(open){
     const sel=el('spotSel');
     if(sel) sel.addEventListener('change',()=>{ spotKey=decodeURIComponent(sel.value); rerender(); });
     el('spot').querySelectorAll('.spot-tab').forEach(t=>t.addEventListener('click',()=>{ spotTab=t.dataset.st; rerender(); }));
-    { const st=el('spotTrk'); if(st) st.addEventListener('click',()=>{ apTrucks.has(sp.key)?apTrucks.delete(sp.key):apTrucks.add(sp.key); rerender(); }); }
+    { const st=el('spotTrk'); if(st) st.addEventListener('click',()=>{ goTruckLog(sp.key); }); }
     const sd=el('spot').querySelector('.spot-done');
     if(sd) sd.addEventListener('click',()=>{ if(confirm(`Close ${sp.elem||'this pour'}? (Undo can re-open it)`)) toggleDone(decodeURIComponent(sd.dataset.e), true); });
   } else el('spot').innerHTML='';
