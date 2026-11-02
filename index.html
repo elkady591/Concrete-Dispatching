@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000026">
+<meta name="app-build" content="20261102-000027">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3497,6 +3497,8 @@ let SKIP={};            // checks the user marked as reviewed: {id: when}
 // up once). With no name / no sync URL it stays on the device as before.
 const skName=()=>String(ME||'').trim().toLowerCase().replace(/[|\s]+/g,' ');
 const skKey=id=>'K|'+skName()+'|'+id;
+// a hold / breakdown truck's Skip made under an older id (…@day / …#day, builds of 29 Oct – 2 Nov) = the Skip of its trip now
+const skNorm=id=>/^(hold|down)\|/.test(id)?id.replace(/[@#]\d{4}-\d{2}-\d{2}$/,''):id;
 const KEY_SKSYNC='cmpour:skipsync';
 function skipSet(ids,on){ const now=Date.now(), push=[];
   for(const id of ids){ if(on) SKIP[id]=now; else delete SKIP[id];
@@ -3507,12 +3509,13 @@ function skipSet(ids,on){ const now=Date.now(), push=[];
 function skipsFromShared(){ const nm=skName(); if(!nm||!syncBase()) return;
   let first=false; try{ first=localStorage.getItem(KEY_SKSYNC)!==nm; }catch(e){}
   const pre='K|'+nm+'|', shared={}, now=Date.now(), old=[];
-  for(const k in PUMPNOTE){ if(k.indexOf(pre)!==0) continue; const id=k.slice(pre.length), t=+PUMPNOTE[k]||now;
+  for(const k in PUMPNOTE){ if(k.indexOf(pre)!==0) continue; const id=skNorm(k.slice(pre.length)), t=+PUMPNOTE[k]||now;
     if(!/^(hold|down)\|/.test(id) && now-t>7*86400000){ old.push(k); continue; }   // a week old = forgotten (a hold / breakdown truck's goes with its alert)
-    shared[id]=t; }
-  if(first){ const up=Object.keys(SKIP).filter(id=>!(id in shared)); up.forEach(id=>{ shared[id]=SKIP[id]; PUMPNOTE[skKey(id)]=String(SKIP[id]); });
+    shared[id]=Math.max(shared[id]||0,t); }
+  if(first){ const up=[...new Set(Object.keys(SKIP).map(skNorm))].filter(id=>!(id in shared)), at=id=>SKIP[id]||Math.max(...Object.keys(SKIP).filter(k=>skNorm(k)===id).map(k=>SKIP[k]));
+    up.forEach(id=>{ shared[id]=at(id); PUMPNOTE[skKey(id)]=String(shared[id]); });
     try{ localStorage.setItem(KEY_SKSYNC,nm); }catch(e){}
-    if(up.length) (async()=>{ for(const id of up) await syncPush('pump',skKey(id),String(SKIP[id])); })(); }
+    if(up.length) (async()=>{ for(const id of up) await syncPush('pump',skKey(id),String(shared[id])); })(); }
   if(old.length){ old.forEach(k=>delete PUMPNOTE[k]); (async()=>{ for(const k of old) await syncPush('pump',k,''); })(); }
   SKIP=shared; stSet(KEY_SKIP,SKIP); }
 // an ON HOLD or BREAKDOWN truck seen loaded: kept here so its check stays after the truck is back / its request is
@@ -5753,6 +5756,7 @@ function requireAuth(){
   PUMPNOTE=(await stGet(KEY_PUMP))||{};
   DONE_ORDER=(await stGet(KEY_DONE_ORDER))||[];
   SKIP=(await stGet(KEY_SKIP))||{};
+  for(const k of Object.keys(SKIP)){ const n=skNorm(k); if(n!==k){ SKIP[n]=Math.max(SKIP[n]||0,SKIP[k]); delete SKIP[k]; } }   // older hold / breakdown ids
   HOLDSEEN=(await stGet(KEY_HOLDSEEN))||{};
   // ids keyed by the day they were SEEN (build 2026-10-29) made one trip a new alert every day: the copies of one trip
   // become ONE alert again (kept until it is skipped — user's rule), skipped if any copy was
