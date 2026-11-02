@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000029">
+<meta name="app-build" content="20261102-000030">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4453,9 +4453,9 @@ function renderOrigActive(open){
         </div>
         <div class="spot-bar">
           <div class="bar bar-lg"><i class="${bc}" style="width:${pct}%"></i></div>
-          <div class="spot-foot"><div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · ${sp.trucks} trucks${sp.hrs?' · '+hLabel(sp.hrs)+' h':''}</div>
+          <div class="spot-foot"><div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · <span class="ap-trk${apTrucks.has(sp.key)?' on':''}" id="spotTrk" title="Tap: this pour's trucks">${sp.trucks} trucks ${apTrucks.has(sp.key)?'▴':'▾'}</span>${sp.hrs?' · '+hLabel(sp.hrs)+' h':''}</div>
           <button class="spot-done" data-e="${encodeURIComponent(doneKey(sp))}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>
-        </div>`;
+        </div>${apTrucks.has(sp.key)?apTrucksHtml(sp):''}`;
     el('spot').innerHTML=`
       <div class="spot ${isActive?'livepour':''}">
         <div class="spot-head">
@@ -4473,6 +4473,7 @@ function renderOrigActive(open){
     const sel=el('spotSel');
     if(sel) sel.addEventListener('change',()=>{ spotKey=decodeURIComponent(sel.value); rerender(); });
     el('spot').querySelectorAll('.spot-tab').forEach(t=>t.addEventListener('click',()=>{ spotTab=t.dataset.st; rerender(); }));
+    { const st=el('spotTrk'); if(st) st.addEventListener('click',()=>{ apTrucks.has(sp.key)?apTrucks.delete(sp.key):apTrucks.add(sp.key); rerender(); }); }
     const sd=el('spot').querySelector('.spot-done');
     if(sd) sd.addEventListener('click',()=>{ if(confirm(`Close ${sp.elem||'this pour'}? (Undo can re-open it)`)) toggleDone(decodeURIComponent(sd.dataset.e), true); });
   } else el('spot').innerHTML='';
