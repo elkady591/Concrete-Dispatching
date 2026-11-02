@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000022">
+<meta name="app-build" content="20261102-000023">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2939,17 +2939,37 @@ let truckEs=null;        // Loaded tab filtered to one pour (its ES), or null = 
 // Productivity › "Trucks for today": how many to run and the trucks taken out by hand. Both STAY until the user changes
 // them (no daily reset) and are shared with every device: PUMPNOTE['TPN'] = "15", PUMPNOTE['TPX'] = "104,107"
 function tpExcluded(){ return new Set(String(PUMPNOTE['TPX']||'').split(',').map(s=>s.trim()).filter(Boolean)); }
-async function tpToggle(tk){ const s=tpExcluded(); s.has(tk)?s.delete(tk):s.add(tk); const v=[...s].join(',');
+async function tpToggle(tk){ const s=tpExcluded(), C=TP_CTX; s.has(tk)?s.delete(tk):s.add(tk); const v=[...s].join(',');
+  if(C){ let L=C.L.slice();
+    if(s.has(tk)){ L=L.filter(x=>x!==tk); L=L.concat(C.next(1,new Set([...L,tk]))); }        // out: the next lowest takes its place
+    else { L.push(tk); const j=[...L].reverse().findIndex(x=>x!==tk&&!C.out.has(x)); if(j>=0) L.splice(L.length-1-j,1); }   // back: the last added goes
+    return tpSave(L,{TPX:v}); }
   if(v) PUMPNOTE['TPX']=v; else delete PUMPNOTE['TPX']; stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPX',v); }
 // trucks the user wants to run whatever their m³ (tap one under HOLD today): always in, they push out the highest-m³ ones;
 // PUMPNOTE['TPI'] = "110,124" — shared, stays until tapped again
 function tpForced(){ return new Set(String(PUMPNOTE['TPI']||'').split(',').map(s=>s.trim()).filter(Boolean)); }
-async function tpForce(tk){ const s=tpForced(), x=tpExcluded(); s.has(tk)?s.delete(tk):s.add(tk);
+async function tpForce(tk){ const s=tpForced(), x=tpExcluded(), C=TP_CTX; s.has(tk)?s.delete(tk):s.add(tk);
   const v=[...s].join(','); if(v) PUMPNOTE['TPI']=v; else delete PUMPNOTE['TPI'];
   if(s.has(tk)&&x.has(tk)){ x.delete(tk); const xv=[...x].join(','); if(xv) PUMPNOTE['TPX']=xv; else delete PUMPNOTE['TPX']; }
+  if(C){ let L=C.L.slice();
+    if(s.has(tk)){ if(!L.includes(tk)){ L.push(tk);   // run it today: it takes the place of the highest-m³ one
+        const cand=L.filter(y=>y!==tk&&!s.has(y)&&!C.out.has(y)).sort((a,b)=>(C.q(b)-C.q(a))); if(cand.length) L=L.filter(y=>y!==cand[0]); } }
+    else { L=L.filter(y=>y!==tk); L=L.concat(C.next(1,new Set([...L,tk]))); }   // not forced any more: the next lowest instead
+    return tpSave(L,{TPI:v, TPX:PUMPNOTE['TPX']||''}); }
   stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPI',v); await syncPush('pump','TPX',PUMPNOTE['TPX']||''); }
 const tpCount=()=>parseInt(PUMPNOTE['TPN'])||(()=>{ try{ return parseInt(localStorage.getItem('cmpour:planN'))||15; }catch(e){ return 15; } })();
 let planN=15, TP_PICK=[], TP_SHEET='';
+// TODAY'S LIST (user's rule): picked once per work day (the lowest m³ at that moment) and then KEPT — the month's m³
+// moving during the day never changes it. Only the user changes it: OK on the count (more = the next lowest are added,
+// fewer = the last added go), taking one out (the next lowest takes its place), putting one back, running a HOLD one.
+// Reset (button, and by itself at the 8 AM cut every day) picks again from the start and clears the hand changes.
+// Shared: PUMPNOTE['TPL'] = '<work day>|101,104,…' (in the order they were added).
+function tpList(){ const v=String(PUMPNOTE['TPL']||''), i=v.indexOf('|'); if(i<0||v.slice(0,i)!==workDayStr()) return null;
+  return v.slice(i+1).split(',').map(x=>x.trim()).filter(Boolean); }
+async function tpSave(L,extra){ const v=workDayStr()+'|'+L.join(','); PUMPNOTE['TPL']=v; if(extra) Object.assign(PUMPNOTE,extra);
+  for(const k in (extra||{})) if(extra[k]==='') delete PUMPNOTE[k];
+  stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPL',v); for(const k in (extra||{})) await syncPush('pump',k,extra[k]); }
+let TP_CTX=null;   // what the list's buttons need from the last draw: {L, next(n, without), down, out, q}
 let CHK_ALERT=0;   // Data checks waiting (act now + to check) -> ⚠ on the All Pours tab
 let truckDown=null;      // broken truck tapped on the Available tab = its reason shows under the chips
 let truckSort='new';     // Loaded tab order: 'new' = latest truck on top, 'old' = longest out on top (kept per device)
@@ -3026,6 +3046,9 @@ function renderTrucks(){
       const down=new Set(ORD.length?ORD.filter(isDownO).map(o=>String(o.truck)):(t.breakdown||[]).map(b=>String(b.truck))), qOf=new Map(rows.map(r=>[String(r.tm),r.q||0]));
       // the fleet = the trucks in the sheet's status list (else the productivity table + working / hold)
       const fleet=(ORD.length?ORD.map(o=>String(o.truck)):[...new Set([...rows.map(r=>String(r.tm)), ...(t.working||[]).map(String), ...(t.hold||[]).map(b=>String(b.truck))])]).filter(tk=>tk&&!down.has(tk));
+      // a new work day (the 8 AM cut) = everything picked again: yesterday's hand changes (taken out / run anyway) go too
+      if(PUMPNOTE['TPL'] && !tpList() && (PUMPNOTE['TPX']||PUMPNOTE['TPI'])){ delete PUMPNOTE['TPX']; delete PUMPNOTE['TPI']; stSet(KEY_PUMP,PUMPNOTE);
+        setTimeout(()=>{ syncPush('pump','TPX',''); syncPush('pump','TPI',''); },0); }
       // trucks the user took out by hand today (tap a truck): the next lowest one takes its place; tap again = back in
       const exS=tpExcluded(), exL=fleet.filter(tk=>exS.has(tk));
       planN=tpCount(); const pickN=Math.max(1,Math.min(fleet.length-exL.length,planN));
@@ -3033,9 +3056,16 @@ function renderTrucks(){
       // …and a truck that is OUT with concrete right now is working today anyway: always in (🚚), never on HOLD
       const outS=new Set((t.loaded||[]).map(x=>String(x.truck)));
       const fxS=tpForced(), fxL=fleet.filter(tk=>(fxS.has(tk)||outS.has(tk))&&!exS.has(tk));
-      const pick=fxL.concat(fleet.filter(tk=>!exS.has(tk)&&!fxS.has(tk)&&!outS.has(tk)).sort((a,b)=>(qOf.get(a)||0)-(qOf.get(b)||0)||a.localeCompare(b,undefined,{numeric:true}))
-          .slice(0,Math.max(0,pickN-fxL.length)))
-        .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+      const lowOrder=fleet.filter(tk=>!exS.has(tk)&&!fxS.has(tk)).sort((a,b)=>(qOf.get(a)||0)-(qOf.get(b)||0)||a.localeCompare(b,undefined,{numeric:true}));
+      const next=(n,without)=>lowOrder.filter(tk=>!without.has(tk)&&!outS.has(tk)).slice(0,Math.max(0,n));   // the next lowest m³ not on the list
+      // today's list: the one picked this work day, else picked now (forced / out first, then the lowest m³) and kept
+      let L=tpList(), fresh=false;
+      if(!L){ L=fxL.concat(next(pickN-fxL.length,new Set(fxL))); fresh=true; }
+      const keep=L.filter(tk=>!down.has(tk)), add=fleet.filter(tk=>outS.has(tk)&&!keep.includes(tk)&&!exS.has(tk));   // broken down = off · out with concrete = on
+      L=keep.concat(add);
+      if(fresh||add.length) setTimeout(()=>tpSave(L),0);   // (outside the draw: it re-draws)
+      TP_CTX={L, next, down, out:outS, q:tk=>qOf.get(tk)||0};
+      const pick=L.slice().sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
       TP_PICK=pick;
       // the sheet's NOTE column (Q) only, row by row in the sheet's own order — the checkbox (P) and the number (R) are
       // formulas on it (P =IF(Q<>"",FALSE,TRUE), R =IF(Q<>"",O,"")), never pasted over: picked = empty note,
@@ -3044,9 +3074,11 @@ function renderTrucks(){
       TP_SHEET=ORD.map(o=>{ const tk=String(o.truck); return pickS.has(tk)?'':isDownO(o)?String(o.note||'').replace(/[\t\r\n]+/g,' '):'HOLD'; }).join('\n');
       const holdS=new Set((t.hold||[]).map(b=>String(b.truck)));
       const tpBox=`<div class="tp-box"><div class="tp-h"><b>🗓 Trucks for today</b>
-          <label class="tp-n">How many <input id="tpN" type="number" min="1" max="${fleet.length}" value="${pickN}" inputmode="numeric"></label>
-          <button class="btn sm" id="tpCopy" type="button">📋 Copy</button></div>
-        <div class="muted" style="font-size:12px;margin:2px 0 8px">The ${pickN} with the lowest m³ this month · Breakdown left out${(t.breakdown||[]).length?' ('+(t.breakdown||[]).map(b=>esc(b.truck)).join(', ')+')':''}</div>
+          <label class="tp-n">How many <input id="tpN" type="number" min="1" max="${fleet.length}" value="${pick.length}" inputmode="numeric"></label>
+          <button class="btn sm" id="tpOk" type="button" title="Add the next lowest / take off the last added — today's list stays">OK</button>
+          <button class="btn sm" id="tpCopy" type="button">📋 Copy</button>
+          <button class="btn sm alt" id="tpReset" type="button" title="Pick again from the start, by the m³ now (it also does this by itself every day at the 8 AM cut)">↺ Reset</button></div>
+        <div class="muted" style="font-size:12px;margin:2px 0 8px">Today's list (${workDayStr().slice(5)} · kept until 8 AM) — picked by the lowest m³ this month · Breakdown left out${(t.breakdown||[]).length?' ('+(t.breakdown||[]).map(b=>esc(b.truck)).join(', ')+')':''}</div>
         <div class="tp-list">${pick.map(tk=>{ const fx=fxS.has(tk), out=outS.has(tk)&&!fx; return `<span class="tp-c${holdS.has(tk)?' hd':''}${fx?' fx':''}${out?' out':''}" data-tk="${esc(tk)}" ${fx?'data-fx="1"':''} title="${fx?'Run by you (📌) — tap to stop forcing it':out?'Out with concrete now — working today (tap to take it out anyway)':'Tap to take it out — the next one comes in'}"><b>${fx?'📌 ':out?'🚚 ':''}${esc(tk)}</b><small>${out?'out now':fmt(qOf.get(tk)||0,0)+' m³'}${holdS.has(tk)?' · hold':''}</small></span>`; }).join('')}</div>
         <div class="muted" style="font-size:11.5px;margin-top:6px">Tap a truck to take it out — the next lowest comes in its place · tap a truck under HOLD to run it anyway (📌)</div>
         ${exL.length?`<div class="tp-ex"><b>🚫 Taken out</b> <span class="muted" style="font-size:11px">(stay out until you tap them back)</span> ${exL.map(tk=>`<span class="tp-x" data-tk="${esc(tk)}" title="Tap to put it back">${esc(tk)} ↺</span>`).join('')}</div>`:''}
@@ -3130,8 +3162,16 @@ function renderTrucks(){
   area.querySelectorAll('.pr-sb').forEach(b=>b.addEventListener('click',()=>{ prodSort=b.dataset.ps; try{ localStorage.setItem('cmpour:prodsort',prodSort); }catch(e){} renderTrucks(); }));
   { const ms=el('tkMonth'); if(ms) ms.addEventListener('change',()=>{ tkMonth=ms.value; ms.blur(); renderTrucks(); });
     const rt=el('tkRetry'); if(rt) rt.addEventListener('click',()=>{ prodHistErr=false; renderTrucks(); }); }
-  { const ni=el('tpN'); if(ni) ni.addEventListener('change',async()=>{ planN=Math.max(1,parseInt(ni.value)||15);
-      PUMPNOTE['TPN']=String(planN); stSet(KEY_PUMP,PUMPNOTE); renderTrucks(); await syncPush('pump','TPN',String(planN)); });
+  { // the count: applied with OK — more = the next lowest m³ added, fewer = the last added taken off (out with concrete stay)
+    const ok=el('tpOk'), ni=el('tpN'); if(ok&&ni) ok.addEventListener('click',()=>{ const C=TP_CTX; if(!C) return; const n=Math.max(1,parseInt(ni.value)||C.L.length);
+      let L=C.L.slice(); if(n>L.length) L=L.concat(C.next(n-L.length,new Set(L)));
+      else while(L.length>n){ const j=[...L].reverse().findIndex(x=>!C.out.has(x)); if(j<0) break; L.splice(L.length-1-j,1); }
+      planN=n; tpSave(L,{TPN:String(n)}); });
+    if(ni) ni.addEventListener('keydown',e=>{ if(e.key==='Enter'&&ok) ok.click(); });
+    // Reset: pick again from the start (as at 8 AM): the hand changes (taken out / run anyway) go too
+    const rs=el('tpReset'); if(rs) rs.addEventListener('click',async()=>{ if(!confirm('Pick today\'s trucks again from the start (by the m³ now)?')) return;
+      for(const k of ['TPL','TPX','TPI']) delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); renderTrucks();
+      for(const k of ['TPX','TPI']) await syncPush('pump',k,''); });
     const mixersTxt=n=>n===1?'خلاطة واحدة':n===2?'خلاطتين':n<=10?n+' خلاطات':n+' خلاطة';
     const cb=el('tpCopy'); if(cb) cb.addEventListener('click',async()=>{ const txt='الخلاطات اللي شغالة النهاردة ان شاء الله\n'+mixersTxt(TP_PICK.length)+'\n\n'+TP_PICK.join('\n');
       let ok=false; try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){} cb.textContent=ok?'Copied ✓':'Copy failed'; });
