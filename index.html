@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000032">
+<meta name="app-build" content="20261102-000033">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2632,7 +2632,7 @@ function planRowsOf(){
   return out;
 }
 const pourDone=g=>!!DONE[doneKey(g)] || (g.remaining!=null&&g.remaining<=0) || g.status==='closed';
-const qtyReached=g=>g.trucks>0 && g.remaining!=null && g.remaining<=0;   // its quantity reached = finished
+const qtyReached=g=>g.trucks>0 && g.remaining!=null && g.remaining<=0 && g.status!=='active';   // its quantity reached AND trucks stopped coming = finished (still loading = stays in All Pours)
 // Chains: requests of the SAME client + element poured one after the other with the same pumps.
 // Members = the ones still running or not started, running first, then plan order.
 // -> Map(pour -> {members, idx (1-based), prev (pour|null), lastDone (ms of the newest finished sibling)})
