@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000033">
+<meta name="app-build" content="20261102-000034">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2314,7 +2314,8 @@ function renderViewTabs(){
   // ⚠ on Upcoming when a request's pumps are not ready
   const chkWarn=CHK_ALERT>0?`<span class="pm-alert" title="${CHK_ALERT} data check${CHK_ALERT>1?'s':''} to look at">⚠</span>`:'';
   let upWarn=''; try{ for(const v of upcomingPumpCheck().values()) if(v.cls!=='ok'){ upWarn='<span class="pm-alert" title="Pumps not ready for a request">⚠</span>'; break; } }catch(e){}
-  box.innerHTML=mk('summary','📋 Summary',VD.open.length,'sum','Summary')+mk('pours','🏗️ All Pours'+chkWarn,VD.started.filter(g=>!qtyReached(g)).length,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
+  const nAll=VD.started.filter(g=>!qtyReached(g)).length;   // Summary shows the same number as All Pours (user's rule)
+  box.innerHTML=mk('summary','📋 Summary',nAll,'sum','Summary')+mk('pours','🏗️ All Pours'+chkWarn,nAll,'all','All Pours')+mk('upcoming','⏳ Upcoming'+upWarn,VD.upcoming.length,'up','Upcoming')
     // Trucks / Pumps: the number = what is AVAILABLE now (empty trucks · free pumps that have an operator)
     +mk('trucks','<svg class="vt-ic"><use href="#ic-mixer"/></svg>Trucks'+(((TRUCKS&&TRUCKS.loaded)||[]).some(x=>outClass(x.elapsed)==='bad')?'<span class="pm-alert" title="CAUTION: a truck out for more than 3 h">⚠</span>':''),(TRUCKS&&TRUCKS.ok)?TRUCKS.available.length:null,'trk','Trucks')
     +mk('pumps','<svg class="vt-ic"><use href="#ic-pump"/></svg>Pumps', (()=>{ try{ return pumpPlan(Date.now()).state.filter(s=>s.st==='free'&&!s.noop).length; }catch(e){ return null; } })(),'pmp','Pumps')
