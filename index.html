@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000027">
+<meta name="app-build" content="20261102-000028">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3525,6 +3525,19 @@ let HOLDSEEN={};
 // how long a loaded truck has been out (the sheet's "Time Elapsed", H:MM) -> minutes, or null
 const outMins=x=>{ const m=String(x.elapsed||'').trim().match(/^(-?)(\d+):(\d{1,2})/); return m?(m[1]?0:(+m[2])*60+(+m[3])):null; };
 const HOLD_FRESH=3*60;   // only a trip out for 3 h or less is a new sighting — an older one still "loaded" in the sheet is stale
+// the DAY and time a held / broken-down truck left: its own row in the station tabs (that truck at that time), else when
+// it was first seen minus its time out, else the day it was first seen (≈) -> "28-OCT · 10:25 PM"
+function holdWhen(x){ const tm=String(x.dep||'').trim().toUpperCase().replace(/^0/,'');
+  let t=null; const ok=v=>v!=null&&v<=(x.seen||Date.now())+60000&&(t==null||v>t);
+  for(const g of (VD.summary||[])) for(const l of (g.loads||[])) if(String(l.k)===String(x.truck)&&l.t!=null&&timeShort(l.t)===tm&&ok(l.t)) t=l.t;
+  if(t==null) for(const r of (RAWTABS||[])){ const H=(r.cols&&r.cols.some(Boolean))?r.cols:(r.matrix[0]||[]), rows=(r.cols&&r.cols.some(Boolean))?r.matrix:r.matrix.slice(1);
+    const fi=re=>H.findIndex(h=>re.test(String(h||'').trim())), cT=fi(/truck/i), cD=fi(/departure/i), cA=fi(/^date$/i); if(cT<0||cD<0) continue;
+    for(const row of rows){ if(String(row[cT]||'').trim()!==String(x.truck)) continue; const ds=String(row[cD]||'');
+      const m=ds.match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{1,2}):(\d{2})/); let v=m?new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).getTime():null;
+      if(v==null&&cA>=0){ const d0=parseDate(row[cA]), mi=parseTime(ds); if(d0&&mi!=null) v=ts(d0,mi); }
+      if(v!=null&&timeShort(v)===tm&&ok(v)) t=v; } }
+  const at=t!=null?t:(x.depAt||null), d=new Date(at!=null?at:(x.seen||Date.now()));
+  return `${at!=null?'':'≈'}${d.getDate()}-${MON3[d.getMonth()]} · ${x.dep||timeShort(d.getTime())}`; }
 // One trip = one alert with ONE id for good: flag | truck | departure (the sheet writes the departure as a time only).
 // While the sheet lists it, it is the same trip — whatever day it is, whether the app was open or not, and whatever its
 // "time out" says (that clock goes round every 24 h). Its Skip is kept under that id. (The same truck leaving at the
@@ -3535,7 +3548,7 @@ function rememberHolds(){ let ch=false; const now=Date.now();
   for(const x of ((TRUCKS&&TRUCKS.loaded)||[]).filter(x=>x.flag==='hold'||x.flag==='down')){ const id=holdKey(x), e=HOLDSEEN[id];
     if(e){ if(now-(e.last||0)>5*60000){ e.last=now; ch=true; } continue; }   // the same trip, still listed
     const mn=outMins(x); if(mn!=null && mn>HOLD_FRESH) continue;
-    HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flag:x.flag, flagNote:x.flagNote||'', seen:now, last:now}; ch=true; }
+    HOLDSEEN[id]={truck:x.truck, plant:x.plant||'', es:x.es||'', q:x.q||0, dep:x.dep||'', flag:x.flag, flagNote:x.flagNote||'', seen:now, last:now, depAt:mn!=null?now-mn*60000:null}; ch=true; }
   // forgotten only when skipped, a week old and off the loaded list for a day (its Skip goes with it)
   const gone=[]; for(const id in HOLDSEEN){ const e=HOLDSEEN[id]; if(SKIP[id] && now-e.seen>7*86400000 && now-(e.last||e.seen)>86400000){ delete HOLDSEEN[id]; gone.push(id); ch=true; } }
   if(gone.length) skipSet(gone,false);
@@ -3797,11 +3810,11 @@ function collectChecks(pours){
   // a truck the user put ON HOLD (parked on purpose) or marked BREAKDOWN that has been loaded anyway
   rememberHolds();
   for(const [hid,x] of Object.entries(HOLDSEEN)){ const st=esc(x.plant||''), site=x.es?(()=>{ const n=esName(x.es); return n&&n.k?(n.c?n.c+' ':'')+n.k:'ES '+x.es; })():'';
-    const dn=x.flag==='down', ST=dn?'BREAKDOWN':'ON HOLD';
+    const dn=x.flag==='down', ST=dn?'BREAKDOWN':'ON HOLD', wh=esc(holdWhen(x));   // the day and the time
     items.push({id:hid, kind:dn?'Breakdown truck loaded':'Hold truck loaded', cls:'rejd',
-      txt:`TM ${esc(x.truck)} is ${ST} but was loaded${st?' at '+st:''}${x.dep?' · '+esc(x.dep):''}${x.q?' · '+fmt(x.q,0)+' m³':''}${site?' · '+esc(site):''}`,
-      ui:{sev:'red', icon:dn?'🔧':'⏸', head:`${ST} truck loaded`, tags:[CT('TM '+esc(x.truck),'tk'), ...(st?[CT(st,'st')]:[]), ...(x.q?[CT(fmt(x.q,0)+' m³')]:[]), ...(site?[CT(esc(site),'el')]:[])],
-        det:`${dn?'You marked it broken down':'You put it on hold'}${x.flagNote?' ('+esc(x.flagNote)+')':''} — it left the plant${x.dep?' at '+esc(x.dep):''}`}}); }
+      txt:`TM ${esc(x.truck)} is ${ST} but was loaded${st?' at '+st:''} · ${wh}${x.q?' · '+fmt(x.q,0)+' m³':''}${site?' · '+esc(site):''}`,
+      ui:{sev:'red', icon:dn?'🔧':'⏸', head:`${ST} truck loaded`, tags:[CT('TM '+esc(x.truck),'tk'), CT(wh), ...(st?[CT(st,'st')]:[]), ...(x.q?[CT(fmt(x.q,0)+' m³')]:[]), ...(site?[CT(esc(site),'el')]:[])],
+        det:`${dn?'You marked it broken down':'You put it on hold'}${x.flagNote?' ('+esc(x.flagNote)+')':''} — it left the plant on ${wh}`}}); }
   // fixes already made (shown under "Show skipped", with Undo)
   for(const k of Object.keys(PUMPNOTE)){ const m=k.match(/^e(\d+)\|(.*)$/); if(!m||!PUMPNOTE[k]||(from&&m[2]<from)||(to&&m[2]>to)) continue;
     const p=(VD.summary||[]).find(x=>x.esId===PUMPNOTE[k]);
