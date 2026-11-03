@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261103-000001">
+<meta name="app-build" content="20261103-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -738,6 +738,10 @@
   .uc-pl.on{color:#0b1020;background:#a78bfa;border:1px solid #a78bfa}
   .uc-pl.uc-plsame{font-family:inherit;font-size:11.5px;border-style:dashed}
   .uc-pl.uc-plsame.on{color:#0b1020;background:#34d399;border:1px solid #34d399}
+  .uc-pl.uc-plsplit{font-family:inherit;font-size:11.5px;color:#60a5fa;border-color:rgba(96,165,250,.6)}
+  .uc-plk{font-family:var(--mono);font-size:12px;font-weight:800;color:#60a5fa;min-width:22px}
+  .uc-plrows .uc-plants{margin-top:6px;gap:4px} .uc-plrows{margin-top:4px}
+  .uc-plrows .uc-pl{padding:2px 7px;font-size:11px} .uc-plrows .uc-pl.uc-plsame{font-size:10.5px}
   .uc-plwarn{margin-top:6px;font-size:12px;line-height:1.5;color:#fb923c} .uc-plwarn b{font-family:var(--mono)}
   .uc-sends{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px;padding-top:7px;border-top:1px dashed rgba(148,163,184,.25)}
   .uc-snd{font:inherit;font-family:var(--mono);font-size:12px;font-weight:800;color:var(--muted);background:transparent;
@@ -4529,6 +4533,7 @@ function renderSumUp(){
   const m=el('suMore'); if(m) m.onclick=()=>{ sumUpAll=true; renderSumUp(); };
   const ls=el('suLess'); if(ls) ls.onclick=()=>{ sumUpAll=false; renderSumUp(); };
 }
+const plSplit=new Set();   // cards opened as "Each request its own plant" (this device; different plants keep it open anyway)
 function renderUpcoming(){
   const rest=VD.upcoming;   // pour objects not started yet (see render())
   // "ADD Request" button -> open the Plan sheet (where new pour requests are entered)
@@ -4548,13 +4553,21 @@ function renderUpcoming(){
   // 🏭 one chip per plant; lit = planned for this card's requests
   // + a warning for each chosen plant still busy on another open pour at this request's time (now if it has none)
   const SUG=(()=>{ try{ return new Map(plantTimeline().noPlant.map(x=>[x.g,x.sug])); }catch(e){ return new Map(); } })();   // no plant yet -> the free ones
-  const plantChips=u=>{ const keys=u.map(g=>plantKey(g)), on=planPlants(keys[0]), t=RT.get(u[0]), at=t&&t.at>now?t.at:now;
+  // a card of several requests: one plant row for all (default) — or one row per request (#1 L1, #2 V3 …) when
+  // the user taps "Each request its own plant" or the requests already have different plants (user 2026-11-03)
+  const plantChips=u=>{ const keys=u.map(g=>plantKey(g));
+    if(u.length<2) return plantRow(u,keys,'');
+    const split=plSplit.has(keys[0]) || keys.some(k=>String(PUMPNOTE[k]||'')!==String(PUMPNOTE[keys[0]]||''));
+    if(!split) return plantRow(u,keys,`<button class="uc-pl uc-plsplit" data-split="${encodeURIComponent(keys[0])}" title="Choose a different plant for each request of this card">Each request its own plant</button>`);
+    return `<div class="uc-plrows">${u.map((g,k)=>plantRow([g],[keys[k]],'',`<span class="uc-plk">#${k+1}</span>`,k?`Same as #${k}`:'')).join('')}
+      <div class="uc-plants"><button class="uc-pl uc-plsplit" data-one="${encodeURIComponent(keys.join('\n'))}" title="Back to one plant choice for the whole card (the one of #1)">One plant for all</button></div></div>`; };
+  const plantRow=(u,keys,tail,lead,sameLbl)=>{ const on=planPlants(keys[0]), t=RT.get(u[0]), at=t&&t.at>now?t.at:now;
     const pred=plantPred(u[0]), same=PUMPNOTE[keys[0]]===SAME_PL;
     // (a plant still busy on another pour then is fine — on purpose, user's rule; only a plant on HOLD is warned about)
     const warns=on.filter(plantHeld).map(st=>`⏸ <b>${esc(st)}</b> is on HOLD — choose another plant`);
-    const sameBtn=pred?`<button class="uc-pl uc-plsame${same?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-same="1" title="Use the plants ${esc(site(pred))} is working with — follows them by itself">${same?'✓ ':''}Same working plants</button>`:'';
+    const sameBtn=pred?`<button class="uc-pl uc-plsame${same?' on':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-same="1" title="Use the plants ${esc(site(pred))} is working with — follows them by itself">${same?'✓ ':''}${sameLbl||'Same working plants'}</button>`:'';
     const sg=!on.length&&SUG.get(u[0]), sugL=sg&&sg.length?`<div class="uc-plsug">💡 Free for its whole pour: ${sg.map(p=>`<b>${esc(p)}</b>`).join(', ')} — tap one above</div>`:(sg?'<div class="uc-plsug">💡 No plant is free for its whole pour</div>':'');
-    return `<div class="uc-plants">🏭 ${sameBtn}${PLANT_LIST().map(st=>`<button class="uc-pl${on.includes(st)?' on':''}${plantHeld(st)?' hd':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="${plantHeld(st)?'On HOLD — take it back on the Plants timeline (All Pours) first':'Planned plant'}">${esc(st)}${plantHeld(st)?' ⏸':''}</button>`).join('')}</div>${sugL}${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
+    return `<div class="uc-plants">${lead||'🏭'} ${sameBtn}${PLANT_LIST().filter(st=>!plantHeld(st)||on.includes(st)).map(st=>`<button class="uc-pl${on.includes(st)?' on':''}${plantHeld(st)?' hd':''}" data-k="${encodeURIComponent(keys.join('\n'))}" data-p="${esc(st)}" title="${plantHeld(st)?'On HOLD — take it back on the Plants timeline (All Pours) first':'Planned plant'}">${esc(st)}${plantHeld(st)?' ⏸':''}</button>`).join('')}${tail}</div>${sugL}${warns.length?`<div class="uc-plwarn">${warns.join('<br>')}</div>`:''}`; };
   // + right after our pumps: the site's stationary (🏗 S.P 3.7) and spider (🕷) pumps — tap when ready (-> WhatsApp photo)
   const siteChips=p=>{ const sp=sitePumps(p); if(!sp) return '';
     const ch=(t,spare)=>siteItems(t).filter(x=>siteKind(x)!=='mob').map(x=>{ const kd=siteKind(x), on=!!sp.r[x];
@@ -4638,6 +4651,10 @@ function renderUpcoming(){
     r.keep=1; const v=JSON.stringify(r); PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); rerender(); await syncPush('pump',k,v); }));
   // 🏭 planned plants: tap a plant to add / remove it — the same choice goes to every request of the card
   el('upcomingArea').querySelectorAll('.uc-pl').forEach(b=>b.addEventListener('click',async()=>{
+    if(b.dataset.split){ plSplit.add(decodeURIComponent(b.dataset.split)); renderUpcoming(); return; }
+    if(b.dataset.one){ const ks=decodeURIComponent(b.dataset.one).split('\n'), v=PUMPNOTE[ks[0]]||'';
+      plSplit.delete(ks[0]); for(const k of ks){ if(v) PUMPNOTE[k]=v; else delete PUMPNOTE[k]; }
+      stSet(KEY_PUMP,PUMPNOTE); renderUpcoming(); for(const k of ks.slice(1)) await syncPush('pump',k,v); return; }
     const keys=decodeURIComponent(b.dataset.k).split('\n'), st=b.dataset.p;
     if(st && plantHeld(st) && !planPlants(keys[0]).includes(st)){ alert(`${st} is on HOLD.\nTake it back first: All Pours → Plants timeline → 🏭 Plant hold.`); return; }   // (one chosen before the hold can still be taken off)
     let val;
