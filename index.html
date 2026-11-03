@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261102-000035">
+<meta name="app-build" content="20261103-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1267,7 +1267,7 @@
   <form id="authForm" autocomplete="off" style="width:min(360px,90vw);padding:26px 24px;border-radius:20px;border:1px solid var(--glass-brd);background:linear-gradient(180deg,var(--glass),var(--glass2));-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:var(--shadow);text-align:center">
     <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:15px;overflow:hidden;box-shadow:0 8px 22px rgba(124,131,255,.5)"><img src="icons/icon-192.png" alt="" style="width:100%;height:100%;object-fit:cover"></div>
     <div style="font-weight:800;font-size:18px;letter-spacing:-.3px">Pour Tracker</div>
-    <div style="color:var(--muted);font-size:12.5px;margin:4px 0 16px">Enter password to continue</div>
+    <div style="color:var(--muted);font-size:12.5px;margin:4px 0 16px">جهاز جديد — اكتب كلمة السر (أول مرة بس)</div>
     <input type="password" id="authPass" placeholder="Password" autocomplete="current-password" style="width:100%;text-align:center;font-family:var(--sans);letter-spacing:2px">
     <button class="btn" type="submit" style="width:100%;margin-top:12px;justify-content:center">Enter</button>
     <div id="authErr" style="color:var(--rose);font-size:12.5px;margin-top:10px;min-height:16px"></div>
@@ -1488,6 +1488,10 @@
     <div class="card">
       <h3>Who's viewing now</h3>
       <div id="admWho"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>🔐 New-device password</h3>
+      <div id="admPw"></div>
     </div>
     <div class="card" style="margin-top:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -2346,7 +2350,7 @@ function applyView(){
   if(view==='pumps') renderPumps();
   if(view==='summary' && typeof updatePlanPreview==='function') updatePlanPreview();
   if(view==='production') renderProduction();
-  if(view==='admin' && IS_ADMIN){ renderAdminWho(); loadAdminUsers(); loadAdminLog(); }
+  if(view==='admin' && IS_ADMIN){ renderAdminWho(); renderPwBox(); loadAdminUsers(); loadAdminLog(); }
 }
 
 /* ---------- pumps ----------
@@ -5762,29 +5766,42 @@ function setRange(r){
 }
 
 /* ---------- init ---------- */
-/* ---------- access gate ----------
-   Deterrent password on a public page: the plaintext is NEVER in the code — only its SHA-256 hash.
-   Set AUTH_HASH='' to turn the gate off. Once entered on a device it's remembered (localStorage). */
-const AUTH_HASH='';   // gate OFF — set to a sha256 hex to require a password
-const KEY_AUTH='cmpour:auth';
+/* ---------- access gate: a password the FIRST time on a new device ----------
+   The admin sets it on the Admin page; only its salted SHA-256 is kept, shared: PUMPNOTE['PWH'] (none = no gate).
+   A device that already has a name (it was used before the gate) or got in once is never asked again (KEY_AUTH).
+   Deterrent only: the page and the sheets stay public. */
+const KEY_AUTH='cmpour:auth', PW_SALT='cmpour|newdevice|';
 async function sha256hex(s){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
-function requireAuth(){
-  if(!AUTH_HASH||AUTH_HASH==='__SET_ME__') return Promise.resolve(true);   // gate not configured yet
-  try{ if(localStorage.getItem(KEY_AUTH)===AUTH_HASH) return Promise.resolve(true); }catch(e){}
+async function requireAuth(){
+  if(BOT) return true;   // the notifier's headless visit
+  try{ if(localStorage.getItem(KEY_AUTH)) return true;
+    if(localStorage.getItem(KEY_ME)){ localStorage.setItem(KEY_AUTH,'1'); return true; } }catch(e){ return true; }
+  const gate=el('authGate'), err=el('authErr'), inp=el('authPass');
+  let hash=null;   // null = not read yet (no connection)
+  const read=async()=>{ const r=await syncCall({action:'get'}); if(!r||!r.state) return false; hash=String((r.state.pump||{}).PWH||''); return true; };
+  if(await read() && !hash) return true;   // no password set: open
   return new Promise(resolve=>{
-    const gate=el('authGate'); gate.style.display='grid';
-    el('authPass').focus();
-    el('authForm').addEventListener('submit',async(e)=>{
-      e.preventDefault();
-      const h=await sha256hex(el('authPass').value);
-      if(h===AUTH_HASH){ try{localStorage.setItem(KEY_AUTH,AUTH_HASH);}catch(e){} gate.style.display='none'; resolve(true); }
-      else { el('authErr').textContent='كلمة السر غلط'; el('authPass').value=''; el('authPass').focus(); }
-    });
+    gate.style.display='grid'; inp.focus();
+    if(hash==null) err.textContent='مفيش اتصال — اكتب كلمة السر وجرب تاني';
+    el('authForm').addEventListener('submit',async e=>{ e.preventDefault();
+      if(hash==null && !(await read())){ err.textContent='مفيش اتصال — جرب تاني'; return; }
+      if(!hash || await sha256hex(PW_SALT+inp.value)===hash){ try{localStorage.setItem(KEY_AUTH,'1');}catch(e){} gate.style.display='none'; resolve(true); }
+      else { err.textContent='كلمة السر غلط'; inp.value=''; inp.focus(); } });
   });
 }
+// Admin page: set / change / turn off the new-device password (devices already in are not asked again)
+async function setNewDevicePw(pw){ const v=pw?await sha256hex(PW_SALT+pw):''; if(v) PUMPNOTE['PWH']=v; else delete PUMPNOTE['PWH'];
+  stSet(KEY_PUMP,PUMPNOTE); await syncPush('pump','PWH',v); renderPwBox(); }
+function renderPwBox(){ const b=el('admPw'); if(!b) return; const on=!!PUMPNOTE['PWH'];
+  b.innerHTML=`<div class="muted" style="font-size:12.5px;margin-bottom:8px">${on?'✅ ON — a new device asks for it the first time. Devices already in are not asked.':'⚪ OFF — anyone with the link can open the app.'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="password" id="admPwInp" placeholder="${on?'New password':'Password'}" autocomplete="new-password" style="flex:1;min-width:160px">
+    <button class="btn" id="admPwSet" type="button">${on?'Change':'Turn on'}</button>${on?'<button class="btn alt" id="admPwOff" type="button">Turn off</button>':''}</div>`;
+  el('admPwSet').onclick=async()=>{ const v=el('admPwInp').value; if(v.length<4){ alert('كلمة السر 4 حروف على الأقل'); return; }
+    if(prompt('اكتبها تاني للتأكيد:')!==v){ alert('مش زي بعض'); return; } await setNewDevicePw(v); alert('اتحفظت ✓'); };
+  const off=el('admPwOff'); if(off) off.onclick=async()=>{ if(confirm('Turn the new-device password off?')) await setNewDevicePw(''); }; }
 
 (async function init(){
   await requireAuth();          // block the whole app until the password is entered
