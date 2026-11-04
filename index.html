@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261104-000003">
+<meta name="app-build" content="20261104-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1186,6 +1186,7 @@
   .rl-h{font-weight:800;font-size:13px;margin-bottom:4px} .rl-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)} .rl-row:first-of-type{border-top:none}
   .rl-row.off{opacity:.55} .rl-full{color:var(--green)}
   .rl-ext{font:inherit;font-size:12px;font-weight:800;border-radius:9px;padding:5px 11px;cursor:pointer;border:1px solid rgba(52,211,153,.55);background:rgba(52,211,153,.12);color:var(--green)} .rl-m{flex:1;min-width:0} .rl-m small{display:block;color:var(--muted);font-size:12px}
+  .rl-ed{font:inherit;font-size:12px;font-weight:800;border-radius:9px;padding:5px 11px;cursor:pointer;border:1px solid var(--line2);background:transparent;color:var(--ink)}
   .rl-stop{font:inherit;font-size:12px;font-weight:800;border-radius:9px;padding:5px 11px;cursor:pointer;border:1px solid rgba(251,113,133,.5);background:transparent;color:var(--rose)}  /* the Themes row in ⚙ */
   /* 🏗 site pumps on an Upcoming card (the site's own, info only) */
   .uc-site{margin-top:8px;border:1px dashed var(--line2);border-radius:10px;padding:7px 10px;font-size:12px;color:var(--muted)}
@@ -3721,7 +3722,8 @@ function ruleMap(){ const R=stRules(), m=new Map(); if(!R.length) return m;
     m.set(noEsKey(o.x),{to:r.to, rule:r}); });
   return m; }
 // the rule form: which request, from when, stop when
-function openRuleForm(plant, from){
+function openRuleForm(plant, from, editKey){
+  const ed=editKey?stRules().find(x=>x.key===editKey):null; if(editKey&&!ed) return;   // ✎ Edit: the rule's own request / station / time / stop, prefilled
   let o=el('ruleModal'); if(!o){ o=document.createElement('div'); o.id='ruleModal'; o.className='rq-back'; document.body.appendChild(o);
     o.addEventListener('click',e=>{ if(e.target===o||e.target.closest('.rl-x')) o.style.display='none'; }); }
   // every request in the daily plan WITHOUT an ES, whatever its date / time: one with an ES would have been
@@ -3730,14 +3732,30 @@ function openRuleForm(plant, from){
   const reqs=(PLAN_ROWS||[]).filter(noEs).map(r=>({v:String(r.es||'').trim()||String(r.code||'').toUpperCase(), r,
       pl:planPlants(plantKey((VD.summary||[]).find(g=>(r.es&&g.esId===String(r.es).trim())||(!r.es&&g.elem===r.code))||{key:''})).includes(plant)}))
     .filter((x,i,a)=>x.v&&a.findIndex(y=>y.v===x.v)===i).sort((a,b)=>(b.pl-a.pl)||((a.r.es?1:0)-(b.r.es?1:0)));
-  o.innerHTML=`<form class="rq-box rl-box"><div class="rq-head"><b>📌 Station rule · ${esc(plant)}</b><button type="button" class="rq-x rl-x">✕</button></div>
+  if(ed&&!reqs.some(x=>x.v.toUpperCase()===ed.to.toUpperCase())){ const rq=ruleReq(ed.to); reqs.unshift({v:ed.to, r:rq||{code:ed.to,req:null,es:''}, pl:false}); }
+  const hm=t=>{ const d=new Date(t); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+  const stations=ed?[...new Set(PLANT_LIST().concat(ed.plant))]:[];
+  o.innerHTML=`<form class="rq-box rl-box"><div class="rq-head"><b>📌 ${ed?'Edit station rule':'Station rule'} · ${esc(plant)}</b><button type="button" class="rq-x rl-x">✕</button></div>
     <div class="muted" style="font-size:13px">Every truck from <b>${esc(plant)}</b> with <b>no ES</b> goes to:</div>
-    <label class="rl-f">Request<select id="rlTo">${reqs.length?'':'<option value="">No request without ES in the daily plan</option>'}${reqs.map(x=>`<option value="${esc(x.v)}">${esc((x.r.client?x.r.client+' ':'')+x.r.code)} · ${fmt(x.r.req,0)} m³${x.r.es?(/^APP-/i.test(x.r.es)?' · app':' · ES '+esc(x.r.es)):' · no ES'}${x.pl?' · planned '+esc(plant):''}</option>`).join('')}</select></label>
-    <div class="rl-f">From<div class="rl-opts"><label><input type="radio" name="rlFrom" value="first" checked> ${from?timeShort(from)+' (first no-ES truck)':'the first no-ES truck'}</label><label><input type="radio" name="rlFrom" value="now"> Now</label></div></div>
-    <div class="rl-f">Stops by itself<div class="rl-opts"><label><input type="radio" name="rlStop" value="qty" checked> when its quantity is reached</label><label><input type="radio" name="rlStop" value="manual"> only when I stop it</label></div></div>
+    <label class="rl-f">Request<select id="rlTo">${reqs.length?'':'<option value="">No request without ES in the daily plan</option>'}${reqs.map(x=>`<option value="${esc(x.v)}"${ed&&x.v.toUpperCase()===ed.to.toUpperCase()?' selected':''}>${esc((x.r.client?x.r.client+' ':'')+x.r.code)} · ${x.r.req!=null?fmt(x.r.req,0):'—'} m³${x.r.es?(/^APP-/i.test(x.r.es)?' · app':' · ES '+esc(x.r.es)):' · no ES'}${x.pl?' · planned '+esc(plant):''}</option>`).join('')}</select></label>
+    ${ed?`<label class="rl-f">Station<select id="rlPl">${stations.map(p=>`<option value="${esc(p)}"${p===ed.plant?' selected':''}>${esc(p)}</option>`).join('')}</select></label>
+    <label class="rl-f" style="display:block">From<br><input type="time" id="rlTime" value="${hm(ed.from)}" style="font:inherit;padding:6px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--card);color:var(--ink)"></label>`
+    :`<div class="rl-f">From<div class="rl-opts"><label><input type="radio" name="rlFrom" value="first" checked> ${from?timeShort(from)+' (first no-ES truck)':'the first no-ES truck'}</label><label><input type="radio" name="rlFrom" value="now"> Now</label></div></div>`}
+    <div class="rl-f">Stops by itself<div class="rl-opts"><label><input type="radio" name="rlStop" value="qty"${!ed||ed.qty?' checked':''}> when its quantity is reached</label><label><input type="radio" name="rlStop" value="manual"${ed&&!ed.qty?' checked':''}> only when I stop it</label></div></div>
     <div class="rl-note">Trucks that have an ES are not touched, nor the ones you marked 🧪 Start mix. Every device follows the rule.</div>
-    <div class="rq-foot"><button type="button" class="btn alt rl-x">Cancel</button><button type="submit" class="btn">Save rule</button></div></form>`;
+    <div class="rq-foot"><button type="button" class="btn alt rl-x">Cancel</button><button type="submit" class="btn">${ed?'Save changes':'Save rule'}</button></div></form>`;
   o.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const to=el('rlTo').value; if(!to) return;
+    if(ed){ // keep everything else on the rule (extended quantity, who made it); a new station / time = a new key, the old one cleared
+      const pl=el('rlPl').value||ed.plant, tm=String(el('rlTime').value||'').match(/^(\d{1,2}):(\d{2})/), qty=o.querySelector('input[name=rlStop]:checked').value==='qty';
+      let f=ed.from; if(tm){ const d=new Date(ed.from); d.setHours(+tm[1],+tm[2],0,0); if(d.getTime()>Date.now()+60000) d.setDate(d.getDate()-1); f=d.getTime(); }
+      let v={}; try{ v=JSON.parse(PUMPNOTE[ed.key]||'{}'); }catch(e2){}
+      if(String(v.to).toUpperCase()!==to.toUpperCase()) delete v.qtyTo;   // another request: its own quantity, not the old one's extension
+      v.to=to; v.qty=qty; v.edBy=ME; v.edAt=Date.now();
+      const k=`R|${pl}|${Math.floor(f/60000)*60000}`, nv=JSON.stringify(v), ch=[[k,nv]];
+      if(k!==ed.key){ delete PUMPNOTE[ed.key]; ch.push([ed.key,'']); }
+      PUMPNOTE[k]=nv; stSet(KEY_PUMP,PUMPNOTE); o.style.display='none'; rerender();
+      for(const [a,b] of ch) await syncPush('pump',a,b);
+      await mergeRules(); return; }
     const f=o.querySelector('input[name=rlFrom]:checked').value==='now'?Date.now():(from||Date.now()), qty=o.querySelector('input[name=rlStop]:checked').value==='qty';
     const k=`R|${plant}|${Math.floor(f/60000)*60000}`, v=JSON.stringify({to, until:0, qty, by:ME, at:Date.now()});
     PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); o.style.display='none'; rerender(); await syncPush('pump',k,v);
@@ -4002,11 +4020,12 @@ function renderCheckList(cb, items){
     // the request's total from every rule that feeds it (+ its own ES trucks): that is what the quantity is checked against
     const T=String(r.to).toUpperCase(), all=NOES.filter(x=>{ const v=RMm.get(noEsKey(x)); return v&&String(v.to).toUpperCase()===T; }).reduce((a,x)=>a+num(x.q),0);
     const need=ruleNeed(r), full=r.qty&&!r.until&&need>0&&all>=need-0.5, many=RR.filter(x=>String(x.to).toUpperCase()===T).length>1;
-    return `<div class="rl-row${r.until?' off':''}${full?' full':''}"><div class="rl-m"><b>${esc(r.plant)} → ${esc(rq?((rq.client?rq.client+' ':'')+rq.code):r.to)}</b><small>since ${timeShort(r.from)} · ${tr} truck${tr===1?'':'s'} · ${fmt(got,0)} m³${many?' · request '+fmt(all,0):''}${need?' / '+fmt(need,0):''} m³ · ${r.until?'stopped '+timeShort(r.until):(full?'<b class="rl-full">✓ quantity reached — paused</b>':(r.qty?'stops at its quantity':'until I stop it'))}</small></div>${r.qty&&!r.until?`<button class="rl-ext" data-k="${esc(r.key)}" title="The client asked for more: raise the quantity, the rule carries on">+ Extend</button>`:''}${r.until?'':`<button class="rl-stop" data-k="${esc(r.key)}">Stop</button>`}</div>`; }).join('')}</div>`:'';  cb.innerHTML = rules + ((open.length||skipped.length)
+    return `<div class="rl-row${r.until?' off':''}${full?' full':''}"><div class="rl-m"><b>${esc(r.plant)} → ${esc(rq?((rq.client?rq.client+' ':'')+rq.code):r.to)}</b><small>since ${timeShort(r.from)} · ${tr} truck${tr===1?'':'s'} · ${fmt(got,0)} m³${many?' · request '+fmt(all,0):''}${need?' / '+fmt(need,0):''} m³ · ${r.until?'stopped '+timeShort(r.until):(full?'<b class="rl-full">✓ quantity reached — paused</b>':(r.qty?'stops at its quantity':'until I stop it'))}</small></div>${r.qty&&!r.until?`<button class="rl-ext" data-k="${esc(r.key)}" title="The client asked for more: raise the quantity, the rule carries on">+ Extend</button>`:''}${r.until?'':`<button class="rl-ed" data-k="${esc(r.key)}" title="Change the request, station, start time or how it stops">✎ Edit</button><button class="rl-stop" data-k="${esc(r.key)}">Stop</button>`}</div>`; }).join('')}</div>`:'';  cb.innerHTML = rules + ((open.length||skipped.length)
     ? `<div class="chk-box${open.length?'':' clear'}"><div class="chk-head">${open.length?`Data checks <span class="ck-pills">${pill('red','act now')}${pill('amber','to check')}${pill('blue','info')}</span>`:'&#10003; Data checks · nothing left to review'}</div>
         <div class="ck-list">${sorted.map(it=>row(it,false)).join('')}${showSkipped?skipped.map(it=>row(it,true)).join(''):''}</div>${foot}</div>`
     : `<div class="chk-ok">&#10003; Data checks: nothing to review on the open pours</div>`);
   cb.querySelectorAll('.chk-rule').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openRuleForm(b.dataset.plant, +b.dataset.from||0); }));
+  cb.querySelectorAll('.rl-ed').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); const r=stRules().find(x=>x.key===b.dataset.k); if(r) openRuleForm(r.plant, r.from, r.key); }));
   cb.querySelectorAll('.rl-ext').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); extendRule(b.dataset.k); }));
   cb.querySelectorAll('.rl-stop').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); if(confirm('Stop this station rule? Trucks already given stay with the request.')) stopRule(b.dataset.k); }));
   cb.querySelectorAll('.chk-skip').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation();
