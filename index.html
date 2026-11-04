@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261104-000001">
+<meta name="app-build" content="20261104-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3804,20 +3804,13 @@ function collectChecks(pours){
     if(RM.has(xk)) continue;   // a station rule gave it a request
     const gk=x.plant+'|'+dk, G=noGrp.get(gk)||{plant:x.plant, dk, list:[]};
     G.list.push({x, at, xk, id:`noes|${x.plant}|${x.truck}|${dk}|${x.dep}`}); noGrp.set(gk,G); }
-  // one card per station (not one per truck), with "📌 Station rule" = give all of them a request at once
+  // one card (and one alert) per truck — never grouped per station (user 2026-11-04); each still has "📌 Station rule"
   for(const G of noGrp.values()){ G.list.sort((a,b)=>(a.at||0)-(b.at||0));
-    const n=G.list.length, tot=G.list.reduce((a,o)=>a+num(o.x.q),0), t0=G.list[0].at, t1=G.list[n-1].at, o=G.list[0];
-    if(n===1){ items.push({id:o.id, kind:'No ES', cls:'noes', txt:`${esc(o.x.plant)} · TM ${esc(o.x.truck)} · ${t0!=null?timeShort(t0):'no time'} · ${fmt(o.x.q)} m³ — not counted on any element`,
-      req:{kind:'noes', key:o.xk, dk:G.dk, plant:o.x.plant, truck:o.x.truck, q:o.x.q, at:t0}, rule:{plant:G.plant, from:t0}, sm:[{key:o.xk}],
-      ui:{sev:'red', icon:'🏷️', head:'Truck without ES', at:t0, tags:[CT(esc(o.x.plant),'st'),CT('TM '+esc(o.x.truck),'tk'),CT(fmt(o.x.q)+' m³')],
-        det:'Not counted on any request — write its ES in the trucks sheet, give it its request, or a 📌 rule for the whole station'}}); continue; }
-    items.push({id:`noesg|${G.plant}|${G.dk}`, ids:G.list.map(o=>o.id), skipped:G.list.every(o=>SKIP[o.id]), kind:'No ES', cls:'noes',
-      sm:G.list.filter(o=>num(o.x.q)<=4).map(o=>({key:o.xk, tk:o.x.truck})),   // the small ones may really be the Start mix
-      txt:`${n} trucks without ES at ${esc(G.plant)} · ${timeShort(t0)} → ${timeShort(t1)} · ${fmt(tot,0)} m³ — not counted on any element`,
-      rule:{plant:G.plant, from:t0},
-      ui:{sev:'red', icon:'🏷️', head:`${n} trucks without ES · ${esc(G.plant)}`, at:t1,
-        tags:[CT(esc(G.plant),'st'), CT(`${t0!=null?timeShort(t0):'—'} → ${t1!=null?timeShort(t1):'—'}`), CT(fmt(tot,0)+' m³'), CT('TM '+G.list.map(o=>esc(o.x.truck)).join(', '),'tk')],
-        det:'Not counted on any request — give the station a 📌 rule once instead of each truck'}}); }
+    for(const o of G.list){ const t0=o.at;
+      items.push({id:o.id, kind:'No ES', cls:'noes', txt:`${esc(o.x.plant)} · TM ${esc(o.x.truck)} · ${t0!=null?timeShort(t0):'no time'} · ${fmt(o.x.q)} m³ — not counted on any element`,
+        req:{kind:'noes', key:o.xk, dk:G.dk, plant:o.x.plant, truck:o.x.truck, q:o.x.q, at:t0}, rule:{plant:G.plant, from:t0}, sm:[{key:o.xk}],
+        ui:{sev:'red', icon:'🏷️', head:'Truck without ES', at:t0, tags:[CT(esc(o.x.plant),'st'),CT('TM '+esc(o.x.truck),'tk'),CT(fmt(o.x.q)+' m³')],
+          det:'Not counted on any request — write its ES in the trucks sheet, give it its request, or a 📌 rule for the whole station'}}); } }
   // trucks on an ES no request has -> the closest request ES, with a Fix button
   const planEs=new Set(PLAN_ROWS.map(r=>String(r.es||'').trim()).filter(Boolean));
   for(const g of pours){ const es=String(g.elem||'').trim();
