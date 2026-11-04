@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261104-000002">
+<meta name="app-build" content="20261104-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3740,9 +3740,21 @@ function openRuleForm(plant, from){
   o.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const to=el('rlTo').value; if(!to) return;
     const f=o.querySelector('input[name=rlFrom]:checked').value==='now'?Date.now():(from||Date.now()), qty=o.querySelector('input[name=rlStop]:checked').value==='qty';
     const k=`R|${plant}|${Math.floor(f/60000)*60000}`, v=JSON.stringify({to, until:0, qty, by:ME, at:Date.now()});
-    PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); o.style.display='none'; rerender(); await syncPush('pump',k,v); };
+    PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); o.style.display='none'; rerender(); await syncPush('pump',k,v);
+    await mergeRules(); };   // the same station + request already has a rule -> one rule, from the earliest time
   o.style.display='flex';
 }
+// one running rule per station + request (user 2026-11-04: a rule made from each truck's own card gave 4 copies):
+// the copies become ONE rule from the earliest time, with the biggest quantity any of them was extended to
+async function mergeRules(){ const R=stRules().filter(r=>!r.until), G=new Map(), ch=[];
+  R.forEach(r=>{ const g=r.plant+'|'+String(r.to).toUpperCase(); if(!G.has(g)) G.set(g,[]); G.get(g).push(r); });
+  for(const L of G.values()){ if(L.length<2) continue; L.sort((a,b)=>a.from-b.from);
+    const keep=L[0]; let v={}; try{ v=JSON.parse(PUMPNOTE[keep.key]||'{}'); }catch(e){}
+    const q=Math.max(...L.map(r=>r.qtyTo||0)); if(q>0) v.qtyTo=q; if(L.some(r=>!r.qty)) v.qty=false;   // (one "until I stop it" -> the merged one too)
+    PUMPNOTE[keep.key]=JSON.stringify(v); ch.push([keep.key,PUMPNOTE[keep.key]]);
+    L.slice(1).forEach(r=>{ delete PUMPNOTE[r.key]; ch.push([r.key,'']); }); }
+  if(!ch.length) return false; stSet(KEY_PUMP,PUMPNOTE); rerender();
+  for(const [k,v] of ch) await syncPush('pump',k,v); return true; }
 // + Extend: the client asked for more — the new total goes on the rule AND on the request's Required (every device)
 async function extendRule(k){ const r=stRules().find(x=>x.key===k); if(!r) return; const now=ruleNeed(r)||0;
   const a=prompt(`New total quantity for this request (m³)\nNow ${fmt(now,0)} — write the new total, or +20 to add 20:`, ''); if(a==null||!String(a).trim()) return;
@@ -3982,6 +3994,8 @@ function renderCheckList(cb, items){
   const pill=(s,lab)=>n(s)?`<span class="ck-pill ck-${s}">${n(s)} ${lab}</span>`:'';
   const foot=skipped.length?`<div class="chk-foot"><span class="filter-clear" id="chkShow">${showSkipped?'Hide':'Show'} skipped (${skipped.length})</span></div>`:'';
   // the station rules in force today, each with Stop
+  { const op=stRules().filter(r=>!r.until).map(r=>r.plant+'|'+String(r.to).toUpperCase());   // copies made before -> merged once (any device)
+    if(!BOT && op.length!==new Set(op).size) setTimeout(()=>mergeRules(),0); }
   const RR=stRules().filter(r=>!r.until||r.until>Date.now()-12*3600000), RMm=ruleMap();
   const rules=RR.length?`<div class="rl-list"><div class="rl-h">📌 Station rules</div>${RR.map(r=>{ const tr=[...RMm.values()].filter(v=>v.rule.key===r.key).length, rq=ruleReq(r.to);
     const got=NOES.filter(x=>{ const v=RMm.get(noEsKey(x)); return v&&v.rule.key===r.key; }).reduce((a,x)=>a+num(x.q),0);
