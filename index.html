@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261105-000001">
+<meta name="app-build" content="20261105-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3007,6 +3007,24 @@ function tpRemoved(){ const now=Date.now(), cut=lastDailyCut(cutDaily()||'08:00'
 function tpUnmark(was,L){ const m=tpRemoved(), now=Date.now();
   was.forEach(tk=>{ if(!L.includes(tk)) m.set(tk,now); }); [...m.keys()].forEach(tk=>{ if(L.includes(tk)) m.delete(tk); });
   return [...m].map(([tk,t])=>tk+'@'+t).join(','); }
+// one time per work day (user 2026-11-05: "apply it to what is there now"): the trucks taken off before the 'taken off' mark
+// existed are found in the shared edit log (every TPL change is logged with the whole list) — each change that brought in
+// a truck still on today's list, and took off one that is still off, marks that one now. PUMPNOTE['TPRB'] = the work day done
+let tpBackBusy=false;
+async function tpBackfillRemoved(){ const wd=workDayStr(), cur=tpList();
+  if(tpBackBusy||BOT||!cur||PUMPNOTE['TPRB']===wd||!syncBase()) return; tpBackBusy=true;
+  try{ const r=await syncCall({action:'log', limit:300}); if(!r||!Array.isArray(r.log)) return;
+    const L=r.log.filter(x=>x.type==='pump'&&x.key==='TPL'&&String(x.value||'').startsWith(wd+'|'))
+      .map(x=>({t:typeof x.when==='number'?x.when:Date.parse(x.when), l:String(x.value).slice(wd.length+1).split(',').map(y=>y.trim()).filter(Boolean)}))
+      .filter(x=>!isNaN(x.t)).sort((a,b)=>a.t-b.t);
+    const C=new Set(cur), m=tpRemoved(), now=Date.now();
+    for(let i=1;i<L.length;i++){ const a=new Set(L[i-1].l), b=new Set(L[i].l);
+      const inNow=L[i].l.filter(tk=>!a.has(tk)&&C.has(tk)); if(!inNow.length) continue;
+      L[i-1].l.filter(tk=>!b.has(tk)&&!C.has(tk)).forEach(tk=>{ if(!m.has(tk)) m.set(tk,now); }); }
+    const v=[...m].map(([tk,t])=>tk+'@'+t).join(',');
+    if(v) PUMPNOTE['TPR']=v; PUMPNOTE['TPRB']=wd; stSet(KEY_PUMP,PUMPNOTE); renderTrucks();
+    if(v) await syncPush('pump','TPR',v); await syncPush('pump','TPRB',wd);
+  }catch(e){} finally{ tpBackBusy=false; } }
 function tpMark(was,L){ const m=tpAdded(), now=Date.now();
   L.forEach(tk=>{ if(!was.includes(tk)) m.set(tk,now); }); [...m.keys()].forEach(tk=>{ if(!L.includes(tk)) m.delete(tk); });
   return [...m].map(([tk,t])=>tk+'@'+t).join(','); }
@@ -3120,6 +3138,7 @@ function renderTrucks(){
       const pickS=new Set(pick), holdToday=ORD.filter(o=>!pickS.has(String(o.truck))&&!isDownO(o)).map(o=>String(o.truck));
       TP_SHEET=ORD.map(o=>{ const tk=String(o.truck); return pickS.has(tk)?'':isDownO(o)?String(o.note||'').replace(/[\t\r\n]+/g,' '):'HOLD'; }).join('\n');
       const holdS=new Set((t.hold||[]).map(b=>String(b.truck))), tpNew=tpAdded();
+      if(PUMPNOTE['TPRB']!==workDayStr()) setTimeout(tpBackfillRemoved,0);
       [...tpNew.keys()].forEach(tk=>{ if(!pickS.has(tk)) tpNew.delete(tk); });
       const tpBox=`<div class="tp-box"><div class="tp-h"><b>🗓 Trucks for today</b>
           <label class="tp-n">How many <input id="tpN" type="number" min="1" max="${fleet.length}" value="${pick.length}" inputmode="numeric"></label>
