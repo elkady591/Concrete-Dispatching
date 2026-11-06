@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261105-000002">
+<meta name="app-build" content="20261106-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3878,7 +3878,12 @@ function collectChecks(pours){
     if(!ES_MODE || g.esId || !/^\d{3,}$/.test(es) || planEs.has(es)) continue;
     const best=esGuess(g)[0], dk=g.dk||'', stn=[...new Set((g.loads||[]).map(l=>l.p).filter(Boolean))].join(', ');
     // which trucks carry it (and when) — so the row can be found in the trucks sheet and corrected
-    const tkL=(g.loads||[]).filter(l=>l.k&&!l.prev).sort((a,b)=>(a.t||0)-(b.t||0)), tkTxt=tkL.map(l=>'TM '+esc(l.k)+(l.t!=null?' '+timeShort(l.t):''));
+    const tkL=(g.loads||[]).filter(l=>l.k&&!l.prev).sort((a,b)=>(a.t||0)-(b.t||0));
+    // the same truck, same station and same time is also a no-ES row the user marked 🧪 Start mix (user 2026-11-06: the two
+    // cards are ONE truck) -> its Start mix answers this card too: every truck of this ES is such a one = no card
+    const smSame=l=>NOES.some(x=>PUMPNOTE[noEsKey(x)]===SM_MARK&&String(x.truck)===String(l.k)&&(!l.p||!x.plant||x.plant===l.p)&&(()=>{ const a=noEsAt(x); return a==null||l.t==null||Math.abs(a-l.t)<=60000; })());
+    if(tkL.length&&tkL.every(smSame)) continue;
+    const tkTxt=tkL.map(l=>'TM '+esc(l.k)+(l.t!=null?' '+timeShort(l.t):''));
     const what=`ES ${esc(es)} · ${stn?esc(stn)+' · ':''}${tkTxt.length&&tkTxt.length<=4?tkTxt.join(', '):g.trucks+' truck'+(g.trucks>1?'s':'')} · ${fmt(g.delivered,0)} m³ · from ${timeShort(g.depMin)}`;
     items.push({id:`wes|${es}|${dk}`, kind:'Wrong ES?', cls:'noes', k:g.key,
       txt: best ? `${what} — no request has it. Closest: <b>${esc(best.p.esId)}</b> ${esc((best.p.client?best.p.client+' ':'')+best.p.elem)}${esSimilar(es,best.p.esId)===2?' (2 digits swapped)':' (1 digit different)'}`
