@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261108-000001">
+<meta name="app-build" content="20261108-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1780,10 +1780,7 @@ function pruneDone(){
 const $=s=>document.querySelector(s);
 const el=id=>document.getElementById(id);
 const num=s=>{ const n=parseFloat(String(s==null?'':s).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; };
-// m³ are shown as a whole number or exactly .5 only: x.5 stays, below .5 goes down (2.2 -> 2), above .5 goes up (2.7 -> 3)
-const fmt=(n,d=1)=>{ if(n==null||isNaN(n))return'—'; n=Number(n);
-  if(d>=1){ const f=n-Math.floor(n); if(Math.abs(f-0.5)>1e-6) n=f<0.5?Math.floor(n):Math.ceil(n); d=1; }
-  return n.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:0}); };
+const fmt=(n,d=1)=>{ if(n==null||isNaN(n))return'—'; return Number(n).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:0}); };
 const pad=n=>String(n).padStart(2,'0');
 
 function parseDate(s){
