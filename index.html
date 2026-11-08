@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261108-000004">
+<meta name="app-build" content="20261108-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6053,9 +6053,14 @@ function planPhotoRows(){
   const inList=new Set(base.map(x=>x.g)), byFam=new Map();
   for(const x of base){ const f=pumpFam(x.g); if(byFam.has(f)) par.set(find(x.g),find(byFam.get(f))); else byFam.set(f,x.g);
     const p=LK.get(x.g); if(p&&inList.has(p)) par.set(find(x.g),find(p)); }
-  const groups=new Map(); base.forEach((x,i)=>{ const k=find(x.g); if(!groups.has(k)) groups.set(k,[]); groups.get(k).push({...x,i}); });
+  // a chain whose started ones are ALL finished (none running): its not-started ones are a new pour at their own time
+  // (user 2026-11-08: the 19:00 10UCB sat at the top with the finished ones) -> they go to the not-started part, in time order
+  const finS=new Set(fin), upS=new Set(up);
+  const kOf=new Map(base.map(x=>[x.g,find(x.g)])), hasRun=new Set(base.filter(x=>!finS.has(x.g)&&!upS.has(x.g)).map(x=>kOf.get(x.g))), hasFin=new Set(base.filter(x=>finS.has(x.g)).map(x=>kOf.get(x.g)));
+  const UPK=new Map(); base.forEach(x=>{ const k=kOf.get(x.g); if(upS.has(x.g)&&hasFin.has(k)&&!hasRun.has(k)){ if(!UPK.has(k)) UPK.set(k,{up:k}); kOf.set(x.g,UPK.get(k)); } });
+  const groups=new Map(); base.forEach((x,i)=>{ const k=kOf.get(x.g); if(!groups.has(k)) groups.set(k,[]); groups.get(k).push({...x,i}); });
   const out=[], placed=new Set();
-  for(const x of base){ const k=find(x.g); if(placed.has(k)) continue; placed.add(k);
+  for(const x of base){ const k=kOf.get(x.g); if(placed.has(k)) continue; placed.add(k);
     const mem=groups.get(k).sort((a,b)=>(first(a.g)-first(b.g))||(a.i-b.i));   // started ones by start time, then the rest in their order
     mem.forEach((m,j)=>{ if(mem.length>1) m.r.grp=j===0?'first':(j===mem.length-1?'last':'mid'); out.push(m.r); }); }
   return out;
