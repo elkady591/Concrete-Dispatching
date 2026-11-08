@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261108-000002">
+<meta name="app-build" content="20261108-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1780,7 +1780,8 @@ function pruneDone(){
 const $=s=>document.querySelector(s);
 const el=id=>document.getElementById(id);
 const num=s=>{ const n=parseFloat(String(s==null?'':s).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; };
-const fmt=(n,d=1)=>{ if(n==null||isNaN(n))return'—'; return Number(n).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:0}); };
+// whole numbers only, no decimals anywhere: 2.4 -> 2, 2.5 -> 3, 2.7 -> 3 (display only; totals use the exact values)
+const fmt=(n,d=1)=>{ if(n==null||isNaN(n))return'—'; return Math.round(Number(n)).toLocaleString('en-US',{maximumFractionDigits:0}); };
 const pad=n=>String(n).padStart(2,'0');
 
 function parseDate(s){
