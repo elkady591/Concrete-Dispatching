@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261108-000005">
+<meta name="app-build" content="20261109-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5011,7 +5011,7 @@ function askName(force){
       ev.preventDefault();
       const v=inp.value.trim();
       if(v.length<2){ err.textContent='اكتب اسمك من فضلك'; return; }
-      ME=v; try{ localStorage.setItem(KEY_ME,ME); }catch(e){} try{ skipsFromShared(); }catch(e){}   // this name's Skips
+      ME=v; try{ localStorage.setItem(KEY_ME,ME); }catch(e){} ckSave(); try{ skipsFromShared(); }catch(e){}   // this name's Skips
       err.textContent=''; gate.style.display='none';
       const mn=el('meName'); if(mn)mn.textContent=ME;
       syncCall({action:'register', dev:deviceId(), name:ME, ip:MY_IP});   // remember this name against the device
@@ -5858,8 +5858,18 @@ async function sha256hex(s){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
+// the browser can wipe this site's saved data by itself (low space / "unused site" clean-up) -> the device looked NEW and
+// asked for the password again every so often (user 2026-11-09). Cookies are not part of that clean-up: the device's
+// "got in" mark, its name and its id are kept in one as well (400 days, renewed on every visit) and put back from it.
+const CK_KEEP=[['a',()=>KEY_AUTH],['m',()=>KEY_ME],['d',()=>KEY_DEV]];
+function ckGet(){ try{ const m=document.cookie.match(/(?:^|;\s*)cmkeep=([^;]*)/); return m?JSON.parse(decodeURIComponent(m[1])):null; }catch(e){ return null; } }
+function ckSave(){ try{ const o={}; CK_KEEP.forEach(([c,k])=>{ const v=localStorage.getItem(k()); if(v!=null) o[c]=v; });
+  if(Object.keys(o).length) document.cookie='cmkeep='+encodeURIComponent(JSON.stringify(o))+';max-age='+(400*86400)+';path=/;SameSite=Lax'+(location.protocol==='https:'?';Secure':''); }catch(e){} }
+function ckRestore(){ const o=ckGet(); if(!o) return; try{ CK_KEEP.forEach(([c,k])=>{ if(o[c]!=null&&localStorage.getItem(k())==null) localStorage.setItem(k(),o[c]); }); }catch(e){} }
 async function requireAuth(){
   if(BOT) return true;   // the notifier's headless visit
+  ckRestore(); try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}   // ask the browser to keep the data
+  try{ if(localStorage.getItem(KEY_AUTH)||localStorage.getItem(KEY_ME)) setTimeout(ckSave,0); }catch(e){}
   try{ if(localStorage.getItem(KEY_AUTH)) return true;
     if(localStorage.getItem(KEY_ME)){ localStorage.setItem(KEY_AUTH,'1'); return true; } }catch(e){ return true; }
   const gate=el('authGate'), err=el('authErr'), inp=el('authPass');
@@ -5871,7 +5881,7 @@ async function requireAuth(){
     if(hash==null) err.textContent='مفيش اتصال — اكتب كلمة السر وجرب تاني';
     el('authForm').addEventListener('submit',async e=>{ e.preventDefault();
       if(hash==null && !(await read())){ err.textContent='مفيش اتصال — جرب تاني'; return; }
-      if(!hash || await sha256hex(PW_SALT+inp.value)===hash){ try{localStorage.setItem(KEY_AUTH,'1');}catch(e){} gate.style.display='none'; resolve(true); }
+      if(!hash || await sha256hex(PW_SALT+inp.value)===hash){ try{localStorage.setItem(KEY_AUTH,'1');}catch(e){} ckSave(); gate.style.display='none'; resolve(true); }
       else { err.textContent='كلمة السر غلط'; inp.value=''; inp.focus(); } });
   });
 }
@@ -5946,7 +5956,7 @@ function renderPwBox(){ const b=el('admPw'); if(!b) return; const on=!!PUMPNOTE[
     else if(el('footL')) el('footL').textContent='Nothing to undo';
   });
   { const rb=el('reportBtn'); if(rb) rb.addEventListener('click',()=>{ if(buildReport()) window.print(); }); }
-  { const lb=el('logoutBtn'); if(lb) lb.addEventListener('click',()=>{ try{localStorage.removeItem(KEY_AUTH);}catch(e){} location.reload(); }); }
+  { const lb=el('logoutBtn'); if(lb) lb.addEventListener('click',()=>{ try{localStorage.removeItem(KEY_AUTH);}catch(e){} document.cookie='cmkeep=;max-age=0;path=/'; location.reload(); }); }
   el('loadBtn').addEventListener('click',async()=>{ await saveCfg(); loadLive(); reschedule(); el('cfgPanel').classList.remove('show'); });
   el('groupBy').addEventListener('change',async()=>{ await saveCfg(); rerender(); });
   const onDateChange=async()=>{ await saveCfg(); rerender();
@@ -5979,7 +5989,7 @@ function renderPwBox(){ const b=el('admPw'); if(!b) return; const on=!!PUMPNOTE[
   const wi = await whoamiCheck();
   if(wi && wi.blocked) return;                            // blocked -> locked out, stop init here
   // remembered name comes back keyed by THIS device, so it's this person's own name (safe on a shared IP)
-  if(!ME && wi && wi.name){ ME=wi.name; try{localStorage.setItem(KEY_ME,ME);}catch(e){} const mn=el('meName'); if(mn)mn.textContent=ME; }
+  if(!ME && wi && wi.name){ ME=wi.name; try{localStorage.setItem(KEY_ME,ME);}catch(e){} ckSave(); const mn=el('meName'); if(mn)mn.textContent=ME; }
   if(IS_ADMIN){                                           // restored admin -> re-claim the single seat
     const claim=await syncCall({action:'adminclaim', who:deviceId(), name:ME});
     if(claim && claim.held){ IS_ADMIN=false; try{localStorage.removeItem(KEY_ADMIN);}catch(e){}
