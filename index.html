@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261109-000001">
+<meta name="app-build" content="20261109-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5030,19 +5030,32 @@ function askName(force){
     };
   });
 }
+// Admin seats (user 2026-11-09: two devices at most, was one): PUMPNOTE['ADM|1'], ['ADM|2'] = "<device>|<name>|<ms claimed>".
+// A seat is taken while its device is online (the "N people viewing" roster) or was claimed in the last 2 min;
+// a device that closed the app without stepping down frees its seat by itself.
+const ADM_SEATS=2;
+const admSeats=()=>Array.from({length:ADM_SEATS},(_,k)=>{ const [dev,name,ms]=String(PUMPNOTE['ADM|'+(k+1)]||'').split('|'); return {i:k+1, dev:dev||'', name:name||'', ms:+ms||0}; });
+const admSeatBusy=s=>!!s.dev && s.dev!==deviceId() && (WHO.some(w=>whoDev(w)===s.dev) || Date.now()-s.ms<120000);
+async function claimAdminSeat(){
+  try{ await syncPull(); }catch(e){} try{ await pingPresence(); }catch(e){}   // the latest seats + who is online now
+  const S=admSeats(), s=S.find(x=>x.dev===deviceId())||S.find(x=>!admSeatBusy(x));
+  if(!s) return {held:true, by:S.map(x=>x.name).filter(Boolean).join(' و ')};
+  const k='ADM|'+s.i, v=deviceId()+'|'+String(ME||'').replace(/\|/g,' ')+'|'+Date.now();
+  PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); await syncPush('pump',k,v); return {held:false}; }
+async function releaseAdminSeat(){ for(const s of admSeats()) if(s.dev===deviceId()){ const k='ADM|'+s.i; delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); await syncPush('pump',k,''); } }
 async function toggleAdmin(){
   if(IS_ADMIN){                                   // step down -> free the single admin seat
     IS_ADMIN=false; try{ localStorage.removeItem(KEY_ADMIN); }catch(e){}
-    syncCall({action:'adminrelease', who:deviceId()});
+    releaseAdminSeat();
     if(view==='admin') view='summary';
     applyRole(); renderViewTabs(); applyView(); return;
   }
   const p=prompt('Admin password:'); if(!p) return;
   const h=await sha256hex(p);
   if(h!==ADMIN_HASH){ alert('كلمة السر غلط'); return; }
-  // only ONE admin at a time — try to claim the seat on the server
-  const claim=await syncCall({action:'adminclaim', who:deviceId(), name:ME});
-  if(claim && claim.held){ alert('يوزر الأدمن مفتوح حاليًا'+(claim.by?(' على جهاز: '+claim.by):'')+'.\nلازم يتقفل الأول قبل ما حد تاني يفتحه.'); return; }
+  // at most ADM_SEATS (2) devices in Admin mode at a time
+  const claim=await claimAdminSeat();
+  if(claim && claim.held){ alert('يوزر الأدمن مفتوح حاليًا على جهازين'+(claim.by?(': '+claim.by):'')+'.\nلازم واحد منهم يتقفل الأول قبل ما جهاز تالت يفتحه.'); return; }
   IS_ADMIN=true; try{ localStorage.setItem(KEY_ADMIN,ADMIN_HASH); }catch(e){}
   applyRole(); renderViewTabs(); applyView();
 }
@@ -5992,7 +6005,7 @@ function renderPwBox(){ const b=el('admPw'); if(!b) return; const on=!!PUMPNOTE[
   // remembered name comes back keyed by THIS device, so it's this person's own name (safe on a shared IP)
   if(!ME && wi && wi.name){ ME=wi.name; try{localStorage.setItem(KEY_ME,ME);}catch(e){} const mn=el('meName'); if(mn)mn.textContent=ME; }
   if(IS_ADMIN){                                           // restored admin -> re-claim the single seat
-    const claim=await syncCall({action:'adminclaim', who:deviceId(), name:ME});
+    const claim=await claimAdminSeat();
     if(claim && claim.held){ IS_ADMIN=false; try{localStorage.removeItem(KEY_ADMIN);}catch(e){}
       if(view==='admin') view='summary'; applyRole(); renderViewTabs(); applyView(); }
   }
