@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261108-000005">
+<meta name="app-build" content="20261109-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1689,6 +1689,16 @@ function parsePlanTab(cols, matrix){
 // The plan's Pumps column mixes numbers ("63") and text ("63-63"); gviz types the column as a number and returns
 // the text ones EMPTY. /export?format=csv keeps every cell as written, so the pumps are also read from there.
 let PLAN_CSV=null;   // rows of the plan's first tab as CSV (filled by loadPlanCsv on every pull)
+// gviz types a column by most of its cells: once numbers fill the Code column (e.g. 264.8 pasted there, user 2026-11-09)
+// every text code (20UJA, 40UQA …) comes back EMPTY and its request is lost. Any cell gviz left empty is taken from the
+// CSV copy of the same row (same header, same ES) — the CSV keeps every cell as it is written.
+function planFillFromCsv(cols, matrix){ const M=PLAN_CSV; if(!M||!M.length||!cols||!matrix) return matrix;
+  const lab=h=>String(h==null?'':h).trim().toLowerCase(), hi=M.findIndex(r=>r.some(x=>/code/i.test(x))); if(hi<0) return matrix;
+  const H=M[hi].map(lab), map=cols.map(h=>lab(h)?H.indexOf(lab(h)):-1), body=M.slice(hi+1);
+  const gE=cols.findIndex(h=>lab(h)==='es'), cE=H.indexOf('es');
+  return matrix.map((r,i)=>{ const c=body[i]; if(!c) return r;
+    if(gE>=0&&cE>=0&&String(r[gE]==null?'':r[gE]).trim()!==String(c[cE]||'').trim()) return r;   // not the same row -> leave it
+    return r.map((v,j)=>(v==null||v==='')&&map[j]>=0&&String(c[map[j]]||'').trim()?String(c[map[j]]).trim():v); }); }
 async function loadPlanCsv(sid){
   try{ const r=await fetch(`https://docs.google.com/spreadsheets/d/${sid}/export?format=csv&_=${Date.now()}`,{cache:'no-store'});
     if(!r.ok) return; const t=await r.text(); if(/^\s*</.test(t)) return;   // a sign-in page, not CSV
@@ -5728,6 +5738,7 @@ async function loadLive(){
   ]);
   RAWTABS=results.filter(r=>r&&r.ok);   // raw station tabs, for the Daily program report (Production)
   if(planRes && planRes.ok){
+    planRes.matrix=planFillFromCsv(planRes.cols, planRes.matrix);
     const parsed=parsePlanTab(planRes.cols, planRes.matrix) || parsePlanPositional(planRes.cols, planRes.matrix);
     if(parsed){ PLAN=parsed.plan; PLAN_ROWS=parsed.rows; SHEET_ROWS=parsed.rows.slice(); stSet(KEY_PLAN,{plan:PLAN,rows:PLAN_ROWS});
       try{console.log('Live plan: '+PLAN_ROWS.length+' rows, '+Object.keys(PLAN).length+' unique codes');}catch(e){} }
