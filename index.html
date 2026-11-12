@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261112-000003">
+<meta name="app-build" content="20261112-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4280,7 +4280,7 @@ function renderPlantTimeline(kind){
     if(x.kind==='stop') return 'waiting';
     if(x.kind==='plan'){ const m=t.match(/^⏰ (\S+ \S+) pumps/); return `${x.setup?'setting up · ':m?`⏰ ${m[1]} · `:''}${esc(g.elem)}${q>0?` · ${fmt(q,0)} m³`:''}${sp}`; }
     const e=t.match(/≈\S+ \S+/); return `${esc(g.elem)}${sp}${e?' · '+e[0]:''}`; };
-  const bar=x=>{ const ix=ITEMS.push(x)-1, l=X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.off||0)+(x.lane||0)*LANE;
+  const bar=x=>{ const ix=ITEMS.push(x)-1, l=x.pl!=null?x.pl:X(x.s), w=Math.max(6,X(x.e)-l), cut=x.s<W.s, top=6+(x.off||0)+(x.lane||0)*LANE;
     const done=x.now!=null?Math.max(0,Math.min(100,Math.round((X(x.now)-l)/w*100))):null;
     const cls=x.kind==='plan'?`plan${x.late?' late':''}`:x.kind, ch=PU&&(x.kind==='plan'||x.kind==='run')?chainOf(x).c:null;
     return `<div class="ptl-bar ${cls}${ch?' chn':''}${x.clash?' clash':''}" style="left:${l}px;width:${w}px;top:${top}px${ch?`;--chc:${ch}`:''}" data-i="${ix}" data-k="${encodeURIComponent(x.g.key)}" data-kind="${x.kind}" title="${esc(x.txt.replace(/<[^>]+>/g,''))}">${done!=null?`<i class="ptl-done" style="width:${done}%"></i>`:''}<span>${cut?'◀ ':''}${PU?shortTxt(x,w):x.txt}</span></div>`; };
@@ -4288,7 +4288,9 @@ function renderPlantTimeline(kind){
   const freeB=([s,e])=>PU?(e>=W.e?`<div class="ptl-free pl" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}</span></div>`:'')
     :`<div class="ptl-free" style="left:${X(s)}px;width:${X(e)-X(s)}px"><span>free ${timeShort(s)}${e>=W.e?' →':' → '+timeShort(e)}</span></div>`;
   const row=(p,list)=>{ const ends=[], off=list.hold?14:0; list.forEach(x=>{ x.row=p; x.off=off; });   // on hold: the HOLD label gets its own line on top   // first line whose last bar ended before this one starts (in px, so touching bars share a line)
-    list.slice().sort((a,b)=>a.s-b.s).forEach(x=>{ const l=X(x.s); let k=ends.findIndex(e=>e<=l+1); if(k<0){ k=ends.length; ends.push(0); } x.lane=k; ends[k]=Math.max(l+6,X(x.e)); });
+    // a very short bar is drawn 6 px wide, a bit past its real end: the next bar (e.g. the washing after a 3 m³ request) stays on the SAME
+    // line and starts right after it (user 2026-11-12: the washing went down to a second line) — up to 8 px of overlap is moved, not stacked
+    list.slice().sort((a,b)=>a.s-b.s).forEach(x=>{ const l=X(x.s); let k=ends.findIndex(e=>e<=l+8); if(k<0){ k=ends.length; ends.push(0); } x.lane=k; x.pl=Math.max(l,ends[k]); ends[k]=Math.max(x.pl+6,X(x.e)); });
     const h=40+off+Math.max(0,ends.length-1)*LANE;
     const hb=list.hold?`<div class="ptl-hold" style="left:${X(Math.max(list.hold.since,W.s))}px;width:${X(W.e)-X(Math.max(list.hold.since,W.s))}px"><span>⏸ HOLD${list.hold.by?' · '+esc(list.hold.by):''}</span></div>`:'';
     return `<div class="ptl-row" style="height:${h}px"><div class="ptl-lab${list.hold?' hd':''}">${esc(p)}${list.hold?'<small>⏸ HOLD</small>':''}</div><div class="ptl-track" style="width:${width}px;height:${h}px">${hb}${(list.free||[]).map(freeB).join('')}${list.map(bar).join('')}</div></div>`; };
@@ -6109,6 +6111,11 @@ function drawPlanPhoto(rows, at){
   const S=2, W=1500, PAD=40, HEAD=150, TH=64, RH=58;
   // the Working Pumps column grows when a row carries the site's own pumps ("Site: …")
   const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305],['Working\nPumps',rows.some(r=>/spider|\(\d+\.\d+\)/i.test(r.pumps||''))?250:170]];
+  // a column whose text is longer than its width grows to fit it (user 2026-11-12: "2/2018/2…" was cut) — never cut a value
+  { const mx=document.createElement('canvas').getContext('2d');
+    const val=(r,k)=>String([,, r.sc, r.client, r.code, r.qty!=null?fmt(r.qty,0)+' m³':'—', r.tem||'—', r.rate?fmt(r.rate,0)+' m³/h':'—'][k]||'');
+    for(let k=2;k<=7;k++){ mx.font=k===4?'700 21px Arial':'500 20px Arial';
+      const need=Math.max(0,...rows.map(r=>mx.measureText(val(r,k)).width+24)); if(need>cols[k][1]) cols[k][1]=Math.ceil(need); } }
   const tableW=cols.reduce((s,c)=>s+c[1],0), H=HEAD+TH+Math.max(rows.length,1)*RH+PAD;
   // planned times are written OUTSIDE the table, left of their row (like on the paper) — margin only when any
   const BR=rows.some(r=>r.grp)?34:0;                       // room for the bracket arrows of pours that follow each other
