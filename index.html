@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261112-000006">
+<meta name="app-build" content="20261112-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2830,9 +2830,10 @@ function upcomingPumpCheck(now){
       // not free yet are doing now (else "ready" next to "no free" chips reads as a contradiction)
       const t=RT.get(g), later=state!==base, busy=later?res.map(r=>({r, n:base.find(x=>x.i===r.s.i)})).filter(o=>o.n&&!(o.n.st==='free'&&!o.n.noop)):[];
       const doing=o=>o.n.st==='wash'?`washing → ${timeShort(o.n.until)}`:o.n.st==='on'&&o.n.pour?`on ${esc(site(o.n.pour))}`:o.n.st==='down'?'breakdown':o.n.noop?'no operator':'busy';
-      out.set(g,{cls:'ok', html:!busy.length?`Pumps free now: <b>${esc(allPumpsLabel(g,need))}</b>`
+      // the pumps label never breaks in the middle ("59-(63)²" went half on a 2nd line — user 2026-11-12)
+      out.set(g,{cls:'ok', html:!busy.length?`Pumps free now: <b style="white-space:nowrap">${esc(allPumpsLabel(g,need))}</b>`
         // (user 2026-11-12: no "Now — not free yet: 63 on DOOSAN …" line when they are free by its time — it only confused)
-        :`Pumps free by <b>${t.est?'≈':''}${timeShort(t.at)}</b> (its time): <b>${esc(allPumpsLabel(g,need))}</b>`}); continue; }
+        :`Pumps free by <b>${t.est?'≈':''}${timeShort(t.at)}</b>: <b style="white-space:nowrap">${esc(allPumpsLabel(g,need))}</b>`}); continue; }
     const byLen={}; res.forEach(r=>{ (byLen[r.len]=byLen[r.len]||[]).push(r); });
     const parts=Object.keys(byLen).map(L=>{ const rs=byLen[L], okN=rs.filter(r=>r.kind==='ok'||r.kind==='same'||r.kind==='sent').length, miss=rs.filter(r=>r.kind!=='ok'&&r.kind!=='same'&&r.kind!=='sent');
       if(!miss.length) return `${L} ✓`;
