@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261112-000002">
+<meta name="app-build" content="20261112-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6099,6 +6099,8 @@ function planPhotoRows(){
   const out=[], placed=new Set();
   for(const x of base){ const k=kOf.get(x.g); if(placed.has(k)) continue; placed.add(k);
     const mem=groups.get(k).sort((a,b)=>(first(a.g)-first(b.g))||(a.i-b.i));   // started ones by start time, then the rest in their order
+    // the time of requests that follow each other is written next to the FIRST of them (user 2026-11-12), not mid-bracket
+    if(mem.length>1 && !mem[0].r.started && !mem[0].r.time){ const t=mem.find(m=>m.r.time); if(t){ mem[0].r.time=t.r.time; t.r.time=''; } }
     mem.forEach((m,j)=>{ if(mem.length>1) m.r.grp=j===0?'first':(j===mem.length-1?'last':'mid'); out.push(m.r); }); }
   return out;
 }
