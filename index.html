@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261109-000001">
+<meta name="app-build" content="20261112-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1689,6 +1689,16 @@ function parsePlanTab(cols, matrix){
 // The plan's Pumps column mixes numbers ("63") and text ("63-63"); gviz types the column as a number and returns
 // the text ones EMPTY. /export?format=csv keeps every cell as written, so the pumps are also read from there.
 let PLAN_CSV=null;   // rows of the plan's first tab as CSV (filled by loadPlanCsv on every pull)
+// gviz types a column by most of its cells: once numbers fill the Code column (e.g. 264.8 pasted there, user 2026-11-09)
+// every text code (20UJA, 40UQA …) comes back EMPTY and its request is lost. Any cell gviz left empty is taken from the
+// CSV copy of the same row (same header, same ES) — the CSV keeps every cell as it is written.
+function planFillFromCsv(cols, matrix){ const M=PLAN_CSV; if(!M||!M.length||!cols||!matrix) return matrix;
+  const lab=h=>String(h==null?'':h).trim().toLowerCase(), hi=M.findIndex(r=>r.some(x=>/code/i.test(x))); if(hi<0) return matrix;
+  const H=M[hi].map(lab), map=cols.map(h=>lab(h)?H.indexOf(lab(h)):-1), body=M.slice(hi+1);
+  const gE=cols.findIndex(h=>lab(h)==='es'), cE=H.indexOf('es');
+  return matrix.map((r,i)=>{ const c=body[i]; if(!c) return r;
+    if(gE>=0&&cE>=0&&String(r[gE]==null?'':r[gE]).trim()!==String(c[cE]||'').trim()) return r;   // not the same row -> leave it
+    return r.map((v,j)=>(v==null||v==='')&&map[j]>=0&&String(c[map[j]]||'').trim()?String(c[map[j]]).trim():v); }); }
 async function loadPlanCsv(sid){
   try{ const r=await fetch(`https://docs.google.com/spreadsheets/d/${sid}/export?format=csv&_=${Date.now()}`,{cache:'no-store'});
     if(!r.ok) return; const t=await r.text(); if(/^\s*</.test(t)) return;   // a sign-in page, not CSV
@@ -5020,19 +5030,32 @@ function askName(force){
     };
   });
 }
+// Admin seats (user 2026-11-09: two devices at most, was one): PUMPNOTE['ADM|1'], ['ADM|2'] = "<device>|<name>|<ms claimed>".
+// A seat is taken while its device is online (the "N people viewing" roster) or was claimed in the last 2 min;
+// a device that closed the app without stepping down frees its seat by itself.
+const ADM_SEATS=2;
+const admSeats=()=>Array.from({length:ADM_SEATS},(_,k)=>{ const [dev,name,ms]=String(PUMPNOTE['ADM|'+(k+1)]||'').split('|'); return {i:k+1, dev:dev||'', name:name||'', ms:+ms||0}; });
+const admSeatBusy=s=>!!s.dev && s.dev!==deviceId() && (WHO.some(w=>whoDev(w)===s.dev) || Date.now()-s.ms<120000);
+async function claimAdminSeat(){
+  try{ await syncPull(); }catch(e){} try{ await pingPresence(); }catch(e){}   // the latest seats + who is online now
+  const S=admSeats(), s=S.find(x=>x.dev===deviceId())||S.find(x=>!admSeatBusy(x));
+  if(!s) return {held:true, by:S.map(x=>x.name).filter(Boolean).join(' و ')};
+  const k='ADM|'+s.i, v=deviceId()+'|'+String(ME||'').replace(/\|/g,' ')+'|'+Date.now();
+  PUMPNOTE[k]=v; stSet(KEY_PUMP,PUMPNOTE); await syncPush('pump',k,v); return {held:false}; }
+async function releaseAdminSeat(){ for(const s of admSeats()) if(s.dev===deviceId()){ const k='ADM|'+s.i; delete PUMPNOTE[k]; stSet(KEY_PUMP,PUMPNOTE); await syncPush('pump',k,''); } }
 async function toggleAdmin(){
   if(IS_ADMIN){                                   // step down -> free the single admin seat
     IS_ADMIN=false; try{ localStorage.removeItem(KEY_ADMIN); }catch(e){}
-    syncCall({action:'adminrelease', who:deviceId()});
+    releaseAdminSeat();
     if(view==='admin') view='summary';
     applyRole(); renderViewTabs(); applyView(); return;
   }
   const p=prompt('Admin password:'); if(!p) return;
   const h=await sha256hex(p);
   if(h!==ADMIN_HASH){ alert('كلمة السر غلط'); return; }
-  // only ONE admin at a time — try to claim the seat on the server
-  const claim=await syncCall({action:'adminclaim', who:deviceId(), name:ME});
-  if(claim && claim.held){ alert('يوزر الأدمن مفتوح حاليًا'+(claim.by?(' على جهاز: '+claim.by):'')+'.\nلازم يتقفل الأول قبل ما حد تاني يفتحه.'); return; }
+  // at most ADM_SEATS (2) devices in Admin mode at a time
+  const claim=await claimAdminSeat();
+  if(claim && claim.held){ alert('يوزر الأدمن مفتوح حاليًا على جهازين'+(claim.by?(': '+claim.by):'')+'.\nلازم واحد منهم يتقفل الأول قبل ما جهاز تالت يفتحه.'); return; }
   IS_ADMIN=true; try{ localStorage.setItem(KEY_ADMIN,ADMIN_HASH); }catch(e){}
   applyRole(); renderViewTabs(); applyView();
 }
@@ -5728,6 +5751,7 @@ async function loadLive(){
   ]);
   RAWTABS=results.filter(r=>r&&r.ok);   // raw station tabs, for the Daily program report (Production)
   if(planRes && planRes.ok){
+    planRes.matrix=planFillFromCsv(planRes.cols, planRes.matrix);
     const parsed=parsePlanTab(planRes.cols, planRes.matrix) || parsePlanPositional(planRes.cols, planRes.matrix);
     if(parsed){ PLAN=parsed.plan; PLAN_ROWS=parsed.rows; SHEET_ROWS=parsed.rows.slice(); stSet(KEY_PLAN,{plan:PLAN,rows:PLAN_ROWS});
       try{console.log('Live plan: '+PLAN_ROWS.length+' rows, '+Object.keys(PLAN).length+' unique codes');}catch(e){} }
@@ -5991,7 +6015,7 @@ function renderPwBox(){ const b=el('admPw'); if(!b) return; const on=!!PUMPNOTE[
   // remembered name comes back keyed by THIS device, so it's this person's own name (safe on a shared IP)
   if(!ME && wi && wi.name){ ME=wi.name; try{localStorage.setItem(KEY_ME,ME);}catch(e){} ckSave(); const mn=el('meName'); if(mn)mn.textContent=ME; }
   if(IS_ADMIN){                                           // restored admin -> re-claim the single seat
-    const claim=await syncCall({action:'adminclaim', who:deviceId(), name:ME});
+    const claim=await claimAdminSeat();
     if(claim && claim.held){ IS_ADMIN=false; try{localStorage.removeItem(KEY_ADMIN);}catch(e){}
       if(view==='admin') view='summary'; applyRole(); renderViewTabs(); applyView(); }
   }
