@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261112-000009">
+<meta name="app-build" content="20261112-000010">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6085,8 +6085,10 @@ function planPhotoRows(){
   }
   fin.sort((a,b)=>last(a)-last(b)); run.sort((a,b)=>first(a)-first(b));
   const up=(VD.upcoming||[]).slice().sort((a,b)=>when(a).localeCompare(when(b))||planIdx(a)-planIdx(b));
-  // every row — finished, running, not started — in the ORDER OF THE DAILY PLAN SHEET (user 2026-11-12)
-  const finS0=new Set(fin), runS=new Set(run), all=fin.concat(run,up).sort((a,b)=>(planIdx(a)-planIdx(b))||when(a).localeCompare(when(b)));
+  // every row — finished, running, not started — by its TIME first, then the order of the Daily Plan sheet (user 2026-11-12)
+  // (a pour that started = the time its first truck left; not started = its time / its estimate; no time = last)
+  const tKey=g=>{ if(g.trucks>0){ const f=first(g); if(f<Infinity) return f; } const t=RTp.get(g); return t?t.at:Infinity; };
+  const finS0=new Set(fin), runS=new Set(run), all=fin.concat(run,up).sort((a,b)=>(tKey(a)-tKey(b))||(planIdx(a)-planIdx(b)));
   const base=all.map(g=>{ if(finS0.has(g)) return {g,r:row(g,true,true,plantsOf(g,false))};
       if(runS.has(g)) return {g,r:row(g,true,false,plantsOf(g,true))};
       // not started: the plants planned in the app, drawn light (they become the real ones once it starts)
