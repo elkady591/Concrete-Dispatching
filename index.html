@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261115-000001">
+<meta name="app-build" content="20261115-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3062,9 +3062,10 @@ window.openView=async function(v, sub){
   view=v; if(v==='trucks' && sub) truckTab=sub;
   await saveCfg(); renderViewTabs(); applyView(); window.scrollTo(0,0);
 };
-function renderTrucks(){
+function renderTrucks(force){
   const area=el('trucksArea'); if(!area)return;
-  if(['tkMonth','tlcFrom','tlcTo'].includes((document.activeElement||{}).id)) return;   // the month list / a date is being picked
+  // the month list / a date is being picked: no redraw under the user (force = the pick itself is done)
+  if(!force&&['tkMonth','tlcFrom','tlcTo'].includes((document.activeElement||{}).id)) return;
   const t=TRUCKS;
   if(!t||!t.ok){ area.innerHTML='<div class="muted" style="font-size:13px;padding:10px 2px">Truck tracking data not available yet — pull the sheet.</div>'; return; }
   // a loaded truck's ES -> "CLIENT ELEMENT" from the plan (e.g. "TREST 10UJA"); unknown ES -> the ES itself
@@ -5327,7 +5328,7 @@ function drawTlc(D){
   const n=Math.max(1,D.trucks.length), W=Math.max(1100,49+571+42+98+50*n+90), H=1000, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const x=cv.getContext('2d'), NAVY='#132f5c', HDR='#dce6f4', PALE='#f2f6fc', GRID='#9fb2cf', INK='#1e2b4a';
   x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.textBaseline='middle';
-  const rr=(X,Y,w,h,r)=>{ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); };
+  const rr=(X,Y,w,h,r)=>{ r=Math.min(r,w/2,h/2); x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); };
   const txt=(s,X,Y,font,col,al)=>{ x.font=font; x.fillStyle=col; x.textAlign=al||'center'; x.fillText(s,X,Y); };
   const cell=(X,Y,w,h,fill)=>{ if(fill){ x.fillStyle=fill; x.fillRect(X,Y,w,h); } x.strokeStyle=GRID; x.lineWidth=1; x.strokeRect(X+.5,Y+.5,w,h); };
   const lg=tlcLogo(); if(lg) x.drawImage(lg,49,22,108*lg.naturalWidth/lg.naturalHeight,108);
@@ -5375,7 +5376,7 @@ function tlcBox(){ tlcPeriod();
       <button type="button" class="btn sm" id="tlcCopy">📋 Copy</button><button type="button" class="btn sm alt" id="tlcSave">💾 Save</button><span class="muted" id="tlcMsg" style="font-size:12px"></span></div>${inner}</div>`; }
 function tlcWire(){
   const f=el('tlcFrom'), t=el('tlcTo'), img=el('tlcImg'), say=s=>{ const m=el('tlcMsg'); if(m) m.textContent=s; };
-  const set=()=>{ tlcFrom=f.value||tlcFrom; tlcTo=t.value||tlcTo; f.blur(); t.blur(); renderTrucks(); };
+  const set=()=>{ tlcFrom=f.value||tlcFrom; tlcTo=t.value||tlcTo; renderTrucks(true); };   // (user 11-15: the picture didn't follow a new date)
   if(f) f.addEventListener('change',set); if(t) t.addEventListener('change',set);
   const rt=el('tlcRetry'); if(rt) rt.addEventListener('click',()=>{ prodHistErr=false; renderTrucks(); });
   if(img){ const k=tlcFrom+'|'+tlcTo+'|'+TLC_ROWS.length+'|'+(tlcLogo()?1:0); if(k!==tlcKey||!tlcUrl){ tlcKey=k; tlcUrl=drawTlc(tlcData()).toDataURL('image/png'); } img.src=tlcUrl; }
