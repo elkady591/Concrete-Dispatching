@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261115-000003">
+<meta name="app-build" content="20261115-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3080,6 +3080,8 @@ function renderTrucks(force){
   const ruleFor=x=>{ if(String(x.es||'').trim()) return null; const T=tok(x.plant), dm=hm(x.dep);
     const same=y=>y.plant===T&&String(y.truck)===String(x.truck)&&(dm==null||hm(String(y.dep).replace(/^.*\s(\d{1,2}:\d{2}).*$/,'$1'))===dm);
     if(NOES.some(y=>same(y)&&PUMPNOTE[noEsKey(y)]===SM_MARK)) return 'Start mix';   // marked Start mix by hand (Data checks)
+    // given its request by hand (Data checks › ✎ Request) — user 2026-11-15: it still said "No ES" here
+    const g=NOES.find(y=>same(y)&&PUMPNOTE[noEsKey(y)]&&PUMPNOTE[noEsKey(y)]!==SM_MARK); if(g){ const v=PUMPNOTE[noEsKey(g)], rq=ruleReq(v); return rq?((rq.client?rq.client+' ':'')+rq.code):String(v); }
     const n=NOES.find(y=>same(y)&&RMt.has(noEsKey(y)));
     if(!n) return null; const to=RMt.get(noEsKey(n)).to, rq=ruleReq(to); return (rq?((rq.client?rq.client+' ':'')+rq.code):to)+' 📌'; };
   const siteT=x=>ruleFor(x)||site(x.es,x.q);
