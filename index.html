@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261112-000010">
+<meta name="app-build" content="20261115-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3064,7 +3064,7 @@ window.openView=async function(v, sub){
 };
 function renderTrucks(){
   const area=el('trucksArea'); if(!area)return;
-  if((document.activeElement||{}).id==='tkMonth') return;   // the month list is open
+  if(['tkMonth','tlcFrom','tlcTo'].includes((document.activeElement||{}).id)) return;   // the month list / a date is being picked
   const t=TRUCKS;
   if(!t||!t.ok){ area.innerHTML='<div class="muted" style="font-size:13px;padding:10px 2px">Truck tracking data not available yet — pull the sheet.</div>'; return; }
   // a loaded truck's ES -> "CLIENT ELEMENT" from the plan (e.g. "TREST 10UJA"); unknown ES -> the ES itself
@@ -3202,7 +3202,7 @@ function renderTrucks(){
         </tr>`).join('')}
         <tr style="font-weight:800"><td></td><td>Total</td><td class="num">${fmt(qTot('q'),0)}</td><td class="num">${fmt(qTot('trips'),0)}</td><td class="num">${fmt(qTot('partial'),0)}</td>
           ${q.plants.map((n,j)=>`<td class="num">${fmt(qr.reduce((s,r)=>s+((r.byPlant&&r.byPlant[j])||0),0),0)}</td>`).join('')}</tr>
-        </tbody></table></div>`);
+        </tbody></table></div>`)+tlcBox();
       body=truckTab==='plan'?tpBox:tbl;
     }
   } else if(truckTab==='loaded'){
@@ -3252,6 +3252,7 @@ function renderTrucks(){
   }
   area.innerHTML=counts+tabs+body;
   area.querySelectorAll('.pr-sb').forEach(b=>b.addEventListener('click',()=>{ prodSort=b.dataset.ps; try{ localStorage.setItem('cmpour:prodsort',prodSort); }catch(e){} renderTrucks(); }));
+  tlcWire();
   { const ms=el('tkMonth'); if(ms) ms.addEventListener('change',()=>{ tkMonth=ms.value; ms.blur(); renderTrucks(); });
     const rt=el('tkRetry'); if(rt) rt.addEventListener('click',()=>{ prodHistErr=false; renderTrucks(); }); }
   { // the count: applied with OK — more = the next lowest m³ added, fewer = the last added taken off (out with concrete stay)
@@ -5266,7 +5267,7 @@ function prodMonths(){ const n=new Date(), out=[];
   return out; }
 async function loadProdHist(){
   if(PRODHIST||prodHistBusy) return; prodHistBusy=true; prodHistErr=false;
-  try{
+  try{ TLC_ROWS=[];
     const id=el('sheetId').value.trim(), EXCL=/waste|rejected\s*&?\s*transferred|مرفوض|هالك/i, h={};
     const csvs=await Promise.all(PROD_RAW.map(async p=>{ const r=await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${p[1]}`,{cache:'no-store'});
       if(!r.ok) throw new Error('tab '+p[0]); return r.text(); }));
@@ -5276,11 +5277,15 @@ async function loadProdHist(){
       const hr=rows.slice(0,5).findIndex(x=>x.some(c=>/^departure/i.test(c.trim()))); if(hr<0) throw new Error('no header');
       const fi=re=>rows[hr].findIndex(c=>re.test(c.trim())), c={date:fi(/^date$/i), tk:fi(/truck/i), q:fi(/qm3/i), dep:fi(/^departure/i), fu:fi(/^follow/i)};
       if(Object.values(c).some(i=>i<0)) throw new Error('no columns');
+      const cDur=fi(/^trip duration/i);
       for(let i=hr+1;i<rows.length;i++){ const x=rows[i], tk=String(x[c.tk]||'').trim();
         if(!tk) continue;
         const d=String(x[c.date]||'').trim().match(/^(\d+)\/(\d+)\/(\d{4})$/), t=String(x[c.dep]||'').trim().match(/^(\d+):(\d+)(?::\d+)?\s*([AP])M$/i);
         if(!d) continue;
         const q=Number(String(x[c.q]||'').replace(/,/g,''))||0;
+        // every trip for "Trucks loaded less than Full Capacity" (same rules as the Excel file: by the Date column, a whole truck number)
+        if(/^\d+$/.test(tk)){ const dm=cDur>=0&&String(x[cDur]||'').trim().match(/^(\d+):(\d{2})$/);
+          TLC_ROWS.push({d:Date.UTC(+d[3],d[1]-1,+d[2]), tk:+tk, q, min:dm?(+dm[1])*60+(+dm[2]):null}); }
         // per truck, like the "Productivity" tab: by the Date column, every trip counted (rejected too)
         if(+tk>0){ const ym=d[3]+'-'+pad(+d[1]), o=h[ym]||(h[ym]=[{},{},{}]), r=o[2][tk]||(o[2][tk]={tm:tk,q:0,trips:0,partial:0,byPlant:[0,0,0,0,0]});
           r.q+=q; r.trips++; r.byPlant[k]++; if(q>0&&q<10) r.partial++; }
@@ -5296,6 +5301,90 @@ async function loadProdHist(){
 function truckHist(ym){ const src=(PRODHIST[ym]||[])[2]||{};
   return {plants:['Liebherr 1','Liebherr 2','Vurmak 3','Vurmak 4','Vurmak 5'], tripOrder:[],
     rows:Object.values(src).map(r=>Object.assign({},r,{byPlant:r.byPlant.map(v=>v||null)})).sort((a,b)=>b.q-a.q)}; }
+/* ---------- Trucks loaded less than Full Capacity (Trucks › Productivity) ----------
+   The same report and picture as the Excel file "Trucks loaded Less than Full Capacity <month>.xlsm" (its Copy Picture
+   button), from the station tabs (read with the past months, loadProdHist): by the Date column; a load counts when
+   0 < m³ < 12 and under the truck's capacity (101–107 = 10 m³, the rest 12 m³); trip duration (col. "Trip Duration"
+   h:mm) 2–3 h and 3–5 h; "all trips" = every row with a date and a truck number. */
+let TLC_ROWS=[], tlcFrom='', tlcTo='', tlcKey='', tlcUrl='';
+const TLC_TEN=new Set([101,102,103,104,105,106,107]);
+const tlcLogo=()=>{ try{ return NCM_LOGO.complete&&NCM_LOGO.naturalWidth?NCM_LOGO:null; }catch(e){ return null; } };   // (NCM_LOGO is declared further down)
+const tlcYmd=t=>{ const d=new Date(t); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; };
+function tlcPeriod(){ const n=new Date(); if(!tlcFrom) tlcFrom=`${n.getFullYear()}-${pad(n.getMonth()+1)}-01`;
+  if(!tlcTo) tlcTo=`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`; }
+function tlcData(){ tlcPeriod();
+  const [a,b]=[tlcFrom,tlcTo].map(s=>{ const p=s.split('-').map(Number); return Date.UTC(p[0],p[1]-1,p[2]); });
+  const R=TLC_ROWS.filter(r=>r.d>=a&&r.d<=b), short=R.filter(r=>r.q>0&&r.q<12&&r.q<(TLC_TEN.has(r.tk)?10:12));
+  const counts=[...Array(11)].map((_,i)=>short.filter(r=>r.q>=i+1&&r.q<i+2).length);
+  const trucks=[...new Set(short.map(r=>r.tk))].sort((x,y)=>x-y);
+  const matrix=[...Array(11)].map((_,i)=>trucks.map(tk=>short.filter(r=>r.tk===tk&&r.q>=i+1&&r.q<i+2).length));
+  const all=R.length, total=counts.reduce((s,v)=>s+v,0), pct=v=>all?Math.round(v/all*100)+'% of all trips':'';
+  const d23=R.filter(r=>r.min!=null&&r.min>=120&&r.min<180).length, d3=R.filter(r=>r.min!=null&&r.min>=180&&r.min<=300).length;
+  const lab=t=>{ const d=new Date(t); return `${d.getUTCDate()} ${PROD_MONS[d.getUTCMonth()].toUpperCase()} ${d.getUTCFullYear()}`; };
+  return {period:`${lab(a)}  -  ${lab(b)}`, counts, total, all, trucks, matrix, mtot:trucks.map((_,k)=>matrix.reduce((s,row)=>s+row[k],0)), d23, d3, p23:pct(d23), p3:pct(d3)}; }
+// the picture: the same drawing as the Excel button's (thin rounded bars, Arial, light-blue headers, navy totals)
+function drawTlc(D){
+  const n=Math.max(1,D.trucks.length), W=Math.max(1100,49+571+42+98+50*n+90), H=1000, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const x=cv.getContext('2d'), NAVY='#132f5c', HDR='#dce6f4', PALE='#f2f6fc', GRID='#9fb2cf', INK='#1e2b4a';
+  x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.textBaseline='middle';
+  const rr=(X,Y,w,h,r)=>{ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); };
+  const txt=(s,X,Y,font,col,al)=>{ x.font=font; x.fillStyle=col; x.textAlign=al||'center'; x.fillText(s,X,Y); };
+  const cell=(X,Y,w,h,fill)=>{ if(fill){ x.fillStyle=fill; x.fillRect(X,Y,w,h); } x.strokeStyle=GRID; x.lineWidth=1; x.strokeRect(X+.5,Y+.5,w,h); };
+  const lg=tlcLogo(); if(lg) x.drawImage(lg,49,22,108*lg.naturalWidth/lg.naturalHeight,108);
+  txt('Trucks loaded less than Full Capacity',W/2,68,'700 42px Arial','#1b2f5c');
+  x.font='700 21px Arial'; const pw=x.measureText(D.period).width+52; rr(W/2-pw/2,108,pw,42,21); x.fillStyle='#e9f0fb'; x.fill(); x.strokeStyle='#b9cdee'; x.stroke();
+  txt(D.period,W/2,130,'700 21px Arial','#2457d6');
+  // left: m³ table
+  let L=49, Y=178; cell(L,Y,179,62,HDR); cell(L+179,Y,392,62,HDR);
+  txt('Quantity Loaded',L+89.5,Y+31,'700 19px Arial',INK); txt('Number of Loaded Trucks',L+179+196,Y+20,'700 19px Arial',INK); txt('less than the Full Capacity',L+179+196,Y+42,'700 19px Arial',INK);
+  Y+=62; const mx=Math.max(1,...D.counts);
+  D.counts.forEach((c,i)=>{ cell(L,Y,179,40,PALE); cell(L+179,Y,392,40,'#fff');
+    txt(`${i+1} m³`,L+89.5,Y+21,'700 19px Arial',INK); txt(String(c),L+179+64,Y+21,'700 19px Arial',INK,'right');
+    if(c>0){ rr(L+179+73,Y+12,Math.max(6,Math.round(c/mx*232)),16,8); x.fillStyle='#38bdf8'; x.fill(); }
+    Y+=40; });
+  x.fillStyle=NAVY; x.fillRect(L,Y,571,40); txt('Total',L+89.5,Y+21,'700 19px Arial','#fff'); txt(`${D.total} Trucks`,L+179+196,Y+21,'700 19px Arial','#fff');
+  Y+=54;
+  rr(L+.5,Y+.5,570,46,8); x.fillStyle='#eaf1fc'; x.fill(); x.strokeStyle='#c3d3ee'; x.stroke();
+  if(D.all){ const parts=[[Math.round(D.total/D.all*100)+'%',1],[' of all ',0],[D.all.toLocaleString('en-US'),1],[' trips in the period',0]];
+    const wOf=p=>{ x.font=(p[1]?'700':'400')+' 20px Arial'; return x.measureText(p[0]).width; }, tw=parts.reduce((s,p)=>s+wOf(p),0); let cx=L+285.5-tw/2;
+    parts.forEach(p=>{ const w=wOf(p); txt(p[0],cx,Y+24,(p[1]?'700':'400')+' 20px Arial',INK,'left'); cx+=w; }); }
+  Y+=63;
+  rr(L+.5,Y+.5,570,141,8); x.save(); x.clip(); x.fillStyle=HDR; x.fillRect(L,Y,571,45); x.restore(); rr(L+.5,Y+.5,570,141,8); x.strokeStyle=GRID; x.stroke();
+  x.beginPath(); x.moveTo(L,Y+45.5); x.lineTo(L+571,Y+45.5); x.moveTo(L+1,Y+93.5); x.lineTo(L+570,Y+93.5); x.strokeStyle=GRID; x.stroke();
+  txt('⏱ Trip duration (slow discharging at site)',L+14,Y+23,'700 19px Arial',INK,'left');
+  [[D.d23,D.p23,'From 2 hours to 3 hours','#b45309'],[D.d3,D.p3,'More than 3 hours','#be123c']].forEach((r,k)=>{ const yy=Y+45+24+k*48;
+    txt(r[2],L+15,yy,'400 18px Arial','#2f3a4f','left'); txt(`${r[0]} Trips`,L+289,yy,'700 21px Arial',r[3],'left'); txt(r[1],L+557,yy,'400 15px Arial','#6b7280','right'); });
+  // right: per truck
+  const R0=L+571+42; txt('Number of Trips for Loaded Trucks less than the Full Capacity — per truck',R0,190,'700 20px Arial','#1b2f5c','left');
+  Y=210; cell(R0,Y,98,36,HDR); txt('Quantity',R0+49,Y+19,'700 15px Arial',INK);
+  D.trucks.forEach((tk,k)=>{ cell(R0+98+k*50,Y,50,36,HDR); txt(String(tk),R0+98+k*50+25,Y+19,'700 15px Arial',INK); });
+  Y+=36;
+  for(let q=0;q<11;q++){ cell(R0,Y,98,35,PALE); txt(`${q+1} m³`,R0+49,Y+18,'700 15px Arial',INK);
+    D.trucks.forEach((tk,k)=>{ const v=D.matrix[q][k]; cell(R0+98+k*50,Y,50,35,'#fff'); txt(v?String(v):'·',R0+98+k*50+25,Y+18,'400 15px Arial',v?INK:'#9aa4b5'); });
+    Y+=35; }
+  x.fillStyle=NAVY; x.fillRect(R0,Y,98+50*D.trucks.length,36); txt('Total',R0+49,Y+19,'700 15px Arial','#fff');
+  D.mtot.forEach((v,k)=>txt(String(v),R0+98+k*50+25,Y+19,'700 15px Arial','#fff'));
+  return cv; }
+function tlcBox(){ tlcPeriod();
+  if(!PRODHIST&&!prodHistBusy&&!prodHistErr) loadProdHist();
+  const inner=!PRODHIST?(prodHistErr?`<div class="muted" style="font-size:13px;padding:10px 2px">Couldn't read the station tabs. <button class="btn" id="tlcRetry">Try again</button></div>`
+      :'<div class="muted" style="font-size:13px;padding:10px 2px"><span class="spin"></span> Reading the station tabs…</div>')
+    :'<img id="tlcImg" alt="Trucks loaded less than Full Capacity" style="width:100%;margin-top:10px;border:1px solid var(--line2);border-radius:10px;background:#fff">';
+  return `<div class="tlc-box" style="margin-top:22px"><div class="section-title" style="font-size:14px;margin-bottom:8px">Trucks loaded less than Full Capacity</div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><span class="muted">From</span><input type="date" id="tlcFrom" value="${tlcFrom}" class="pr-month" style="margin:0"><span class="muted">To</span><input type="date" id="tlcTo" value="${tlcTo}" class="pr-month" style="margin:0">
+      <button type="button" class="btn sm" id="tlcCopy">📋 Copy</button><button type="button" class="btn sm alt" id="tlcSave">💾 Save</button><span class="muted" id="tlcMsg" style="font-size:12px"></span></div>${inner}</div>`; }
+function tlcWire(){
+  const f=el('tlcFrom'), t=el('tlcTo'), img=el('tlcImg'), say=s=>{ const m=el('tlcMsg'); if(m) m.textContent=s; };
+  const set=()=>{ tlcFrom=f.value||tlcFrom; tlcTo=t.value||tlcTo; f.blur(); t.blur(); renderTrucks(); };
+  if(f) f.addEventListener('change',set); if(t) t.addEventListener('change',set);
+  const rt=el('tlcRetry'); if(rt) rt.addEventListener('click',()=>{ prodHistErr=false; renderTrucks(); });
+  if(img){ const k=tlcFrom+'|'+tlcTo+'|'+TLC_ROWS.length+'|'+(tlcLogo()?1:0); if(k!==tlcKey||!tlcUrl){ tlcKey=k; tlcUrl=drawTlc(tlcData()).toDataURL('image/png'); } img.src=tlcUrl; }
+  const blob=()=>new Promise(res=>drawTlc(tlcData()).toBlob(res,'image/png'));
+  const name=()=>`Trucks loaded less than Full Capacity ${tlcFrom} to ${tlcTo}.png`;
+  const cb=el('tlcCopy'); if(cb) cb.addEventListener('click',async()=>{ try{ if(!(navigator.clipboard&&window.ClipboardItem)) throw new Error('copying pictures is not supported on this browser — use Save');
+      await navigator.clipboard.write([new ClipboardItem({'image/png':await blob()})]); say('Copied ✓ — paste it anywhere'); }catch(e){ say('Could not copy: '+(e&&e.message||e)); } });
+  const sb=el('tlcSave'); if(sb) sb.addEventListener('click',async()=>{ const b=await blob(), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name(); document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); say('Saved ✓'); });
+}
 // one month in the same shape as parseProdTable: w 0 = 8 AM : 8 AM, 1 = 12 AM : 12 AM. Empty stations show — like the sheet
 function prodHistTbl(ym,w){ const [y,m]=ym.split('-').map(Number), src=(PRODHIST[ym]||[{},{}])[w], tot=[0,0,0,0,0], days=[], sum=a=>a.reduce((s,v)=>s+v,0), nz=a=>a.map(v=>v||null);
   for(let n=1;n<=new Date(y,m,0).getDate();n++){ const a=src[n]||[0,0,0,0,0]; a.forEach((v,i)=>tot[i]+=v);
