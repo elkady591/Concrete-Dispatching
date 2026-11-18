@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261115-000004">
+<meta name="app-build" content="20261118-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1147,8 +1147,9 @@
   .ptl-leg .lg{display:inline-block;width:16px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
   .lg.run{background:var(--cyan)}.lg.est{background:rgba(34,211,238,.45)}.lg.done{background:rgba(148,163,184,.4)}.lg.plan{border:1.5px dashed var(--violet)}.lg.late{border:1.5px dashed var(--amber)}.lg.free{border:1.5px dotted var(--green)}.lg.clash{box-shadow:0 0 0 2px var(--rose) inset}
   .ptl-warn{margin-top:8px;font-size:12.5px;color:var(--rose)}
-  .ptl-np .np-r{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;color:var(--ink,inherit)} .ptl-np .np-r small{color:var(--faint)}
-  .np-sug{font:700 12px var(--mono);padding:4px 10px;border-radius:999px;border:1px solid var(--green);background:rgba(52,211,153,.12);color:var(--green);cursor:pointer}
+  .ptl-np .np-r{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);color:var(--ink,inherit)} .ptl-np .np-r small{color:var(--faint)}
+  .ptl-np .np-r>span:first-child{flex:0 0 100%}   /* the pour on its own line, its plants all in one row under it (phone: they wrapped unevenly) */
+  .np-sug{font:700 12px var(--mono);min-width:44px;text-align:center;padding:4px 10px;border-radius:999px;border:1px solid var(--green);background:rgba(52,211,153,.12);color:var(--green);cursor:pointer}
   .np-none{color:var(--rose)!important}
   .uc-plsug{font-size:12px;color:var(--green);margin:4px 0 2px}
   .ph-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;align-items:center;font-size:12px}.ph-hint{font-size:11px}
