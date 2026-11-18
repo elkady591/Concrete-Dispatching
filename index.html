@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261118-000001">
+<meta name="app-build" content="20261118-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4723,10 +4723,15 @@ function renderUpcoming(){
   const kids=units.map(()=>[]), hasPar=units.map(()=>false);
   units.forEach((u,i)=>{ const pr=LKu.get(u[0]); const j=pr&&uOf.has(pr)?uOf.get(pr):-1; if(j>=0&&j!==i){ kids[j].push(i); hasPar[i]=true; } });
   const seqOf=i=>[i].concat(...kids[i].map(seqOf));
-  const blocks=[]; units.forEach((u,i)=>{ if(!hasPar[i]) blocks.push(seqOf(i)); });
-  const nm=u=>esc((u[0].client?u[0].client+' ':'')+u[0].elem);
-  el('upcomingArea').innerHTML='<div class="ucards">'+blocks.map(b=>b.length<2?card(units[b[0]])
-    :`<div class="useq"><div class="useq-h">🔗 <b>${b.length} requests one after the other</b> <span>${b.map(i=>nm(units[i])).join(' → ')}</span></div>
+  // the one they follow is POURING already (so it is not in Upcoming): its followers still stay together in one frame,
+  // headed by it (user 2026-11-18: the frame went away as soon as the first of the chain started)
+  const ext=new Map(); units.forEach((u,i)=>{ if(hasPar[i]) return; const pr=LKu.get(u[0]);
+    if(pr&&!uOf.has(pr)&&pr.trucks>0&&!pourDone(pr)){ if(!ext.has(pr)) ext.set(pr,[]); ext.get(pr).push(i); hasPar[i]=true; } });
+  const blocks=[], done=new Set(); units.forEach((u,i)=>{ if(!hasPar[i]){ blocks.push(seqOf(i)); return; }
+    for(const [pr,L] of ext) if(L[0]===i&&!done.has(pr)){ done.add(pr); const b=[].concat(...L.map(seqOf)); b.run=pr; blocks.push(b); } });
+  const nm=u=>esc((u[0].client?u[0].client+' ':'')+u[0].elem), nmG=g=>esc((g.client?g.client+' ':'')+g.elem);
+  el('upcomingArea').innerHTML='<div class="ucards">'+blocks.map(b=>b.length<2&&!b.run?card(units[b[0]])
+    :`<div class="useq"><div class="useq-h">🔗 <b>${b.run?`After ${nmG(b.run)} — pouring now`:`${b.length} requests one after the other`}</b> <span>${(b.run?[nmG(b.run)]:[]).concat(b.map(i=>nm(units[i]))).join(' → ')}</span></div>
        <div class="useq-l">${b.map((i,k)=>`<div class="useq-i"><span class="useq-n">${k+1}</span>${card(units[i])}</div>`).join('')}</div></div>`).join('')+'</div>';
   // app requests: delete / merge with the sheet copy / keep both
   const A=el('upcomingArea');
