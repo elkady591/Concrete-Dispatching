@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261118-000002">
+<meta name="app-build" content="20261118-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2748,8 +2748,15 @@ function requestTimes(){
   }
   // 2) estimates: behind a chain sibling, or behind the element named in its TIME cell ("after" link).
   //    A few rounds so a link to a pour that itself waits gets its estimate first.
-  const prevOf=g=>{ const ch=CH.get(g); return (ch&&ch.prev&&g.trucks===0)?ch.prev:(LK.get(g)||null); };
-  for(let round=0; round<4; round++){
+  const prevRaw=g=>{ const ch=CH.get(g); return (ch&&ch.prev&&g.trucks===0)?ch.prev:(LK.get(g)||null); };
+  // several requests waiting on the SAME one queue behind it one after the other, in sheet order — not all at its end
+  // (user 2026-11-18: FENSMA 10UFZ + ESKM 91UAZ both "after 45551" started together on V3 / V4)
+  const effPrev=new Map(), byPrev=new Map();
+  for(const g of (VD.summary||[])){ if(!waits(g)) continue; const p=prevRaw(g); if(!p) continue; if(!byPrev.has(p)) byPrev.set(p,[]); byPrev.get(p).push(g); }
+  const rowIx=g=>{ const r=PRm.get(g); return r?r.idx:1e9; };
+  for(const [p,L] of byPrev){ L.sort((a,b)=>rowIx(a)-rowIx(b)); L.forEach((g,k)=>effPrev.set(g,k?L[k-1]:p)); }
+  const prevOf=g=>effPrev.get(g)||null;
+  for(let round=0; round<8; round++){
     for(const g of (VD.summary||[])){ if(!waits(g)) continue; const prev=prevOf(g); if(!prev) continue;
       if(prev.trucks>0 && pourDone(prev)){                   // the one before is finished -> due now
         const a=(prev.loads||[]).map(l=>l.t).filter(t=>t!=null);
