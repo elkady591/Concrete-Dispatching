@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261119-000001">
+<meta name="app-build" content="20261119-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6645,7 +6645,11 @@ function hourlyRows(now){
     const s=sn.length?sentPour(g,Math.min(...sn.map(x=>x.t)),now).ps:(t?Math.max(pourStartAt(g,t),now):now);
     const r=Object.assign(base(g),{run:false, start:s}); r.h=spread(r.qty,r.rate,s); rows.push(r); });
   const tot=new Array(N).fill(0); rows.forEach(r=>r.h.forEach((v,i)=>tot[i]+=v));
-  return {h0, N, rows, tot, trucks:tot.map(v=>v>0?Math.ceil(v/10*2):0)}; }
+  // trucks: the sheet's ROUNDUP(m³ ÷ load × 2) with the load = the average capacity of the trucks WORKING now
+  // (loaded + empty at the plant; 101–107 carry 10 m³, the rest 12 — user 2026-11-19), not a fixed 10
+  const T=TRUCKS||{}, work=[...new Set([...(T.loaded||[]).map(x=>String(x.truck)),...(T.available||[]).map(String)])].filter(Boolean);
+  const cap=work.length?work.reduce((s,tk)=>s+(TLC_TEN.has(+tk)?10:12),0)/work.length:12;
+  return {h0, N, rows, tot, cap, nWork:work.length, trucks:tot.map(v=>v>0?Math.ceil(v/cap*2):0)}; }
 function drawHourly(P){
   P=P||hourlyRows();
   const S=2, PAD=36, HEAD=150, RH=40, cols=[['Contractor',150],['Code',112],['S.C',96],['Quantity',96],['Pumps',150],['Temp',74],['Rate',80]], HW=58;
@@ -6666,7 +6670,7 @@ function drawHourly(P){
     const dd=new Date(P.h0+i*3600000); cell(X0+i*HW,y,(j-i)*HW,30,'#eef3fb',`${dd.getDate()} ${MON3[dd.getMonth()]}`,'700 13px Arial','#2457d6'); i=j; }
   y+=30;
   // Trucks / Total m³ (above the hours, like the sheet)
-  cell(L,y,leftW,RH,'#fff7e6','Trucks needed','800 15px Arial','#9a3412'); P.trucks.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,'#fff7e6',v||'','800 15px Arial','#9a3412')); y+=RH;
+  cell(L,y,leftW,RH,'#fff7e6',`Trucks needed (avg load ${P.cap.toFixed(1)} m³)`,'800 15px Arial','#9a3412'); P.trucks.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,'#fff7e6',v||'','800 15px Arial','#9a3412')); y+=RH;
   cell(L,y,leftW,RH,'#eaf1fc','Total m³','800 15px Arial',NAVY); P.tot.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,'#eaf1fc',v?fmt(v,0):'','800 15px Arial',NAVY)); y+=RH;
   // header
   let cx=L; cols.forEach(([t,w])=>{ cell(cx,y,w,RH,HDR,t,'700 14px Arial'); cx+=w; });
@@ -6681,7 +6685,7 @@ function drawHourly(P){
 let hpPrevKey='';
 function updateHourlyPreview(){
   const im=el('hpPrev'); if(!im || view!=='upcoming') return;
-  try{ const P=hourlyRows(), key=JSON.stringify([P.h0,P.rows.map(r=>[r.code,r.h]),NCM_LOGO.complete]);
+  try{ const P=hourlyRows(), key=JSON.stringify([P.h0,P.cap,P.rows.map(r=>[r.code,r.h]),NCM_LOGO.complete]);
     if(key===hpPrevKey) return; hpPrevKey=key; im.src=drawHourly(P).toDataURL('image/png'); im.style.display='block'; }catch(e){ console.warn('hourly',e); } }
 NCM_LOGO.addEventListener('load',()=>{ hpPrevKey=''; updateHourlyPreview(); });
 async function hourlyBlob(){ const cv=drawHourly(); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
