@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261119-000004">
+<meta name="app-build" content="20261119-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1121,6 +1121,7 @@
   .ptl-axis{position:relative;margin-left:56px;height:22px;z-index:2;font:11px var(--mono);color:var(--faint);cursor:pointer}
   .ptl-axis span{position:absolute;top:4px;padding-left:3px;border-left:1px solid var(--line2);height:18px;white-space:nowrap}
   .ptl-row{position:relative;display:flex;height:40px;border-top:1px solid var(--line)}
+  #pumpsView .ptl-row{border-top:2px solid var(--line2)}   /* a bold line between one pump and the next (user 2026-11-19) */
   .ptl-lab{position:sticky;left:0;flex:none;width:56px;box-sizing:border-box;display:flex;align-items:center;font:800 13px var(--mono);background:var(--panel2);z-index:4;padding-left:4px}
   .ptl-track{position:relative;flex:none;height:40px;cursor:pointer;background-image:repeating-linear-gradient(90deg,transparent 0 63px,var(--line) 63px 64px)}
   .ptl-bar{box-sizing:border-box;position:absolute;top:6px;height:28px;border-radius:7px;font-size:11px;font-weight:700;padding:0 6px;display:flex;align-items:center;white-space:nowrap;overflow:clip;cursor:pointer;z-index:1}
@@ -2815,7 +2816,8 @@ function upcomingPumpCheck(now){
       if(srS){ got.add(srS.i); claimed.set(srS.i,fam); claimedBy.set(srS.i,g); claimedTill.set(srS.i,tillOf(g));
         res.push({len, kind:srS.pour===g?'sent':'ok', s:srS}); continue; }
       // (a pump already SENT to another request — setting up there — is that request's; not up for grabs)
-      const cand=state.filter(s=>s.len===len && !got.has(s.i) && (!held(s.i,g) || claimed.get(s.i)===fam)
+      // a broken pump is as if we did not have it (user 2026-11-19): never a candidate, never named on the card
+      const cand=state.filter(s=>s.len===len && !s.note && !got.has(s.i) && (!held(s.i,g) || claimed.get(s.i)===fam)
         && !(s.setup && s.pour && s.pour!==g && SF(s.pour)!==fam) && !(RS.has(s.i) && SF(RS.get(s.i))!==fam));   // (a spare stays with the whole chain of its request)
       // a pump on / washing after the same client + element = this request just carries on with it
       const own=s=>s.pour===g;                       // already sent to this request
@@ -2834,7 +2836,8 @@ function upcomingPumpCheck(now){
         .sort((a,b)=>(a.setup?1:0)-(b.setup?1:0))[0];
       if(tk){ res.push({len, kind:'taken', s:tk, by:claimedBy.get(tk.i), till:claimedTill.get(tk.i)}); continue; }
       if(pick){ claimed.set(pick.i,fam); claimedBy.set(pick.i,g); claimedTill.set(pick.i,tillOf(g)); got.add(pick.i); }
-      res.push({len, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
+      const alt=!pick?state.filter(s=>s.len===len&&!s.note).sort((a,b)=>(a.until||Infinity)-(b.until||Infinity))[0]:null;   // busy elsewhere (not broken)
+      res.push({len, alt, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
         after:same?(sib(pick)?(pumpFam(pick.pour)===pumpFam(g)?`the ${fmt(pick.pour.required!=null?pick.pour.required:pick.pour.planReq,0)} m³`:site(pick.pour)):'the previous request'):''});
     }
     // a pump marked sent to it stays "sent" also while it is on a sibling of the same site (a sibling started first)
@@ -2862,7 +2865,7 @@ function upcomingPumpCheck(now){
       const why=miss.map(r=> r.kind==='taken' ? `taken by ${esc(site(r.by))}${(RT.get(r.by)||{}).time?' ('+RT.get(r.by).time+')':''}${r.till&&isFinite(r.till)?' · back ≈'+timeShort(r.till):' · it has no rate, so all day'}`
                             : r.kind==='wash' ? `free at ${timeShort(r.s.until)}`
                             : r.kind==='on'   ? `busy on ${esc(site(r.s.pour))}${r.s.until?' · free ≈'+timeShort(r.s.until):''}`
-                            : r.kind==='down' ? 'Breakdown' : r.kind==='noop' ? 'free but no operator' : 'no pump');
+                            : r.kind==='noop' ? 'free but no operator' : r.alt ? `busy${r.alt.pour?' on '+esc(site(r.alt.pour)):''}${r.alt.until?' · free ≈'+timeShort(r.alt.until):''}` : 'no pump');
       const uniq=[...new Set(why)].join(' · ');
       return rs.length>1 ? `${L}: ${okN} of ${rs.length} free · ${uniq}` : `${L} ${uniq}`; });
     out.set(g,{cls:bad.every(r=>r.kind==='wash'||r.kind==='taken')?'warn':'bad', html:parts.join('<br>')});
@@ -4208,7 +4211,7 @@ function plantTimeline(now){
         if(b.free==null && chainTail(list,i,b.p.fam,Math.max(runE,now),b.end==null)) continue;
         const wE=b.free!=null?b.free:runE+WASH; if(wE>runE) list.push({g, s:runE, e:wE, kind:'wash', txt:`washing → ${timeShort(wE)}`}); }
     });
-    for(const g of (VD.upcoming||[])){ const ix=[...(UP.get(g)||[]),...(SH.get(g)||[])]; if(!ix.length) continue;   // also a pump an earlier request has then: drawn there, it shows as a clash
+    for(const g of (VD.upcoming||[])){ const ix=[...new Set([...(UP.get(g)||[]),...(SH.get(g)||[])])];   /* (a pump in both lists was drawn twice — user 2026-11-19) */ if(!ix.length) continue;   // also a pump an earlier request has then: drawn there, it shows as a clash
       const t=RT.get(g), d=dur(g), s0=t?Math.max(t.at,now):now, e0=pourOf(g,t,d)[1];   // pumps: from sending to the pour's end
       ix.forEach(i=>{ const l=pumps.get(i); if(!l) return;
         if(l.some(x=>x.fromHold&&x.g===g)) return;   // already drawn from its chain's pumps (above)
