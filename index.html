@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261119-000002">
+<meta name="app-build" content="20261119-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6205,7 +6205,9 @@ function planPhotoRows(){
   // every row — finished, running, not started — by its TIME first, then the order of the Daily Plan sheet (user 2026-11-12)
   // (a pour that started = the time its first truck left; not started = its time / its estimate; no time = last)
   const tKey=g=>{ if(g.trucks>0){ const f=first(g); if(f<Infinity) return f; } const t=RTp.get(g); return t?t.at:Infinity; };
-  const finS0=new Set(fin), runS=new Set(run), all=fin.concat(run,up).sort((a,b)=>(tKey(a)-tKey(b))||(planIdx(a)-planIdx(b)));
+  // the ones that started (finished or pouring) always come first, then the ones not started — each by time (user 2026-11-19)
+  const finS0=new Set(fin), runS=new Set(run), st=g=>g.trucks>0?0:1;
+  const all=fin.concat(run,up).sort((a,b)=>(st(a)-st(b))||(tKey(a)-tKey(b))||(planIdx(a)-planIdx(b)));
   const base=all.map(g=>{ if(finS0.has(g)) return {g,r:row(g,true,true,plantsOf(g,false))};
       if(runS.has(g)) return {g,r:row(g,true,false,plantsOf(g,true))};
       // not started: the plants planned in the app, drawn light (they become the real ones once it starts)
@@ -6227,7 +6229,12 @@ function planPhotoRows(){
   const UPK=new Map(); base.forEach(x=>{ const k=kOf.get(x.g); if(upS.has(x.g)&&hasFin.has(k)&&!hasRun.has(k)&&!linkFin.has(k)){ if(!UPK.has(k)) UPK.set(k,{up:k}); kOf.set(x.g,UPK.get(k)); } });
   const groups=new Map(); base.forEach((x,i)=>{ const k=kOf.get(x.g); if(!groups.has(k)) groups.set(k,[]); groups.get(k).push({...x,i}); });
   const out=[], placed=new Set();
-  for(const x of base){ const k=kOf.get(x.g); if(placed.has(k)) continue; placed.add(k);
+  // a finished request on its own (not in a chain) goes to the very top; then the started ones; then the rest (user 2026-11-19)
+  // (a chain whose requests are ALL finished goes up with them too)
+  const gRank=k=>{ const L=groups.get(k); return L.every(m=>m.r.finished)?0:L.some(m=>m.r.started)?1:2; };
+  const keysInOrder=[]; base.forEach(x=>{ const k=kOf.get(x.g); if(!keysInOrder.includes(k)) keysInOrder.push(k); });
+  const order=keysInOrder.map((k,i)=>({k,i})).sort((a,b)=>(gRank(a.k)-gRank(b.k))||(a.i-b.i));
+  for(const {k} of order){ if(placed.has(k)) continue; placed.add(k);
     // finished first, then started and not finished, then not started (user 2026-11-15); inside each: by start time,
     // then pouring order (its time / "after" link), then sheet order
     const stage=m=>m.r.finished?0:m.r.started?1:2;
