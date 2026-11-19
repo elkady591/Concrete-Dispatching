@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261118-000003">
+<meta name="app-build" content="20261119-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1438,6 +1438,16 @@
       </div>
     </div>
     <div id="upcomingArea"></div>
+    <!-- Hourly Plan as a picture: the running + coming requests hour by hour (see hourlyRows / drawHourly) -->
+    <div class="section-title" style="margin:22px 0 0">📷 Hourly Plan — m³ per hour</div>
+    <img id="hpPrev" alt="Hourly Plan" style="display:none;width:100%;margin-top:12px;border-radius:12px;border:1px solid var(--line2);background:#fff">
+    <div class="pic-btns" style="display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:12px">
+      <button class="btn" id="hpSaveBtn" style="padding:12px 18px;font-size:14px" title="Save the picture to this device">💾 Save</button>
+      <button class="btn" id="hpCopyBtn" style="padding:12px 18px;font-size:14px" title="Copy the picture">📋 Copy</button>
+      <button class="btn" id="hpShareBtn" style="padding:12px 18px;font-size:14px" title="Send the picture to an app">📤 Share</button>
+      <button class="btn" id="hpOpenBtn" style="padding:12px 18px;font-size:14px" title="Open the picture full size">🔍 Open</button>
+    </div>
+    <div id="hpMsg" class="muted" style="text-align:center;font-size:12px;margin-top:6px"></div>
     <!-- ➕ new request form (app request: saved in the app for every device, not written to the sheet) -->
     <div id="reqModal" class="rq-back" style="display:none">
       <form class="rq-box" id="reqForm" autocomplete="off">
@@ -2324,6 +2334,7 @@ function render(res){
   renderSummary();
   renderAllPours();
   renderUpcoming();
+  if(view==='upcoming' && typeof updateHourlyPreview==='function') updateHourlyPreview();
   try{ renderPlantTimeline(); }catch(e){ try{console.log('timeline',e);}catch(_){} }
   applyView();
 }
@@ -2367,6 +2378,7 @@ function applyView(){
   if(view==='trucks') renderTrucks();
   if(view==='pumps') renderPumps();
   if(view==='summary' && typeof updatePlanPreview==='function') updatePlanPreview();
+  if(view==='upcoming' && typeof updateHourlyPreview==='function') updateHourlyPreview();
   if(view==='production') renderProduction();
   if(view==='admin' && IS_ADMIN){ renderAdminWho(); renderPwBox(); loadAdminUsers(); loadAdminLog(); }
 }
@@ -6610,6 +6622,81 @@ function updatePlanPreview(){
   }catch(e){}
 }
 NCM_LOGO.addEventListener('load',()=>{ planPrevKey=''; updatePlanPreview(); });
+/* ---------- 📷 Hourly Plan (Upcoming page) — like the user's "Daily Plan" sheet (2026-11-19) ----------
+   One row per request that is pouring or still to come; 24 hour columns from the current hour. Each request takes its
+   rate (m³/h) in every hour from its start until its quantity is done (the last hour = what is left). Running = what is
+   left, from now. Not started = from its time (pumps: when the concrete starts) — a time that passed moves to now;
+   no time = now. On top: Total m³ per hour and the trucks needed = ROUNDUP(total ÷ 10 × 2), the sheet's formula. */
+function hourlyRows(now){
+  now=now||Date.now(); const H0=new Date(now); H0.setMinutes(0,0,0); const h0=H0.getTime(), HR=3600000, N=24;
+  const RT=requestTimes(), rows=[];
+  const rateOf=g=>g.rateManual!=null?g.rateManual:g.planRate;
+  const spread=(qty,rate,start)=>{ const v=new Array(N).fill(0); if(!(qty>0)||!(rate>0)) return v;
+    let i=Math.max(0,Math.floor((start-h0)/HR)), left=qty; while(left>0.0001&&i<N){ const m=Math.min(rate,left); v[i]+=m; left-=m; i++; } return v; };
+  const base=g=>({client:g.client||'', code:g.elem||'', sc:g.sc||'', qty:(g.required!=null?g.required:g.planReq), pumps:allPumpsLabel(g)||'',
+    tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:rateOf(g)});
+  // pouring now: what is left, from this hour
+  (VD.summary||[]).filter(g=>g.trucks>0&&!pourDone(g)&&!closedHidden(g)).sort((a,b)=>(a.depMin||0)-(b.depMin||0)).forEach(g=>{
+    const left=g.remaining!=null?Math.max(0,g.remaining):null, r=Object.assign(base(g),{run:true, left});
+    r.h=spread(left,r.rate,now); rows.push(r); });
+  // not started: in Upcoming's order (its time, then the plan's order)
+  const up=(VD.upcoming||[]).slice().sort((a,b)=>{ const ta=RT.get(a), tb=RT.get(b); return ((ta?ta.at:now)-(tb?tb.at:now))||((ta?0:1)-(tb?0:1)); });
+  up.forEach(g=>{ const t=RT.get(g), sn=pumpSent(g);
+    const s=sn.length?sentPour(g,Math.min(...sn.map(x=>x.t)),now).ps:(t?Math.max(pourStartAt(g,t),now):now);
+    const r=Object.assign(base(g),{run:false, start:s}); r.h=spread(r.qty,r.rate,s); rows.push(r); });
+  const tot=new Array(N).fill(0); rows.forEach(r=>r.h.forEach((v,i)=>tot[i]+=v));
+  return {h0, N, rows, tot, trucks:tot.map(v=>v>0?Math.ceil(v/10*2):0)}; }
+function drawHourly(P){
+  P=P||hourlyRows();
+  const S=2, PAD=36, HEAD=150, RH=40, cols=[['Contractor',150],['Code',112],['S.C',96],['Quantity',96],['Pumps',150],['Temp',74],['Rate',80]], HW=58;
+  const leftW=cols.reduce((s,c)=>s+c[1],0), W=PAD*2+leftW+HW*P.N, topRows=3, H=HEAD+(topRows+Math.max(1,P.rows.length))*RH+PAD;
+  const cv=document.createElement('canvas'); cv.width=W*S; cv.height=H*S; const x=cv.getContext('2d'); x.scale(S,S);
+  const NAVY='#1f2a44', GRID='#c3cedd', HDR='#dde6f2', PALE='#f3f8ff';
+  x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.textBaseline='middle'; x.textAlign='center';
+  if(NCM_LOGO.complete&&NCM_LOGO.naturalWidth){ const lh=70; x.drawImage(NCM_LOGO,PAD,PAD-6,lh*NCM_LOGO.naturalWidth/NCM_LOGO.naturalHeight,lh); }
+  x.fillStyle=NAVY; x.font='800 32px Arial'; x.fillText('Hourly Plan',W/2,PAD+20);
+  const d=new Date(P.h0), lab=`${d.getDate()} ${MON3[d.getMonth()]} ${d.getFullYear()} · ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()]}`;
+  x.font='700 15px Arial'; const pw=x.measureText(lab).width+40, py=PAD+46; x.fillStyle='#e8f0fd'; x.strokeStyle='#b9cdee';
+  x.beginPath(); x.roundRect?x.roundRect(W/2-pw/2,py,pw,28,14):x.rect(W/2-pw/2,py,pw,28); x.fill(); x.stroke(); x.fillStyle='#2457d6'; x.fillText(lab,W/2,py+14);
+  const L=PAD, X0=L+leftW, cell=(cx,cy,w,h,fill,txt,font,col)=>{ if(fill){ x.fillStyle=fill; x.fillRect(cx,cy,w,h); } x.strokeStyle=GRID; x.lineWidth=1; x.strokeRect(cx+.5,cy+.5,w,h);
+    if(txt!=null&&txt!==''){ x.font=font||'500 15px Arial'; x.fillStyle=col||NAVY; let s=String(txt); while(s.length>1&&x.measureText(s).width>w-8) s=s.slice(0,-2)+'…'; x.fillText(s,cx+w/2,cy+h/2+1); } };
+  let y=HEAD-30;
+  // day over the hours (it changes at midnight)
+  let i=0; while(i<P.N){ const di=new Date(P.h0+i*3600000).toDateString(); let j=i; while(j<P.N&&new Date(P.h0+j*3600000).toDateString()===di) j++;
+    const dd=new Date(P.h0+i*3600000); cell(X0+i*HW,y,(j-i)*HW,30,'#eef3fb',`${dd.getDate()} ${MON3[dd.getMonth()]}`,'700 13px Arial','#2457d6'); i=j; }
+  y+=30;
+  // Trucks / Total m³ (above the hours, like the sheet)
+  cell(L,y,leftW,RH,'#fff7e6','Trucks needed','800 15px Arial','#9a3412'); P.trucks.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,'#fff7e6',v||'','800 15px Arial','#9a3412')); y+=RH;
+  cell(L,y,leftW,RH,'#eaf1fc','Total m³','800 15px Arial',NAVY); P.tot.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,'#eaf1fc',v?fmt(v,0):'','800 15px Arial',NAVY)); y+=RH;
+  // header
+  let cx=L; cols.forEach(([t,w])=>{ cell(cx,y,w,RH,HDR,t,'700 14px Arial'); cx+=w; });
+  for(let k=0;k<P.N;k++){ const h=new Date(P.h0+k*3600000).getHours(); cell(X0+k*HW,y,HW,RH,HDR,`${pad(h)}:00`,'700 13px Arial'); }
+  y+=RH;
+  if(!P.rows.length){ cell(L,y,leftW+HW*P.N,RH,'#fff','No requests running or coming','italic 16px Arial','#6b7a90'); }
+  P.rows.forEach(r=>{ const bg=r.run?PALE:'#fff'; cx=L;
+    [r.client,r.code,r.sc,r.qty!=null?fmt(r.qty,0)+' m³':'—',r.pumps||'—',r.tem||'—',r.rate?fmt(r.rate,0):'—'].forEach((v,k)=>{ cell(cx,y,cols[k][1],RH,bg,v,k===1?'800 15px Arial':'500 15px Arial'); cx+=cols[k][1]; });
+    r.h.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,v?(r.run?'#cfe8ff':'#e3edfb'):bg,v?fmt(v,v%1?1:0):'',v?'700 15px Arial':'',r.run?'#0b4a8a':NAVY));
+    y+=RH; });
+  return cv; }
+let hpPrevKey='';
+function updateHourlyPreview(){
+  const im=el('hpPrev'); if(!im || view!=='upcoming') return;
+  try{ const P=hourlyRows(), key=JSON.stringify([P.h0,P.rows.map(r=>[r.code,r.h]),NCM_LOGO.complete]);
+    if(key===hpPrevKey) return; hpPrevKey=key; im.src=drawHourly(P).toDataURL('image/png'); im.style.display='block'; }catch(e){ console.warn('hourly',e); } }
+NCM_LOGO.addEventListener('load',()=>{ hpPrevKey=''; updateHourlyPreview(); });
+async function hourlyBlob(){ const cv=drawHourly(); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
+  const d=new Date(); return {blob, name:`Hourly Plan ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}.png`}; }
+{ const say=t=>{ const m=el('hpMsg'); if(m) m.textContent=t; };
+  const sb=el('hpSaveBtn'); if(sb) sb.addEventListener('click',async()=>{ try{ const {blob,name}=await hourlyBlob(); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); say('Saved ✓ '+name); }catch(e){ say('Could not save: '+(e&&e.message||e)); } });
+  const cb=el('hpCopyBtn'); if(cb) cb.addEventListener('click',async()=>{ try{ if(!(navigator.clipboard&&window.ClipboardItem)) throw new Error('copying pictures is not supported on this browser — use Save');
+    const {blob}=await hourlyBlob(); await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]); say('Copied ✓ — paste it anywhere'); }catch(e){ say('Could not copy: '+(e&&e.message||e)); } });
+  const shb=el('hpShareBtn'); if(shb) shb.addEventListener('click',async()=>{ try{ const {blob,name}=await hourlyBlob(); const file=new File([blob],name,{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); say('Shared ✓'); return; } say('Sharing is not available on this device — use Copy or Save'); }
+    catch(e){ if(e&&e.name==='AbortError') return; say('Could not share: '+(e&&e.message||e)); } });
+  const ob=el('hpOpenBtn'); if(ob) ob.addEventListener('click',async()=>{ const win=window.open('','_blank');
+    try{ const {blob,name}=await hourlyBlob(); const url=URL.createObjectURL(blob); if(win) win.location.href=url; else location.href=url; say('Opened ✓ '+name); }
+    catch(e){ if(win) win.close(); say('Could not open: '+(e&&e.message||e)); } }); }
 
 /* ---------- build number + "Check for update" (⚙) ----------
    The app already updates itself (on open, then every 5 min). This shows which build is running and lets
