@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261119-000006">
+<meta name="app-build" content="20261119-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2834,9 +2834,10 @@ function upcomingPumpCheck(now){
       const same=pick && (sib(pick) || (claimed.get(pick.i)===fam && pick.st!=='down'));   // sibling running / ahead in the plan
       // nothing usable left because an EARLIER request took that length -> say so (not "Breakdown")
       // (name the one that took a FREE pump first; pumps already sent somewhere are that request's anyway)
-      const tk=(!pick||pick.note)&&state.filter(s=>s.len===len && !s.note && held(s.i,g) && claimed.get(s.i)!==fam && claimedBy.has(s.i))
+      // (2 pumps of a size short: name 2 different pumps, not the same one twice — user 2026-11-19)
+      const tk=(!pick||pick.note)&&state.filter(s=>s.len===len && !s.note && !got.has(s.i) && held(s.i,g) && claimed.get(s.i)!==fam && claimedBy.has(s.i))
         .sort((a,b)=>(a.setup?1:0)-(b.setup?1:0))[0];
-      if(tk){ res.push({len, kind:'taken', s:tk, by:claimedBy.get(tk.i), till:claimedTill.get(tk.i)}); continue; }
+      if(tk){ got.add(tk.i); res.push({len, kind:'taken', s:tk, by:claimedBy.get(tk.i), till:claimedTill.get(tk.i)}); continue; }
       if(pick){ claimed.set(pick.i,fam); claimedBy.set(pick.i,g); claimedTill.set(pick.i,tillOf(g)); got.add(pick.i); }
       const alt=!pick?state.filter(s=>s.len===len&&!s.note).sort((a,b)=>(a.until||Infinity)-(b.until||Infinity))[0]:null;   // busy elsewhere (not broken)
       res.push({len, alt, kind:!pick?'none':own(pick)?'sent':same?'same':pick.noop?'noop':pick.st==='free'?'ok':pick.note?'down':pick.st, s:pick,
