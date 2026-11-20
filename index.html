@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261119-000007">
+<meta name="app-build" content="20261120-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6647,7 +6647,7 @@ function hourlyRows(now){
   const spread=(qty,rate,start)=>{ const v=new Array(N).fill(0); if(!(qty>0)||!(rate>0)) return v;
     let i=Math.max(0,Math.floor((start-h0)/HR)), left=qty; while(left>0.0001&&i<N){ const m=Math.min(rate,left); v[i]+=m; left-=m; i++; } return v; };
   const base=g=>({client:g.client||'', code:g.elem||'', sc:g.sc||'', qty:(g.required!=null?g.required:g.planReq), pumps:allPumpsLabel(g)||'',
-    tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:rateOf(g)});
+    tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:rateOf(g), mix:g.mix||'', planned:g.planReq, poured:g.delivered||0});
   // pouring now: what is left, from this hour
   (VD.summary||[]).filter(g=>g.trucks>0&&!pourDone(g)&&!closedHidden(g)).sort((a,b)=>(a.depMin||0)-(b.depMin||0)).forEach(g=>{
     const left=g.remaining!=null?Math.max(0,g.remaining):null, r=Object.assign(base(g),{run:true, left});
@@ -6658,44 +6658,74 @@ function hourlyRows(now){
     const s=sn.length?sentPour(g,Math.min(...sn.map(x=>x.t)),now).ps:(t?Math.max(pourStartAt(g,t),now):now);
     const r=Object.assign(base(g),{run:false, start:s}); r.h=spread(r.qty,r.rate,s); rows.push(r); });
   const tot=new Array(N).fill(0); rows.forEach(r=>r.h.forEach((v,i)=>tot[i]+=v));
-  // trucks: the sheet's ROUNDUP(m³ ÷ load × 2) with the load = the average capacity of the trucks WORKING now
-  // (loaded + empty at the plant; 101–107 carry 10 m³, the rest 12 — user 2026-11-19), not a fixed 10
-  const T=TRUCKS||{}, work=[...new Set([...(T.loaded||[]).map(x=>String(x.truck)),...(T.available||[]).map(String)])].filter(Boolean);
-  const cap=work.length?work.reduce((s,tk)=>s+(TLC_TEN.has(+tk)?10:12),0)/work.length:12;
-  return {h0, N, rows, tot, cap, nWork:work.length, trucks:tot.map(v=>v>0?Math.ceil(v/cap*2):0)}; }
-function drawHourly(P){
+  // trucks: the sheet's ROUNDUP(m³ ÷ 10 × 2) — every truck counted as 10 m³ (user 2026-11-20)
+  const cap=10;
+  return {h0, N, rows, tot, cap, trucks:tot.map(v=>v>0?Math.ceil(v/cap*2):0)}; }
+// 3 looks (user 2026-11-20: "like my sheet" — pick one): 'green' = the sheet's colours, 'navy' = the app's colours, 'clean' = light.
+// All: the sheet's columns, hours written upright, a BOLD line where a day ends, trucks = ROUNDUP(m³ ÷ 10 × 2).
+const HP_THEMES={
+  green:{band:'#e2efda', day:'#c6e0b4', dayTx:'#375623', hdr:'#ffffff', hdrTx:'#000000', hdrHi:'#c6e0b4', hrHdr:'#e2efda', hrNight:'#a9d08e', hrTx:'#000000',
+         grid:'#8c8c8c', tx:'#000000', cellOn:'#9bc2e6', cellTx:'#000000', runBg:'#ffffff', topTx:'#000000', title:'#375623'},
+  navy: {band:'#eef3fb', day:'#1f2a44', dayTx:'#ffffff', hdr:'#1f2a44', hdrTx:'#ffffff', hdrHi:'#2457d6', hrHdr:'#dde6f2', hrNight:'#c3d2ea', hrTx:'#1f2a44',
+         grid:'#9fb2cf', tx:'#1f2a44', cellOn:'#38bdf8', cellTx:'#062b4a', runBg:'#f3f8ff', topTx:'#1f2a44', title:'#1f2a44'},
+  clean:{band:'#ffffff', day:'#f1f5f9', dayTx:'#0f172a', hdr:'#f8fafc', hdrTx:'#334155', hdrHi:'#fef3c7', hrHdr:'#f8fafc', hrNight:'#e2e8f0', hrTx:'#334155',
+         grid:'#cbd5e1', tx:'#0f172a', cellOn:'#bfdbfe', cellTx:'#1e3a8a', runBg:'#fffbeb', topTx:'#0f172a', title:'#0f172a'} };
+const HP_STYLE='clean';   // the user chose the light one (2026-11-20)
+function drawHourly(P,style){
   P=P||hourlyRows();
-  const S=2, PAD=36, HEAD=150, RH=40, cols=[['Contractor',150],['Code',112],['S.C',96],['Quantity',96],['Pumps',150],['Temp',74],['Rate',80]], HW=58;
-  const leftW=cols.reduce((s,c)=>s+c[1],0), W=PAD*2+leftW+HW*P.N, topRows=3, H=HEAD+(topRows+Math.max(1,P.rows.length))*RH+PAD;
+  // hours shown: up to the last hour with concrete (+1), at least 12
+  let last=-1; P.tot.forEach((v,k)=>{ if(v>0) last=k; }); const NN=Math.min(P.N,Math.max(12,last+2));
+  const T=HP_THEMES[style||HP_STYLE]||HP_THEMES.green;
+  const S=2, PAD=24, RH=34, TR=32, DR=34, HH=74, HW=46;   // HH: the hours row — as tall as "12:00 AM" upright + a little (user 2026-11-20)
+  // the app's own columns (user 2026-11-20: only the LOOK is taken from the sheet, not its columns)
+  const cols=[['Contractor',140],['Code',104],['S.C',80],['Quantity',96],['Pumps',140],['Temp',80],['Rate',72]];
+  const leftW=cols.reduce((s,c)=>s+c[1],0), L=PAD, X0=L+leftW, W=PAD*2+leftW+HW*NN, topH=DR+TR*2, y0=PAD;
+  const H=y0+topH+HH+Math.max(1,P.rows.length)*RH+PAD;
   const cv=document.createElement('canvas'); cv.width=W*S; cv.height=H*S; const x=cv.getContext('2d'); x.scale(S,S);
-  const NAVY='#1f2a44', GRID='#c3cedd', HDR='#dde6f2', PALE='#f3f8ff';
   x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.textBaseline='middle'; x.textAlign='center';
-  if(NCM_LOGO.complete&&NCM_LOGO.naturalWidth){ const lh=70; x.drawImage(NCM_LOGO,PAD,PAD-6,lh*NCM_LOGO.naturalWidth/NCM_LOGO.naturalHeight,lh); }
-  x.fillStyle=NAVY; x.font='800 32px Arial'; x.fillText('Hourly Plan',W/2,PAD+20);
-  const d=new Date(P.h0), lab=`${d.getDate()} ${MON3[d.getMonth()]} ${d.getFullYear()} · ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()]}`;
-  x.font='700 15px Arial'; const pw=x.measureText(lab).width+40, py=PAD+46; x.fillStyle='#e8f0fd'; x.strokeStyle='#b9cdee';
-  x.beginPath(); x.roundRect?x.roundRect(W/2-pw/2,py,pw,28,14):x.rect(W/2-pw/2,py,pw,28); x.fill(); x.stroke(); x.fillStyle='#2457d6'; x.fillText(lab,W/2,py+14);
-  const L=PAD, X0=L+leftW, cell=(cx,cy,w,h,fill,txt,font,col)=>{ if(fill){ x.fillStyle=fill; x.fillRect(cx,cy,w,h); } x.strokeStyle=GRID; x.lineWidth=1; x.strokeRect(cx+.5,cy+.5,w,h);
-    if(txt!=null&&txt!==''){ x.font=font||'500 15px Arial'; x.fillStyle=col||NAVY; let s=String(txt); while(s.length>1&&x.measureText(s).width>w-8) s=s.slice(0,-2)+'…'; x.fillText(s,cx+w/2,cy+h/2+1); } };
-  let y=HEAD-30;
-  // day over the hours (it changes at midnight)
-  let i=0; while(i<P.N){ const di=new Date(P.h0+i*3600000).toDateString(); let j=i; while(j<P.N&&new Date(P.h0+j*3600000).toDateString()===di) j++;
-    const dd=new Date(P.h0+i*3600000); cell(X0+i*HW,y,(j-i)*HW,30,'#eef3fb',`${dd.getDate()} ${MON3[dd.getMonth()]}`,'700 13px Arial','#2457d6'); i=j; }
-  y+=30;
-  // Trucks / Total m³ (above the hours, like the sheet)
-  cell(L,y,leftW,RH,'#fff7e6',`Trucks needed (avg load ${P.cap.toFixed(1)} m³)`,'800 15px Arial','#9a3412'); P.trucks.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,'#fff7e6',v||'','800 15px Arial','#9a3412')); y+=RH;
-  cell(L,y,leftW,RH,'#eaf1fc','Total m³','800 15px Arial',NAVY); P.tot.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,'#eaf1fc',v?fmt(v,0):'','800 15px Arial',NAVY)); y+=RH;
-  // header
-  let cx=L; cols.forEach(([t,w])=>{ cell(cx,y,w,RH,HDR,t,'700 14px Arial'); cx+=w; });
-  for(let k=0;k<P.N;k++){ const h=new Date(P.h0+k*3600000).getHours(); cell(X0+k*HW,y,HW,RH,HDR,`${pad(h)}:00`,'700 13px Arial'); }
-  y+=RH;
-  if(!P.rows.length){ cell(L,y,leftW+HW*P.N,RH,'#fff','No requests running or coming','italic 16px Arial','#6b7a90'); }
-  P.rows.forEach(r=>{ const bg=r.run?PALE:'#fff'; cx=L;
-    [r.client,r.code,r.sc,r.qty!=null?fmt(r.qty,0)+' m³':'—',r.pumps||'—',r.tem||'—',r.rate?fmt(r.rate,0):'—'].forEach((v,k)=>{ cell(cx,y,cols[k][1],RH,bg,v,k===1?'800 15px Arial':'500 15px Arial'); cx+=cols[k][1]; });
-    r.h.forEach((v,k)=>cell(X0+k*HW,y,HW,RH,v?(r.run?'#cfe8ff':'#e3edfb'):bg,v?fmt(v,v%1?1:0):'',v?'700 15px Arial':'',r.run?'#0b4a8a':NAVY));
+  const box=(cx,cy,w,h,fill)=>{ if(fill){ x.fillStyle=fill; x.fillRect(cx,cy,w,h); } x.strokeStyle=T.grid; x.lineWidth=1; x.strokeRect(cx+.5,cy+.5,w,h); };
+  const txt=(s,cx,cy,w,font,col)=>{ if(s==null||s==='') return; x.font=font; x.fillStyle=col; s=String(s); while(s.length>1&&x.measureText(s).width>w-6) s=s.slice(0,-2)+'…'; x.fillText(s,cx,cy); };
+  const cell=(cx,cy,w,h,fill,s,font,col)=>{ box(cx,cy,w,h,fill); const ls=String(s==null?'':s).split('\n');
+    ls.forEach((l,k)=>txt(l,cx+w/2,cy+h/2+1+(k-(ls.length-1)/2)*18,w,font||'700 14px Calibri, Arial',col||T.tx)); };
+  // top-left band: logo, title, date + the labels of the two rows on the right
+  box(L,y0,leftW,topH,T.band);
+  let lw=0; if(NCM_LOGO.complete&&NCM_LOGO.naturalWidth){ const lh=topH-30; lw=lh*NCM_LOGO.naturalWidth/NCM_LOGO.naturalHeight; x.drawImage(NCM_LOGO,L+12,y0+15,lw,lh); }
+  // the title starts over the Quantity column (never over the logo); the date under it in the soft pill of the plan photo (user 2026-11-20)
+  const d=new Date(P.h0), tX=Math.max(L+12+lw+20, L+cols.slice(0,3).reduce((s,c)=>s+c[1],0)); x.textAlign='left';
+  x.font='800 30px Calibri, Arial'; const tW=x.measureText('Hourly Plan').width;
+  txt('Hourly Plan',tX,y0+30,leftW,'800 30px Calibri, Arial',T.title);
+  { const MONS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const t=`${d.getDate()} ${MONS[d.getMonth()]} ${d.getFullYear()}  ·  ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()]}`;
+    x.font='700 15px Calibri, Arial'; const w=x.measureText(t).width+34, cxT=tX+tW/2, py=y0+52;
+    x.fillStyle='#e8f0fb'; x.strokeStyle='#a9c1e6'; x.lineWidth=1.2; x.beginPath(); x.roundRect?x.roundRect(cxT-w/2,py,w,28,14):x.rect(cxT-w/2,py,w,28); x.fill(); x.stroke();
+    x.textAlign='center'; txt(t,cxT,py+15,w+10,'700 15px Calibri, Arial','#1d4ed8'); x.textAlign='left'; }
+  x.textAlign='right'; txt('Trucks needed',X0-10,y0+DR+TR/2+1,300,'800 15px Calibri, Arial',T.topTx); txt('Total m³/h',X0-10,y0+DR+TR+TR/2+1,300,'800 15px Calibri, Arial',T.topTx); x.textAlign='center';
+  // day row (changes at midnight), trucks row, m³ row
+  let i=0; while(i<NN){ const di=new Date(P.h0+i*3600000).toDateString(); let j=i; while(j<NN&&new Date(P.h0+j*3600000).toDateString()===di) j++;
+    const dd=new Date(P.h0+i*3600000); cell(X0+i*HW,y0,(j-i)*HW,DR,T.day,`${dd.getDate()}-${MON3[dd.getMonth()]}`,'800 18px Calibri, Arial',T.dayTx); i=j; }
+  P.trucks.slice(0,NN).forEach((v,k)=>cell(X0+k*HW,y0+DR,HW,TR,'#fff',v||'','700 15px Calibri, Arial',T.topTx));
+  P.tot.slice(0,NN).forEach((v,k)=>cell(X0+k*HW,y0+DR+TR,HW,TR,'#fff',v?fmt(v,0):'','700 15px Calibri, Arial',T.topTx));
+  // header row: the columns + every hour written upright
+  let y=y0+topH, cx=L;
+  cols.forEach(([t,w])=>{ const hi=false; cell(cx,y,w,HH,hi?T.hdrHi:T.hdr,t,'800 15px Calibri, Arial',hi&&T.hdr!=='#ffffff'&&T.hdrHi!=='#fef3c7'?'#fff':(hi?T.tx:T.hdrTx)); cx+=w; });
+  // shifts of 12 h (8 → 8): the first shift light, the next dark, then light … (user 2026-11-20)
+  const shiftOf=k=>{ const h=new Date(P.h0+k*3600000).getHours(); return k-((h-8+24)%12); };   // the hour index where that shift began
+  let sh0=shiftOf(0);
+  for(let k=0;k<NN;k++){ const h=new Date(P.h0+k*3600000).getHours(), night=Math.round((shiftOf(k)-sh0)/12)%2===1;
+    box(X0+k*HW,y,HW,HH,night?T.hrNight:T.hrHdr); x.save(); x.translate(X0+k*HW+HW/2,y+HH/2); x.rotate(-Math.PI/2);
+    txt(`${h%12||12}:00 ${h<12?'AM':'PM'}`,0,1,HH,'700 14px Calibri, Arial',T.hrTx); x.restore(); }
+  y+=HH;
+  if(!P.rows.length) cell(L,y,leftW+HW*NN,RH,'#fff','No requests running or coming','italic 16px Calibri, Arial','#6b7a90');
+  P.rows.forEach(r=>{ const bg=r.run?T.runBg:'#fff';
+    const vals=[r.client,r.code,r.sc,r.qty!=null?fmt(r.qty,0)+' m³':'—',r.pumps||'—',r.tem||'—',r.rate?fmt(r.rate,0):'—'];
+    cx=L; vals.forEach((v,k)=>{ cell(cx,y,cols[k][1],RH,bg,v,'700 14px Calibri, Arial',T.tx); cx+=cols[k][1]; });
+    r.h.slice(0,NN).forEach((v,k)=>cell(X0+k*HW,y,HW,RH,v?T.cellOn:'#fff',v?fmt(v,v%1?1:0):'','700 14px Calibri, Arial',T.cellTx));
     y+=RH; });
-  return cv; }
-let hpPrevKey='';
+  // BOLD line where a day ends (user 2026-11-20) + around the hours block
+  x.strokeStyle='#000'; x.lineWidth=3;
+  for(let k=1;k<NN;k++) if(new Date(P.h0+k*3600000).getHours()===0){ const bx=X0+k*HW+.5; x.beginPath(); x.moveTo(bx,y0); x.lineTo(bx,y+.5); x.stroke(); }
+  x.lineWidth=2; x.strokeRect(L+.5,y0+.5,leftW+HW*NN,y-y0); x.beginPath(); x.moveTo(X0+.5,y0); x.lineTo(X0+.5,y); x.stroke();
+  return cv; }let hpPrevKey='';
 function updateHourlyPreview(){
   const im=el('hpPrev'); if(!im || view!=='upcoming') return;
   try{ const P=hourlyRows(), key=JSON.stringify([P.h0,P.cap,P.rows.map(r=>[r.code,r.h]),NCM_LOGO.complete]);
