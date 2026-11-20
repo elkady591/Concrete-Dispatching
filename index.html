@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261120-000003">
+<meta name="app-build" content="20261120-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6722,11 +6722,13 @@ function drawHourly(P,style){
     r.h.slice(0,NN).forEach((v,k)=>cell(X0+k*HW,y,HW,RH,v?T.cellOn:'#fff',v?fmt(v,v%1?1:0):'','700 14px Calibri, Arial',T.cellTx));
     y+=RH; });
   // BOLD line where a day ends (user 2026-11-20) + around the hours block
-  x.strokeStyle='#000'; x.lineWidth=3;
+  // the "bold" lines drawn like the plan photo's lines (slate #5b6b80, 1.2) — user 2026-11-20
+  const BL=window.__hpBold==='black'?['#000',3,2]:['#5b6b80',1.2,1.2];
+  x.strokeStyle=BL[0]; x.lineWidth=BL[1];
   for(let k=1;k<NN;k++) if(new Date(P.h0+k*3600000).getHours()===0){ const bx=X0+k*HW+.5; x.beginPath(); x.moveTo(bx,y0); x.lineTo(bx,y+.5); x.stroke(); }
   // bold: the table from its header row (hours / Contractor / Quantity …) down, its header row boxed, and the hours block on top;
   // NOT over / left of the logo (user 2026-11-20)
-  const yH=y0+topH; x.lineWidth=2;
+  const yH=y0+topH; x.lineWidth=BL[2];
   x.strokeRect(L+.5,yH+.5,leftW+HW*NN,y-yH);
   x.beginPath(); x.moveTo(L,yH+HH+.5); x.lineTo(X0+HW*NN,yH+HH+.5); x.stroke();
   x.strokeRect(X0+.5,y0+.5,HW*NN,topH);
