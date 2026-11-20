@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261120-000001">
+<meta name="app-build" content="20261120-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6724,7 +6724,15 @@ function drawHourly(P,style){
   // BOLD line where a day ends (user 2026-11-20) + around the hours block
   x.strokeStyle='#000'; x.lineWidth=3;
   for(let k=1;k<NN;k++) if(new Date(P.h0+k*3600000).getHours()===0){ const bx=X0+k*HW+.5; x.beginPath(); x.moveTo(bx,y0); x.lineTo(bx,y+.5); x.stroke(); }
-  x.lineWidth=2; x.strokeRect(L+.5,y0+.5,leftW+HW*NN,y-y0); x.beginPath(); x.moveTo(X0+.5,y0); x.lineTo(X0+.5,y); x.stroke();
+  // bold: the table from its header row (hours / Contractor / Quantity …) down, its header row boxed, and the hours block on top;
+  // NOT over / left of the logo (user 2026-11-20)
+  const yH=y0+topH; x.lineWidth=2;
+  x.strokeRect(L+.5,yH+.5,leftW+HW*NN,y-yH);
+  x.beginPath(); x.moveTo(L,yH+HH+.5); x.lineTo(X0+HW*NN,yH+HH+.5); x.stroke();
+  x.strokeRect(X0+.5,y0+.5,HW*NN,topH);
+  x.beginPath(); x.moveTo(X0,y0+DR+.5); x.lineTo(X0+HW*NN,y0+DR+.5); x.stroke();   // each date boxed in bold (user 2026-11-20)
+  { let bx=L; cols.forEach(([,w])=>{ bx+=w; x.beginPath(); x.moveTo(bx+.5,yH); x.lineTo(bx+.5,y); x.stroke(); }); }   // every column Contractor → Rate framed in bold, top to bottom
+  x.beginPath(); x.moveTo(X0+.5,y0); x.lineTo(X0+.5,y); x.stroke();
   return cv; }let hpPrevKey='';
 function updateHourlyPreview(){
   const im=el('hpPrev'); if(!im || view!=='upcoming') return;
