@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261120-000002">
+<meta name="app-build" content="20261120-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6707,7 +6707,7 @@ function drawHourly(P,style){
   P.tot.slice(0,NN).forEach((v,k)=>cell(X0+k*HW,y0+DR+TR,HW,TR,'#fff',v?fmt(v,0):'','700 15px Calibri, Arial',T.topTx));
   // header row: the columns + every hour written upright
   let y=y0+topH, cx=L;
-  cols.forEach(([t,w])=>{ const hi=false; cell(cx,y,w,HH,hi?T.hdrHi:T.hdr,t,'800 15px Calibri, Arial',hi&&T.hdr!=='#ffffff'&&T.hdrHi!=='#fef3c7'?'#fff':(hi?T.tx:T.hdrTx)); cx+=w; });
+  cols.forEach(([t,w])=>{ const hi=false; cell(cx,y,w,HH,hi?T.hdrHi:T.hdr,t,'800 17px Calibri, Arial',hi&&T.hdr!=='#ffffff'&&T.hdrHi!=='#fef3c7'?'#fff':(hi?T.tx:T.hdrTx)); cx+=w; });
   // shifts of 12 h (8 → 8): the first shift light, the next dark, then light … (user 2026-11-20)
   const shiftOf=k=>{ const h=new Date(P.h0+k*3600000).getHours(); return k-((h-8+24)%12); };   // the hour index where that shift began
   let sh0=shiftOf(0);
@@ -6718,7 +6718,7 @@ function drawHourly(P,style){
   if(!P.rows.length) cell(L,y,leftW+HW*NN,RH,'#fff','No requests running or coming','italic 16px Calibri, Arial','#6b7a90');
   P.rows.forEach(r=>{ const bg=r.run?T.runBg:'#fff';
     const vals=[r.client,r.code,r.sc,r.qty!=null?fmt(r.qty,0)+' m³':'—',r.pumps||'—',r.tem||'—',r.rate?fmt(r.rate,0):'—'];
-    cx=L; vals.forEach((v,k)=>{ cell(cx,y,cols[k][1],RH,bg,v,'700 14px Calibri, Arial',T.tx); cx+=cols[k][1]; });
+    cx=L; vals.forEach((v,k)=>{ cell(cx,y,cols[k][1],RH,bg,v,'700 17px Calibri, Arial',T.tx); cx+=cols[k][1]; });   // 17px: fits the 34-px row (user 2026-11-20)
     r.h.slice(0,NN).forEach((v,k)=>cell(X0+k*HW,y,HW,RH,v?T.cellOn:'#fff',v?fmt(v,v%1?1:0):'','700 14px Calibri, Arial',T.cellTx));
     y+=RH; });
   // BOLD line where a day ends (user 2026-11-20) + around the hours block
@@ -6731,8 +6731,9 @@ function drawHourly(P,style){
   x.beginPath(); x.moveTo(L,yH+HH+.5); x.lineTo(X0+HW*NN,yH+HH+.5); x.stroke();
   x.strokeRect(X0+.5,y0+.5,HW*NN,topH);
   x.beginPath(); x.moveTo(X0,y0+DR+.5); x.lineTo(X0+HW*NN,y0+DR+.5); x.stroke();   // each date boxed in bold (user 2026-11-20)
-  { let bx=L; cols.forEach(([,w])=>{ bx+=w; x.beginPath(); x.moveTo(bx+.5,yH); x.lineTo(bx+.5,y); x.stroke(); }); }   // every column Contractor → Rate framed in bold, top to bottom
-  x.beginPath(); x.moveTo(X0+.5,y0); x.lineTo(X0+.5,y); x.stroke();
+  // each heading Contractor → Rate framed in bold — the headings only; the request rows/columns under them stay thin (user 2026-11-20)
+  { let bx=L; cols.forEach(([,w])=>{ bx+=w; x.beginPath(); x.moveTo(bx+.5,yH); x.lineTo(bx+.5,yH+HH); x.stroke(); }); }
+  x.beginPath(); x.moveTo(X0+.5,y0); x.lineTo(X0+.5,y); x.stroke();   // right of Rate: bold all the way down (user 2026-11-20)
   return cv; }let hpPrevKey='';
 function updateHourlyPreview(){
   const im=el('hpPrev'); if(!im || view!=='upcoming') return;
