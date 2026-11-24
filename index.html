@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261124-000004">
+<meta name="app-build" content="20261124-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6683,9 +6683,8 @@ const HP_THEMES={
 const HP_STYLE='clean';   // the user chose the light one (2026-11-20)
 function drawHourly(P,style){
   P=P||hourlyRows();
-  // hours shown: from the FIRST hour that has concrete to the LAST one — the table grows / shrinks with the working hours
-  // (user 2026-11-24: no empty hours before or after); nothing planned = 12 hours from now
-  { const F=P.tot.findIndex(v=>v>0); if(F>0) P=Object.assign({},P,{h0:P.h0+F*3600000, N:P.N-F, tot:P.tot.slice(F), trucks:P.trucks.slice(F), rows:P.rows.map(r=>Object.assign({},r,{h:r.h.slice(F)}))}); }
+  // hours shown: from the CURRENT hour (work or not) to the LAST hour that has concrete — the table grows / shrinks with
+  // the working hours, no empty hours after the last one (user 2026-11-24); nothing planned = 12 hours from now
   let last=-1; P.tot.forEach((v,k)=>{ if(v>0) last=k; }); const NN=Math.min(P.N,last<0?12:last+1);
   const T=HP_THEMES[style||HP_STYLE]||HP_THEMES.green;
   const PAD=24, RH=34, TR=32, DR=34, HH=74, HW=46;   // HH: the hours row — as tall as "12:00 AM" upright + a little (user 2026-11-20)
