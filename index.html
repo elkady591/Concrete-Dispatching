@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261124-000006">
+<meta name="app-build" content="20261124-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5342,7 +5342,9 @@ function truckHist(ym){ const src=(PRODHIST[ym]||[])[2]||{};
 let PIC_HD=0;
 function picS(W,H){ if(!PIC_HD) return 2;
   const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
-  return Math.max(2,Math.min(4,Math.sqrt((ios?16e6:50e6)/(W*H)),16000/Math.max(W,H))); }
+  // the long side at most 4096 px = the biggest WhatsApp sends as it is (HD); bigger, it shrinks the picture itself and
+  // thin lines / small numbers break up (user 2026-11-24: the picture opened on the laptop was blurred and broken)
+  return Math.max(1,Math.min(4,Math.sqrt((ios?16e6:50e6)/(W*H)),4096/Math.max(W,H))); }
 const hdDraw=f=>{ PIC_HD++; try{ return f(); } finally{ PIC_HD--; } };
 /* ---------- Trucks loaded less than Full Capacity (Trucks › Productivity) ----------
    The same report and picture as the Excel file "Trucks loaded Less than Full Capacity <month>.xlsm" (its Copy Picture
