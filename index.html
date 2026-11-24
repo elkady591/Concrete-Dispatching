@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261124-000001">
+<meta name="app-build" content="20261124-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5335,6 +5335,14 @@ async function loadProdHist(){
 function truckHist(ym){ const src=(PRODHIST[ym]||[])[2]||{};
   return {plants:['Liebherr 1','Liebherr 2','Vurmak 3','Vurmak 4','Vurmak 5'], tripOrder:[],
     rows:Object.values(src).map(r=>Object.assign({},r,{byPlant:r.byPlant.map(v=>v||null)})).sort((a,b)=>b.q-a.q)}; }
+/* ---------- picture quality (user 2026-11-24: "every picture in the app at the highest quality, not just FHD") ----------
+   The previews in the page are drawn at 2×; what is Saved / Copied / Shared is drawn as sharp as the phone can make it:
+   up to 4× (≈ 6000–7000 px wide), kept under the browser's canvas limit (iPhone ≈ 16 M pixels, others 50 M). */
+let PIC_HD=0;
+function picS(W,H){ if(!PIC_HD) return 2;
+  const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  return Math.max(2,Math.min(4,Math.sqrt((ios?16e6:50e6)/(W*H)),16000/Math.max(W,H))); }
+const hdDraw=f=>{ PIC_HD++; try{ return f(); } finally{ PIC_HD--; } };
 /* ---------- Trucks loaded less than Full Capacity (Trucks › Productivity) ----------
    The same report and picture as the Excel file "Trucks loaded Less than Full Capacity <month>.xlsm" (its Copy Picture
    button), from the station tabs (read with the past months, loadProdHist): by the Date column; a load counts when
@@ -5358,8 +5366,8 @@ function tlcData(){ tlcPeriod();
   return {period:`${lab(a)}  -  ${lab(b)}`, counts, total, all, trucks, matrix, mtot:trucks.map((_,k)=>matrix.reduce((s,row)=>s+row[k],0)), d23, d3, p23:pct(d23), p3:pct(d3)}; }
 // the picture: the same drawing as the Excel button's (thin rounded bars, Arial, light-blue headers, navy totals)
 function drawTlc(D){
-  // drawn at 3× (user 2026-11-24: "why isn't it HD?") — sharp on a phone screen and when zoomed in WhatsApp
-  const n=Math.max(1,D.trucks.length), W=Math.max(1560,49+571+42+98+50*n+90), H=1000, SC=3, cv=document.createElement('canvas'); cv.width=W*SC; cv.height=H*SC;
+  // sharp (user 2026-11-24: "why isn't it HD?"): 3× on the page, the highest the phone allows when saved / copied (picS)
+  const n=Math.max(1,D.trucks.length), W=Math.max(1560,49+571+42+98+50*n+90), H=1000, SC=PIC_HD?picS(W,H):3, cv=document.createElement('canvas'); cv.width=Math.round(W*SC); cv.height=Math.round(H*SC);
   const x=cv.getContext('2d'); x.scale(SC,SC); x.imageSmoothingQuality='high'; const NAVY='#132f5c', HDR='#dce6f4', PALE='#f2f6fc', GRID='#9fb2cf', INK='#1e2b4a';
   x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.textBaseline='middle';
   const rr=(X,Y,w,h,r)=>{ r=Math.min(r,w/2,h/2); x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); };
@@ -5414,7 +5422,7 @@ function tlcWire(){
   if(f) f.addEventListener('change',set); if(t) t.addEventListener('change',set);
   const rt=el('tlcRetry'); if(rt) rt.addEventListener('click',()=>{ prodHistErr=false; renderTrucks(); });
   if(img){ const k=tlcFrom+'|'+tlcTo+'|'+TLC_ROWS.length+'|'+(tlcLogo()?1:0); if(k!==tlcKey||!tlcUrl){ tlcKey=k; tlcUrl=drawTlc(tlcData()).toDataURL('image/png'); } img.src=tlcUrl; }
-  const blob=()=>new Promise(res=>drawTlc(tlcData()).toBlob(res,'image/png'));
+  const blob=()=>new Promise(res=>hdDraw(()=>drawTlc(tlcData())).toBlob(res,'image/png'));
   const name=()=>`Trucks loaded less than Full Capacity ${tlcFrom} to ${tlcTo}.png`;
   const cb=el('tlcCopy'); if(cb) cb.addEventListener('click',async()=>{ try{ if(!(navigator.clipboard&&window.ClipboardItem)) throw new Error('copying pictures is not supported on this browser — use Save');
       await navigator.clipboard.write([new ClipboardItem({'image/png':await blob()})]); say('Copied ✓ — paste it anywhere'); }catch(e){ say('Could not copy: '+(e&&e.message||e)); } });
@@ -6253,7 +6261,7 @@ function planPhotoRows(){
 }
 function drawPlanPhoto(rows, at){
   rows=rows||planPhotoRows(); at=at||Date.now();
-  const S=2, W=1500, PAD=40, HEAD=150, TH=64, RH=58;
+  const W=1500, PAD=40, HEAD=150, TH=64, RH=58;
   // the Working Pumps column grows when a row carries the site's own pumps ("Site: …")
   const cols=[['Started',95],['Finished',95],['Selection\nCard',120],['Contractor',200],['Code',165],['Quantity',150],['Temperature',140],['Rate',150],['Working Plants',305],['Working\nPumps',rows.some(r=>/spider|\(\d+\.\d+\)/i.test(r.pumps||''))?250:170]];
   // a column whose text is longer than its width grows to fit it (user 2026-11-12: "2/2018/2…" was cut) — never cut a value
@@ -6265,7 +6273,7 @@ function drawPlanPhoto(rows, at){
   // planned times are written OUTSIDE the table, left of their row (like on the paper) — margin only when any
   const BR=rows.some(r=>r.grp)?34:0;                       // room for the bracket arrows of pours that follow each other
   const TM=(rows.some(r=>r.time||r.after)?96:0)+BR, L=PAD+TM, TX=L-14-BR;   // TX = right edge of the time text
-  const cv=document.createElement('canvas'); cv.width=(tableW+PAD*2+TM)*S; cv.height=H*S;
+  const S=picS(tableW+PAD*2+TM,H), cv=document.createElement('canvas'); cv.width=Math.round((tableW+PAD*2+TM)*S); cv.height=Math.round(H*S);
   const x=cv.getContext('2d'); x.scale(S,S);
   x.fillStyle='#ffffff'; x.fillRect(0,0,tableW+PAD*2+TM,H);
   // header
@@ -6374,7 +6382,7 @@ function drawPlanPhoto(rows, at){
 async function planPhoto(){
   const msg=el('planPhotoMsg'), say=t=>{ if(msg) msg.textContent=t; };
   try{
-    const cv=drawPlanPhoto();
+    const cv=hdDraw(()=>drawPlanPhoto());
     const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
     const d=new Date(), name=`Daily Production Plan ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.png`;
     const file=new File([blob],name,{type:'image/png'});
@@ -6608,7 +6616,7 @@ async function planPhoto(){
     if(forReq){ const [k0,v0]=saved[0], r0=JSON.parse(v0); await attachTo(r0.es?String(r0.es).trim():'APP-'+k0.slice(1)); } });
 }
 // 💾 Save = always a .png file on this device; 📋 Copy = always to the clipboard (paste anywhere)
-async function planPhotoBlob(){ const cv=drawPlanPhoto(); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
+async function planPhotoBlob(){ const cv=hdDraw(()=>drawPlanPhoto()); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
   const d=new Date(); return {blob, name:`Daily Production Plan ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}.png`}; }
 { const sb=el('planSaveBtn'); if(sb) sb.addEventListener('click',async()=>{ const say=t=>{ const m=el('planPhotoMsg'); if(m) m.textContent=t; };
     try{ const {blob,name}=await planPhotoBlob(); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
@@ -6677,12 +6685,12 @@ function drawHourly(P,style){
   // hours shown: up to the last hour with concrete (+1), at least 12
   let last=-1; P.tot.forEach((v,k)=>{ if(v>0) last=k; }); const NN=Math.min(P.N,Math.max(12,last+2));
   const T=HP_THEMES[style||HP_STYLE]||HP_THEMES.green;
-  const S=2, PAD=24, RH=34, TR=32, DR=34, HH=74, HW=46;   // HH: the hours row — as tall as "12:00 AM" upright + a little (user 2026-11-20)
+  const PAD=24, RH=34, TR=32, DR=34, HH=74, HW=46;   // HH: the hours row — as tall as "12:00 AM" upright + a little (user 2026-11-20)
   // the app's own columns (user 2026-11-20: only the LOOK is taken from the sheet, not its columns)
   const cols=[['Contractor',140],['Code',104],['S.C',80],['Quantity',96],['Pumps',140],['Temp',80],['Rate',72]];
   const leftW=cols.reduce((s,c)=>s+c[1],0), L=PAD, X0=L+leftW, W=PAD*2+leftW+HW*NN, topH=DR+TR*2, y0=PAD;
   const H=y0+topH+HH+Math.max(1,P.rows.length)*RH+PAD;
-  const cv=document.createElement('canvas'); cv.width=W*S; cv.height=H*S; const x=cv.getContext('2d'); x.scale(S,S);
+  const S=picS(W,H), cv=document.createElement('canvas'); cv.width=Math.round(W*S); cv.height=Math.round(H*S); const x=cv.getContext('2d'); x.scale(S,S);
   x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.textBaseline='middle'; x.textAlign='center';
   const box=(cx,cy,w,h,fill)=>{ if(fill){ x.fillStyle=fill; x.fillRect(cx,cy,w,h); } x.strokeStyle=T.grid; x.lineWidth=1; x.strokeRect(cx+.5,cy+.5,w,h); };
   const txt=(s,cx,cy,w,font,col)=>{ if(s==null||s==='') return; x.font=font; x.fillStyle=col; s=String(s); while(s.length>1&&x.measureText(s).width>w-6) s=s.slice(0,-2)+'…'; x.fillText(s,cx,cy); };
@@ -6743,7 +6751,7 @@ function updateHourlyPreview(){
   try{ const P=hourlyRows(), key=JSON.stringify([P.h0,P.cap,P.rows.map(r=>[r.code,r.h]),NCM_LOGO.complete]);
     if(key===hpPrevKey) return; hpPrevKey=key; im.src=drawHourly(P).toDataURL('image/png'); im.style.display='block'; }catch(e){ console.warn('hourly',e); } }
 NCM_LOGO.addEventListener('load',()=>{ hpPrevKey=''; updateHourlyPreview(); });
-async function hourlyBlob(){ const cv=drawHourly(); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
+async function hourlyBlob(){ const cv=hdDraw(()=>drawHourly()); const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
   const d=new Date(); return {blob, name:`Hourly Plan ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}.png`}; }
 { const say=t=>{ const m=el('hpMsg'); if(m) m.textContent=t; };
   const sb=el('hpSaveBtn'); if(sb) sb.addEventListener('click',async()=>{ try{ const {blob,name}=await hourlyBlob(); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
