@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261120-000004">
+<meta name="app-build" content="20261124-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5358,8 +5358,9 @@ function tlcData(){ tlcPeriod();
   return {period:`${lab(a)}  -  ${lab(b)}`, counts, total, all, trucks, matrix, mtot:trucks.map((_,k)=>matrix.reduce((s,row)=>s+row[k],0)), d23, d3, p23:pct(d23), p3:pct(d3)}; }
 // the picture: the same drawing as the Excel button's (thin rounded bars, Arial, light-blue headers, navy totals)
 function drawTlc(D){
-  const n=Math.max(1,D.trucks.length), W=Math.max(1100,49+571+42+98+50*n+90), H=1000, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
-  const x=cv.getContext('2d'), NAVY='#132f5c', HDR='#dce6f4', PALE='#f2f6fc', GRID='#9fb2cf', INK='#1e2b4a';
+  // drawn at 3× (user 2026-11-24: "why isn't it HD?") — sharp on a phone screen and when zoomed in WhatsApp
+  const n=Math.max(1,D.trucks.length), W=Math.max(1560,49+571+42+98+50*n+90), H=1000, SC=3, cv=document.createElement('canvas'); cv.width=W*SC; cv.height=H*SC;
+  const x=cv.getContext('2d'); x.scale(SC,SC); x.imageSmoothingQuality='high'; const NAVY='#132f5c', HDR='#dce6f4', PALE='#f2f6fc', GRID='#9fb2cf', INK='#1e2b4a';
   x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.textBaseline='middle';
   const rr=(X,Y,w,h,r)=>{ r=Math.min(r,w/2,h/2); x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); };
   const txt=(s,X,Y,font,col,al)=>{ x.font=font; x.fillStyle=col; x.textAlign=al||'center'; x.fillText(s,X,Y); };
