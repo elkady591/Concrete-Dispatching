@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261124-000003">
+<meta name="app-build" content="20261124-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3584,7 +3584,8 @@ function renderSummary(){
      • entry flags — no ES (such a truck is dropped from every pour), odd quantity, no load time,
                      the same truck entered twice within minutes.
    Nothing here changes the numbers; it only points at rows worth a second look. */
-const mins=ms=>Math.round(ms/60000)+' min';
+// an hour or more as hours and minutes (user 2026-11-24: "574 min late" -> "9h 34m late") — every alert / check / gap uses this
+const mins=ms=>{ const m=Math.round(ms/60000); if(Math.abs(m)<60) return m+' min'; const a=Math.abs(m), h=Math.floor(a/60), r=a%60; return (m<0?'-':'')+h+'h'+(r?' '+r+'m':''); };
 // an element's name the way every list shows it: code + whose it is, e.g. "10UJE (TREST)"
 const elName=g=>esc((g&&g.elem)||'—')+((g&&g.client)?' ('+esc(g.client)+')':'');
 let NOES=[];            // trucks typed without an ES id (collected by normalizeTab on every pull)
