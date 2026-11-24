@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261124-000002">
+<meta name="app-build" content="20261124-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6682,8 +6682,10 @@ const HP_THEMES={
 const HP_STYLE='clean';   // the user chose the light one (2026-11-20)
 function drawHourly(P,style){
   P=P||hourlyRows();
-  // hours shown: up to the last hour with concrete (+1), at least 12
-  let last=-1; P.tot.forEach((v,k)=>{ if(v>0) last=k; }); const NN=Math.min(P.N,Math.max(12,last+2));
+  // hours shown: from the FIRST hour that has concrete to the LAST one — the table grows / shrinks with the working hours
+  // (user 2026-11-24: no empty hours before or after); nothing planned = 12 hours from now
+  { const F=P.tot.findIndex(v=>v>0); if(F>0) P=Object.assign({},P,{h0:P.h0+F*3600000, N:P.N-F, tot:P.tot.slice(F), trucks:P.trucks.slice(F), rows:P.rows.map(r=>Object.assign({},r,{h:r.h.slice(F)}))}); }
+  let last=-1; P.tot.forEach((v,k)=>{ if(v>0) last=k; }); const NN=Math.min(P.N,last<0?12:last+1);
   const T=HP_THEMES[style||HP_STYLE]||HP_THEMES.green;
   const PAD=24, RH=34, TR=32, DR=34, HH=74, HW=46;   // HH: the hours row — as tall as "12:00 AM" upright + a little (user 2026-11-20)
   // the app's own columns (user 2026-11-20: only the LOOK is taken from the sheet, not its columns)
@@ -6711,7 +6713,7 @@ function drawHourly(P,style){
   x.textAlign='right'; txt('Trucks needed',X0-10,y0+DR+TR/2+1,300,'800 15px Calibri, Arial',T.topTx); txt('Total m³/h',X0-10,y0+DR+TR+TR/2+1,300,'800 15px Calibri, Arial',T.topTx); x.textAlign='center';
   // day row (changes at midnight), trucks row, m³ row
   let i=0; while(i<NN){ const di=new Date(P.h0+i*3600000).toDateString(); let j=i; while(j<NN&&new Date(P.h0+j*3600000).toDateString()===di) j++;
-    const dd=new Date(P.h0+i*3600000); cell(X0+i*HW,y0,(j-i)*HW,DR,T.day,`${dd.getDate()}-${MON3[dd.getMonth()]}`,'800 18px Calibri, Arial',T.dayTx); i=j; }
+    const dd=new Date(P.h0+i*3600000); cell(X0+i*HW,y0,(j-i)*HW,DR,T.day,`${dd.getDate()}-${MON3[dd.getMonth()]}`,(j-i)*HW<80?'800 12px Calibri, Arial':'800 18px Calibri, Arial',T.dayTx); i=j; }
   P.trucks.slice(0,NN).forEach((v,k)=>cell(X0+k*HW,y0+DR,HW,TR,'#fff',v||'','700 15px Calibri, Arial',T.topTx));
   P.tot.slice(0,NN).forEach((v,k)=>cell(X0+k*HW,y0+DR+TR,HW,TR,'#fff',v?fmt(v,0):'','700 15px Calibri, Arial',T.topTx));
   // header row: the columns + every hour written upright
