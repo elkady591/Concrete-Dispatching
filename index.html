@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261124-000007">
+<meta name="app-build" content="20261125-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3514,7 +3514,7 @@ function renderSummary(){
         ${g.rejected>0?`<span class="ap-s" style="color:var(--rose)">⛔ <b>${fmt(g.rejected,0)}</b> m³</span>`:''}
         <span class="ap-s">⚡ <b style="${rc?`color:${rc}`:''}">${avg!=null?fmt(avg,0):'—'}</b> m³/h</span>
         <span class="ap-s">🏁 <b style="${fc?`color:${fc}`:''}">${g.finishAvg!=null?timeShort(g.finishAvg):(doneQ?'✓':'—')}</b>${dF!=null&&!doneQ?` <span class="ap-pill ${dF>=0?'ok':'bad'}">${Math.abs(dF)<1?'on time':(Math.abs(dF)>=60?Math.floor(Math.abs(dF)/60)+'h '+(Math.abs(dF)%60)+'m':Math.abs(dF)+' min')+(dF>0?' early':' late')}</span>`:''}</span>
-        <span class="ap-s">🚛 <b>${g.trucks}</b></span>
+        <span class="ap-s">🚛 <b>${loadedN(g)}</b></span>
         <span class="ap-sp"></span><b class="ap-spc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</b></div>
       <div class="bar ap-bar ap-bar-s"><i class="${barClass(g.status)}" style="width:${pct}%"></i></div>`:`
       ${meta?`<div class="ap-meta">${meta}</div>`:''}
@@ -3530,7 +3530,7 @@ function renderSummary(){
           ${dF!=null&&!doneQ?`<span class="ap-pill ${dF>=0?'ok':'bad'}">${Math.abs(dF)<1?'on time':Math.abs(dF)>=60?Math.floor(Math.abs(dF)/60)+'h '+(Math.abs(dF)%60)+'m ':Math.abs(dF)+' min '}${Math.abs(dF)<1?'':dF>0?'early':'late'}</span>`:''}</div>
       </div>`}
       <div class="bar ap-bar"><i class="${barClass(g.status)}" style="width:${pct}%"></i></div>
-      <div class="ap-ft"><span class="ap-fs"><b class="ap-pc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</b><span class="ap-fc ap-trk" data-k="${encodeURIComponent(g.key)}" title="Tap: this pour's trucks in All Pours">🚛 <b>${g.trucks}</b> trucks <span class="go">&#8599;</span></span>${g.hrs?`<span class="ap-fc">⏱ <b>${hLabel(g.hrs)}</b> h</span>`:''}</span>
+      <div class="ap-ft"><span class="ap-fs"><b class="ap-pc">${g.pct!=null?fmt(g.pct,0)+'%':'—'}</b><span class="ap-fc ap-trk" data-k="${encodeURIComponent(g.key)}" title="Tap: this pour's trucks in All Pours">🚛 <b>${loadedN(g)}</b> trucks <span class="go">&#8599;</span></span>${g.hrs?`<span class="ap-fc">⏱ <b>${hLabel(g.hrs)}</b> h</span>`:''}</span>
         <span class="ap-sp"></span><button class="ap-btn ap-hr${hourly?' on':''}" data-k="${encodeURIComponent(g.key)}">${hourly?'Overview':'Hourly rate'}</button>
         <button class="ap-btn ap-done" data-e="${encodeURIComponent(doneKey(g))}" data-n="${esc(g.elem||'')}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>`}
     </div>`;
@@ -3688,6 +3688,8 @@ function rejLoads(g){
   }
   return out;
 }
+// trucks LOADED for a pour = counted trucks + its rejected ones (count only — m³ stay without the rejected; user 2026-11-25)
+function loadedN(g){ return (g.trucks||0)+(g.rejected>0?rejLoads(g).length:0); }
 // How often a truck SHOULD load on this pour, from its target rate (manual rate if typed, else the plan's):
 //   target m³/h ÷ average m³ per truck = trucks per hour  ->  one truck every (60 ÷ that) minutes.
 // Returns {every(ms), rate, load} or null when the pour has no target rate.
@@ -4588,7 +4590,7 @@ function renderOrigActive(open){
         </div>
         <div class="spot-bar">
           <div class="bar bar-lg"><i class="${bc}" style="width:${pct}%"></i></div>
-          <div class="spot-foot"><div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · <span class="ap-trk" id="spotTrk" title="Tap: this pour's trucks in All Pours">${sp.trucks} trucks &#8599;</span>${sp.hrs?' · '+hLabel(sp.hrs)+' h':''}</div>
+          <div class="spot-foot"><div class="pct">${sp.pct!=null?fmt(sp.pct,0)+'%':'— no target set for this element'} · <span class="ap-trk" id="spotTrk" title="Tap: this pour's trucks in All Pours">${loadedN(sp)} trucks &#8599;</span>${sp.hrs?' · '+hLabel(sp.hrs)+' h':''}</div>
           <button class="spot-done" data-e="${encodeURIComponent(doneKey(sp))}" title="Close this pour — same as the Done box in All Pours">✓ Request done</button></div>
         </div>`;
     el('spot').innerHTML=`
