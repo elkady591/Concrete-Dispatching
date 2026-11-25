@@ -5,10 +5,10 @@
      (so the built-in self-update keeps working), and fall back to the cached shell only when offline.
    - Static assets (icons/manifest) are cache-first for speed.
    Bump CACHE only when this file itself changes. */
-const CACHE = 'pourtracker-v4';
+const CACHE = 'pourtracker-v5';   // v5: new app icon (2026-11-25)
 const SHELL = [
   './index.html', './manifest.webmanifest',
-  './icons/icon-192.png', './icons/icon-512.png',
+  './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png',
   './icons/favicon-32.png', './icons/apple-touch-icon.png'
 ];
 
