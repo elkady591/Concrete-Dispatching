@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261125-000002">
+<meta name="app-build" content="20261125-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6658,26 +6658,24 @@ function hourlyRows(now){
   now=now||Date.now(); const H0=new Date(now); H0.setMinutes(0,0,0); const h0=H0.getTime(), HR=3600000, N=24;
   const RT=requestTimes(), rows=[];
   const rateOf=g=>g.rateManual!=null?g.rateManual:g.planRate;
-  // part=true: a request that starts LATER (e.g. 21:54) only gets the minutes left in its first hour (rate × 6/60),
-  // so back-to-back requests on one site don't both take a full hour (user 2026-11-25: "they're one after the other —
-  // why does 9 o'clock show them loading together?")
-  const spread=(qty,rate,start,part)=>{ const v=new Array(N).fill(0); if(!(qty>0)||!(rate>0)) return v;
-    let i=Math.max(0,Math.floor((start-h0)/HR)), left=qty;
-    if(part && i<N && start>h0){ const f=1-((start-h0)/HR-i); const m=Math.min(rate*f,left); v[i]+=m; left-=m; i++; }
-    while(left>0.0001&&i<N){ const m=Math.min(rate,left); v[i]+=m; left-=m; i++; }
-    if(part && qty%1===0){ let c=0, p=0; for(let k=0;k<N;k++){ c+=v[k]; const R=Math.round(c); v[k]=R-p; p=R; } }   // whole m³ per hour, same total
-    return v; };
+  // from: the first hour column it may use (a request queued behind another one starts the hour AFTER that one's last hour)
+  const spread=(qty,rate,start,from)=>{ const v=new Array(N).fill(0); if(!(qty>0)||!(rate>0)) return v;
+    let i=Math.max(0,Math.floor((start-h0)/HR),from||0), left=qty; while(left>0.0001&&i<N){ const m=Math.min(rate,left); v[i]+=m; left-=m; i++; } return v; };
+  const rowOf=new Map(), lastCol=r=>{ let k=-1; (r.h||[]).forEach((v,i)=>{ if(v>0) k=i; }); return k; };
   const base=g=>({client:g.client||'', code:g.elem||'', sc:g.sc||'', qty:(g.required!=null?g.required:g.planReq), pumps:allPumpsLabel(g)||'',
     tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:rateOf(g), mix:g.mix||'', planned:g.planReq, poured:g.delivered||0});
   // pouring now: what is left, from this hour
   (VD.summary||[]).filter(g=>g.trucks>0&&!pourDone(g)&&!closedHidden(g)).sort((a,b)=>(a.depMin||0)-(b.depMin||0)).forEach(g=>{
     const left=g.remaining!=null?Math.max(0,g.remaining):null, r=Object.assign(base(g),{run:true, left});
-    r.h=spread(left,r.rate,now); rows.push(r); });
+    r.h=spread(left,r.rate,now); rows.push(r); rowOf.set(g,r); });
   // not started: in Upcoming's order (its time, then the plan's order)
   const up=(VD.upcoming||[]).slice().sort((a,b)=>{ const ta=RT.get(a), tb=RT.get(b); return ((ta?ta.at:now)-(tb?tb.at:now))||((ta?0:1)-(tb?0:1)); });
   up.forEach(g=>{ const t=RT.get(g), sn=pumpSent(g);
     const s=sn.length?sentPour(g,Math.min(...sn.map(x=>x.t)),now).ps:(t?Math.max(pourStartAt(g,t),now):now);
-    const r=Object.assign(base(g),{run:false, start:s}); r.h=spread(r.qty,r.rate,s,s>now); rows.push(r); });
+    // one after the other (user 2026-11-25): the one before closes its last hour, this one starts the NEXT hour —
+    // never in the same hour, even if the one before has less than a truck left in it
+    const pr=t&&t.est&&t.after?rowOf.get(t.after):null, from=pr?lastCol(pr)+1:0;
+    const r=Object.assign(base(g),{run:false, start:s}); r.h=spread(r.qty,r.rate,s,from); rows.push(r); rowOf.set(g,r); });
   const tot=new Array(N).fill(0); rows.forEach(r=>r.h.forEach((v,i)=>tot[i]+=v));
   // trucks: the sheet's ROUNDUP(m³ ÷ 10 × 2) — every truck counted as 10 m³ (user 2026-11-20)
   const cap=10;
