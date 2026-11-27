@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261125-000003">
+<meta name="app-build" content="20261127-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6214,7 +6214,9 @@ function planPhotoRows(){
   const today=new Date(), todayKey=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
   const RTp=requestTimes();   // own times + estimates behind a chain sibling / an "after" element
   const CHp=pourChains(), chainNext=g=>{ const c=CHp.get(g); return !!(c&&c.prev&&g.trucks===0); };
-  const when=g=>{ const t=RTp.get(g); return t ? String(t.at).padStart(15,'0') : '~'; };
+  // today's date and no time = due NOW (user 2026-11-27) -> first of the not-started ones, not at the end
+  const nowToday=g=>g.trucks===0 && !RTp.get(g) && String(g.planDate||'')===todayKey;
+  const when=g=>{ const t=RTp.get(g); return t ? String(t.at).padStart(15,'0') : nowToday(g) ? String(now).padStart(15,'0') : '~'; };
   const fin=[], run=[];
   for(const g of pours){
     if(closedHidden(g)) continue;   // hidden from Closed Pours (by hand, or finished before the auto-hide time) = not in the photo either
@@ -6224,7 +6226,7 @@ function planPhotoRows(){
   const up=(VD.upcoming||[]).slice().sort((a,b)=>when(a).localeCompare(when(b))||planIdx(a)-planIdx(b));
   // every row — finished, running, not started — by its TIME first, then the order of the Daily Plan sheet (user 2026-11-12)
   // (a pour that started = the time its first truck left; not started = its time / its estimate; no time = last)
-  const tKey=g=>{ if(g.trucks>0){ const f=first(g); if(f<Infinity) return f; } const t=RTp.get(g); return t?t.at:Infinity; };
+  const tKey=g=>{ if(g.trucks>0){ const f=first(g); if(f<Infinity) return f; } const t=RTp.get(g); return t?t.at:nowToday(g)?now:Infinity; };
   // the ones that started (finished or pouring) always come first, then the ones not started — each by time (user 2026-11-19)
   const finS0=new Set(fin), runS=new Set(run), st=g=>g.trucks>0?0:1;
   const all=fin.concat(run,up).sort((a,b)=>(st(a)-st(b))||(tKey(a)-tKey(b))||(planIdx(a)-planIdx(b)));
