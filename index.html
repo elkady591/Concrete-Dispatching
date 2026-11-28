@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261127-000001">
+<meta name="app-build" content="20261128-000001">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2326,7 +2326,17 @@ function render(res){
   const closed=started.filter(g=>g.status==='closed');                        // auto-closed (2h idle)
   // Upcoming = planned pours not started yet (0 trucks, has a target), excluding DONE,
   // and only those whose request date falls inside the current From/To date filter.
-  const upcoming=withElem.filter(g=>g.trucks===0 && g.planReq!=null && inDateFilter(g.planDate));
+  // …plus one dated BEFORE the filter that is still waiting behind a pour that is pouring now (same client + element, or
+  // the request its TIME cell names): it did not get to start before 8 AM, so it stays (user 2026-11-28: HAC 90UPN 252 m³
+  // behind the running 1,095 m³ vanished at 8 AM). One whose day passed with nothing running before it still goes.
+  const running=open.filter(h=>!pourDone(h)||h.status==='active');
+  const rowOfG=g=>(PLAN_ROWS||[]).find(r=>g.esId?String(r.es||'').trim()===g.esId:r.code===g.elem)||null;
+  const behindRunning=g=>{ if(!(CFG.fromDate&&g.planDate&&g.planDate<CFG.fromDate)) return false;
+    const fam=h=>String(h.client||'').toUpperCase()+'|'+String(h.base||h.elem||'').toUpperCase();
+    if(running.some(h=>fam(h)===fam(g))) return true;
+    const af=String((rowOfG(g)||{}).after||'').toUpperCase(); if(!af) return false;
+    return running.some(h=>String(h.esId||'')===af||String(h.elem||'').toUpperCase()===af||String(h.base||'').toUpperCase()===af); };
+  const upcoming=withElem.filter(g=>g.trucks===0 && g.planReq!=null && (inDateFilter(g.planDate)||behindRunning(g)));
   // Closed Pours = the ones the user marked DONE (shown read-only below, with what they poured)
   const doneList=summary.filter(g=>hasElem(g) && g.trucks>0 && DONE[doneKey(g)]);
   VD={full,summary,started,open,completed,closed,upcoming,doneList};
