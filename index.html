@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261128-000002">
+<meta name="app-build" content="20261128-000003">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2170,6 +2170,7 @@ function build(matrix, colHeader){
     const q=num(row[c.q]);
     const plant=c.plant>=0?String(row[c.plant]||'').trim():'';
     const elem=c.elem>=0?String(row[c.elem]||'').trim():'';
+    if(elem && q>0 && rt>=from-2*86400000) LOADED_RECENT.add(elem.toUpperCase());
     if(q<=0 && !plant && !elem)continue;
     const dk=dateKey(dObj);
     const P=plant||'—';
@@ -2341,10 +2342,12 @@ function render(res){
   // …and every request dated the work day BEFORE (it should have started yesterday and did not): it stays too, marked
   // "from <its day>" on the card, the plan photo and the timeline (user 2026-11-28: even another contractor's)
   const prevDayOf=d=>{ const p=String(d||'').split('-').map(Number); if(p.length<3) return ''; const t=new Date(p[0],p[1]-1,p[2]-1); return `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}`; };
-  const fromYesterday=g=>!!(CFG.fromDate&&g.planDate&&g.planDate<CFG.fromDate&&g.planDate>=prevDayOf(CFG.fromDate));
+  // (poured yesterday = it has trucks on its ES / code in the station tabs, even if none since "From": not carried)
+  const pouredBefore=g=>LOADED_RECENT.has(String(g.esId||'').toUpperCase())||(!g.esId&&LOADED_RECENT.has(String(g.elem||'').toUpperCase()));
+  const fromYesterday=g=>!!(CFG.fromDate&&g.planDate&&g.planDate<CFG.fromDate&&g.planDate>=prevDayOf(CFG.fromDate))&&!pouredBefore(g);
   const upcoming=withElem.filter(g=>{ if(!(g.trucks===0 && g.planReq!=null)) return false;
     g.fromDay=''; if(inDateFilter(g.planDate)) return true;
-    if(fromYesterday(g)||behindRunning(g)){ g.fromDay=g.planDate; return true; } return false; });
+    if((fromYesterday(g)||behindRunning(g))&&!pouredBefore(g)){ g.fromDay=g.planDate; return true; } return false; });
   // Closed Pours = the ones the user marked DONE (shown read-only below, with what they poured)
   const doneList=summary.filter(g=>hasElem(g) && g.trucks>0 && DONE[doneKey(g)]);
   VD={full,summary,started,open,completed,closed,upcoming,doneList};
@@ -3606,6 +3609,8 @@ function renderSummary(){
 const mins=ms=>{ const m=Math.round(ms/60000); if(Math.abs(m)<60) return m+' min'; const a=Math.abs(m), h=Math.floor(a/60), r=a%60; return (m<0?'-':'')+h+'h'+(r?' '+r+'m':''); };
 // an element's name the way every list shows it: code + whose it is, e.g. "10UJE (TREST)"
 const elName=g=>esc((g&&g.elem)||'—')+((g&&g.client)?' ('+esc(g.client)+')':'');
+let LOADED_RECENT=new Set();   // ES / codes with a truck loaded from the day before "From" on (any tab) — a request
+                               // "from yesterday" that is in here was poured: not a not-started one (user 2026-11-28)
 let NOES=[];            // trucks typed without an ES id (collected by normalizeTab on every pull)
 let REJLIST=[];         // rejected / wasted trucks, one entry each (same pull)
 const rejId=l=>`rej|${l.p}|${l.k}|${l.dk}|${l.t}`;
@@ -5924,7 +5929,7 @@ async function loadLive(){
     // so re-opening the app never forces the user to re-pick "Today". They change the date manually if needed.
   } else { try{console.log('Plan sheet not reachable — is it shared "Anyone with the link"?');}catch(e){} }
   let allRows=[]; const report=[]; let anyOk=false;
-  NOES=[]; REJLIST=[];
+  NOES=[]; REJLIST=[]; LOADED_RECENT=new Set();
   REJECTED={}; REJECTED_TODAY=0;   // recomputed fresh each pull from every station tab's Follow Up column
   for(const r of results){
     if(r.ok){ const nz=normalizeTab(r.cols,r.matrix,r.token);
