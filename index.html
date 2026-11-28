@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261128-000001">
+<meta name="app-build" content="20261128-000002">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -688,6 +688,7 @@
   .uc-st{margin-inline-start:auto;font-family:var(--mono);font-weight:700;color:var(--ink)} .uc-st i{font-style:normal;color:var(--muted)}
   .uc-same{margin-top:6px;font-size:12px;color:var(--muted)}
   .uc-pnow{font-size:12px;font-weight:500;opacity:.85}
+  .uc-prev{font-family:inherit;font-size:11px;font-weight:800;color:#7c2d12;background:#fdba74;border-radius:6px;padding:1px 7px;vertical-align:2px;white-space:nowrap}
   .uc-app{font-family:inherit;font-size:11px;font-weight:800;color:#0b1020;background:#fbbf24;border-radius:6px;padding:1px 7px;vertical-align:2px}
   .uc-appdel{display:flex;align-items:center;gap:8px;margin:4px 0 2px;font-size:12px;color:var(--muted)}
   .uc-del{font:inherit;font-size:12px;color:var(--rose);background:transparent;border:1px solid rgba(251,113,133,.45);border-radius:8px;padding:2px 8px;cursor:pointer}
@@ -2233,7 +2234,8 @@ function timeShort(t){ if(t==null)return'—'; const d=new Date(t); let h=d.getH
 const ALL_PLANTS=['L1','L2','V3','V4','V5'];
 function plantsLabel(s){ const t=String(s||'').split(/[,\s-]+/).filter(Boolean); return ALL_PLANTS.every(p=>t.includes(p))?'All Plants':(s||''); }
 // a finish time; one that falls on another day than today carries its date ("14-OCT 2:40 AM")
-const MON3=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const MON3=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const dayLab=ymd=>{ const p=String(ymd||'').split('-').map(Number); return p.length<3?'':`${p[2]}-${MON3[p[1]-1]}`; };   // '2026-11-27' -> '27-NOV'
 function finishDay(t){ if(t==null)return''; const d=new Date(t), n=new Date();   // '' when it is today
   const same=d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate();
   return same?'':`${d.getDate()}-${MON3[d.getMonth()]}`; }
@@ -2336,7 +2338,13 @@ function render(res){
     if(running.some(h=>fam(h)===fam(g))) return true;
     const af=String((rowOfG(g)||{}).after||'').toUpperCase(); if(!af) return false;
     return running.some(h=>String(h.esId||'')===af||String(h.elem||'').toUpperCase()===af||String(h.base||'').toUpperCase()===af); };
-  const upcoming=withElem.filter(g=>g.trucks===0 && g.planReq!=null && (inDateFilter(g.planDate)||behindRunning(g)));
+  // …and every request dated the work day BEFORE (it should have started yesterday and did not): it stays too, marked
+  // "from <its day>" on the card, the plan photo and the timeline (user 2026-11-28: even another contractor's)
+  const prevDayOf=d=>{ const p=String(d||'').split('-').map(Number); if(p.length<3) return ''; const t=new Date(p[0],p[1]-1,p[2]-1); return `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}`; };
+  const fromYesterday=g=>!!(CFG.fromDate&&g.planDate&&g.planDate<CFG.fromDate&&g.planDate>=prevDayOf(CFG.fromDate));
+  const upcoming=withElem.filter(g=>{ if(!(g.trucks===0 && g.planReq!=null)) return false;
+    g.fromDay=''; if(inDateFilter(g.planDate)) return true;
+    if(fromYesterday(g)||behindRunning(g)){ g.fromDay=g.planDate; return true; } return false; });
   // Closed Pours = the ones the user marked DONE (shown read-only below, with what they poured)
   const doneList=summary.filter(g=>hasElem(g) && g.trucks>0 && DONE[doneKey(g)]);
   VD={full,summary,started,open,completed,closed,upcoming,doneList};
@@ -4186,7 +4194,7 @@ function plantTimeline(now){
   for(const g of (VD.upcoming||[])){ const t=RT.get(g), d=dur(g), [s,e]=pourOf(g,t,d);
     const ps=planPlants(plantKey(g));
     const it={g, s, e, kind:'plan', late:lateOf(g,t), noTime:!t, noRate:!d,
-      txt:`${whenTxt(g,t)}${nameOf(g)} · ${fmt(g.planReq,0)} m³${d?` · ≈${timeShort(e)}`:' · no rate'}`};
+      txt:`${g.fromDay?`📅 from ${dayLab(g.fromDay)} · `:''}${whenTxt(g,t)}${nameOf(g)} · ${fmt(g.planReq,0)} m³${d?` · ≈${timeShort(e)}`:' · no rate'}`};
     if(!ps.length){ noPlant.push(it); continue; }
     ps.forEach(p=>add(p,Object.assign({},it))); }
   // 3) pumps: what each one is on (to the expected end), its washing after it, the requests it is planned for.
@@ -4733,7 +4741,7 @@ function renderUpcoming(){
     const multi=u.length>1, tot=u.reduce((s,g)=>s+(g.planReq||0),0);
     return `
     <div class="ucard${multi?' chain':''}">${timeLine(rt,late,rt&&rt.est&&carriesOn(p)?0:sent.length,p)}
-      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${multi?` <span class="uc-n">${u.length} requests</span>`:''}${u.some(g=>g.app)?' <span class="uc-app" title="Added in the app — not in the sheet">App</span>':''}</div>
+      <div class="uc-code">${p.client?`<span class="uc-cl">${esc(p.client)}</span> `:''}${p.elem}${p.fromDay?` <span class="uc-prev" title="Dated ${dayLab(p.fromDay)} — it should have started then">📅 from ${dayLab(p.fromDay)}</span>`:''}${multi?` <span class="uc-n">${u.length} requests</span>`:''}${u.some(g=>g.app)?' <span class="uc-app" title="Added in the app — not in the sheet">App</span>':''}</div>
       ${u.filter(g=>g.app).map(g=>{ const m=APP_MAYBE.get(g.app);
         return (m?`<div class="uc-maybe">⚠ Same as sheet request? <b>${esc(m.client||'')} ${esc(m.code)}</b> · ${fmt(m.req,0)} m³ (here ${fmt(g.planReq,0)} m³)
           <div class="uc-mbtns"><button class="btn sm uc-merge" data-id="${g.app}" data-es="${esc(m.es||'')}" data-code="${esc(m.code)}">Merge</button><button class="btn sm alt uc-keep" data-id="${g.app}">Keep both</button></div></div>`:'')
@@ -6207,7 +6215,7 @@ function planPhotoRows(){
     qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g),
     // a request waiting behind its chain sibling (same client + element) gets no time of its own
     // the time / "after X" is only for requests that have NOT started yet
-    time:started||chainNext(g)?'':((PR.get(g)||{}).time||''), after:started?'':((PR.get(g)||{}).after||'')});   // planned time / "after X", written left of the row (not on finished pours)
+    time:started||chainNext(g)?'':((PR.get(g)||{}).time||''), after:started?'':((PR.get(g)||{}).after||''), prev:started?'':(g.fromDay||'')});   // prev: dated the day before (should have started then)   // planned time / "after X", written left of the row (not on finished pours)
   const pours=(VD.summary||[]).filter(g=>{ const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0; });
   // order: finished by finish time (first to finish on top) → running by start time → not started in plan order
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
@@ -6289,7 +6297,7 @@ function drawPlanPhoto(rows, at){
   const tableW=cols.reduce((s,c)=>s+c[1],0), H=HEAD+TH+Math.max(rows.length,1)*RH+PAD;
   // planned times are written OUTSIDE the table, left of their row (like on the paper) — margin only when any
   const BR=rows.some(r=>r.grp)?34:0;                       // room for the bracket arrows of pours that follow each other
-  const TM=(rows.some(r=>r.time||r.after)?96:0)+BR, L=PAD+TM, TX=L-14-BR;   // TX = right edge of the time text
+  const TM=(rows.some(r=>r.time||r.after||r.prev)?96:0)+BR, L=PAD+TM, TX=L-14-BR;   // TX = right edge of the time text
   const S=picS(tableW+PAD*2+TM,H), cv=document.createElement('canvas'); cv.width=Math.round((tableW+PAD*2+TM)*S); cv.height=Math.round(H*S);
   const x=cv.getContext('2d'); x.scale(S,S);
   x.fillStyle='#ffffff'; x.fillRect(0,0,tableW+PAD*2+TM,H);
@@ -6355,10 +6363,12 @@ function drawPlanPhoto(rows, at){
   const fit=(s,w,font)=>{ x.font=font; s=String(s==null?'':s); if(x.measureText(s).width<=w-14) return s; while(s.length>1&&x.measureText(s+'…').width>w-14) s=s.slice(0,-1); return s+'…'; };
   y+=TH;
   rows.forEach((r,i)=>{
-    x.fillStyle=r.finished?'#f1faf4':(r.started?'#f3f8ff':'#ffffff'); x.fillRect(L,y,tableW,RH);
-    if(r.time){ x.save(); x.fillStyle='#1d4ed8'; x.font='700 22px Arial'; x.textAlign='right'; x.fillText(r.time,TX,y+RH/2+1); x.restore(); }
-    else if(r.after && !r.grp){ x.save(); x.fillStyle='#1d4ed8'; x.textAlign='right'; x.font='600 13px Arial'; x.fillText('after',TX,y+RH/2-10);
-      x.fillText(fit(r.after,TM-BR+6,'700 17px Arial'),TX,y+RH/2+10); x.restore(); }
+    x.fillStyle=r.finished?'#f1faf4':(r.started?'#f3f8ff':(r.prev?'#fff4e3':'#ffffff')); x.fillRect(L,y,tableW,RH);   // from yesterday = light amber
+    if(r.prev){ x.save(); x.fillStyle='#c2410c'; x.font='800 12px Arial'; x.textAlign='right'; x.fillText('from '+dayLab(r.prev),TX,y+(r.time||r.after?11:RH/2+1)); x.restore(); }
+    if(r.time&&r.prev){ x.save(); x.fillStyle='#1d4ed8'; x.font='700 20px Arial'; x.textAlign='right'; x.fillText(r.time,TX,y+RH/2+9); x.restore(); }
+    else if(r.time){ x.save(); x.fillStyle='#1d4ed8'; x.font='700 22px Arial'; x.textAlign='right'; x.fillText(r.time,TX,y+RH/2+1); x.restore(); }
+    else if(r.after && !r.grp){ const o=r.prev?7:0; x.save(); x.fillStyle='#1d4ed8'; x.textAlign='right'; x.font='600 13px Arial'; x.fillText('after',TX,y+RH/2-10+o);
+      x.fillText(fit(r.after,TM-BR+6,'700 17px Arial'),TX,y+RH/2+10+o); x.restore(); }
     if(r.grp){   // bracket: out of the first row, down, and an arrow into each following row
       // smooth: every turn is a rounded corner (like the icons' corners), soft round arrowheads
       const ym=y+RH/2, xv=L-24, xe=L-5, R=9; x.save(); x.strokeStyle='#1d4ed8'; x.fillStyle='#1d4ed8'; x.lineWidth=2.2; x.lineCap='round'; x.lineJoin='round'; x.beginPath();
