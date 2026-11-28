@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261128-000006">
+<meta name="app-build" content="20261128-000007">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2235,7 +2235,7 @@ function timeShort(t){ if(t==null)return'—'; const d=new Date(t); let h=d.getH
 const ALL_PLANTS=['L1','L2','V3','V4','V5'];
 function plantsLabel(s){ const t=String(s||'').split(/[,\s-]+/).filter(Boolean); return ALL_PLANTS.every(p=>t.includes(p))?'All Plants':(s||''); }
 // a finish time; one that falls on another day than today carries its date ("14-OCT 2:40 AM")
-const MON3=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const MON3=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 const prevWorkDay=()=>{ const p=String((CFG&&CFG.fromDate)||workDayStr()).split('-').map(Number); const t=new Date(p[0],p[1]-1,p[2]-1); return `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}`; };
 const dayLab=ymd=>{ const p=String(ymd||'').split('-').map(Number); return p.length<3?'':`${p[2]}-${MON3[p[1]-1]}`; };   // '2026-11-27' -> '27-NOV'
 function finishDay(t){ if(t==null)return''; const d=new Date(t), n=new Date();   // '' when it is today
@@ -6276,7 +6276,11 @@ function planPhotoRows(){
   // …unless one of them is written "after" a finished one in the TIME column: then the arrow goes on from it
   // (user 2026-11-12: DOOSAN 90UGG 5 m³ finished -> 91UGK after it had no arrow)
   const linkFin=new Set(base.filter(x=>upS.has(x.g)&&finS.has(LK.get(x.g))).map(x=>kOf.get(x.g)));
-  const UPK=new Map(); base.forEach(x=>{ const k=kOf.get(x.g); if(upS.has(x.g)&&hasFin.has(k)&&!hasRun.has(k)&&!linkFin.has(k)){ if(!UPK.has(k)) UPK.set(k,{up:k}); kOf.set(x.g,UPK.get(k)); } });
+  // …and unless the chain was started OUT of order (user 2026-11-28: 22UQB 7 m³ — the 2nd — poured first, the 143 m³ — the 1st —
+  // must stay under it with the arrow): a not-started one that comes BEFORE a finished one in the plan stays in the chain
+  const finMaxIx=new Map(); base.forEach(x=>{ if(finS.has(x.g)){ const k=kOf.get(x.g); finMaxIx.set(k,Math.max(finMaxIx.has(k)?finMaxIx.get(k):-1,planIdx(x.g))); } });
+  const outOfOrder=new Set(base.filter(x=>upS.has(x.g)&&finMaxIx.has(kOf.get(x.g))&&planIdx(x.g)<finMaxIx.get(kOf.get(x.g))).map(x=>kOf.get(x.g)));
+  const UPK=new Map(); base.forEach(x=>{ const k=kOf.get(x.g); if(upS.has(x.g)&&hasFin.has(k)&&!hasRun.has(k)&&!linkFin.has(k)&&!outOfOrder.has(k)){ if(!UPK.has(k)) UPK.set(k,{up:k}); kOf.set(x.g,UPK.get(k)); } });
   const groups=new Map(); base.forEach((x,i)=>{ const k=kOf.get(x.g); if(!groups.has(k)) groups.set(k,[]); groups.get(k).push({...x,i}); });
   const out=[], placed=new Set();
   // a finished request on its own (not in a chain) goes to the very top; then the started ones; then the rest (user 2026-11-19)
