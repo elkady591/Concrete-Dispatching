@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261128-000003">
+<meta name="app-build" content="20261128-000004">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4687,7 +4687,7 @@ function renderUpcoming(){
   const pIdx=new Map((VD.summary||[]).map(g=>{ const i=(PLAN_ROWS||[]).findIndex((r,j)=>!used.has(j) && (g.esId?String(r.es||'').trim()===g.esId:(r.code===g.elem||(g.base&&r.base===g.base&&!r.es)))); if(i>=0) used.add(i); return [g,i<0?1e9:i]; }));
   // no time = due now (same order the pumps are handed out in upcomingPumpCheck)
   const sorted=rest.slice().sort((a,b)=>{ const ta=RT.get(a), tb=RT.get(b), xa=ta?ta.at:now, xb=tb?tb.at:now;
-    return (xa-xb)||((ta?0:1)-(tb?0:1))||((pIdx.get(a)??1e9)-(pIdx.get(b)??1e9)); });
+    return ((b.fromDay?1:0)-(a.fromDay?1:0))||(xa-xb)||((ta?0:1)-(tb?0:1))||((pIdx.get(a)??1e9)-(pIdx.get(b)??1e9)); });   // carried from yesterday first
   const PC=upcomingPumpCheck(), addedPumps=g=>PC.toSend.get(g)||[];
   const dayLbl=t=>{ const d=new Date(t), n=new Date(); return d.toDateString()===n.toDateString()?'':`${d.getDate()}-${MON3[d.getMonth()]} `; };
   // one small chip per requested pump inside the pump box: tap = "sent to site" (tap again = undo)
@@ -6246,13 +6246,16 @@ function planPhotoRows(){
     (pourDone(g)?fin:run).push(g);   // closed, quantity reached, or auto-closed (no truck for 2 h) = finished
   }
   fin.sort((a,b)=>last(a)-last(b)); run.sort((a,b)=>first(a)-first(b));
-  const up=(VD.upcoming||[]).slice().sort((a,b)=>when(a).localeCompare(when(b))||planIdx(a)-planIdx(b));
+  // a late one carried from the day before goes FIRST of the not-started ones (user 2026-11-28) — unless it waits behind a
+  // running pour: then its chain keeps it with that one (grouping below)
+  const up=(VD.upcoming||[]).slice().sort((a,b)=>((b.fromDay?1:0)-(a.fromDay?1:0))||when(a).localeCompare(when(b))||planIdx(a)-planIdx(b));
   // every row — finished, running, not started — by its TIME first, then the order of the Daily Plan sheet (user 2026-11-12)
   // (a pour that started = the time its first truck left; not started = its time / its estimate; no time = last)
   const tKey=g=>{ if(g.trucks>0){ const f=first(g); if(f<Infinity) return f; } const t=RTp.get(g); return t?t.at:nowToday(g)?now:Infinity; };
   // the ones that started (finished or pouring) always come first, then the ones not started — each by time (user 2026-11-19)
   const finS0=new Set(fin), runS=new Set(run), st=g=>g.trucks>0?0:1;
-  const all=fin.concat(run,up).sort((a,b)=>(st(a)-st(b))||(tKey(a)-tKey(b))||(planIdx(a)-planIdx(b)));
+  const late=g=>g.trucks===0&&g.fromDay?0:1;   // not started, carried from the day before = first of the not-started (user 2026-11-28)
+  const all=fin.concat(run,up).sort((a,b)=>(st(a)-st(b))||(late(a)-late(b))||(tKey(a)-tKey(b))||(planIdx(a)-planIdx(b)));
   const base=all.map(g=>{ if(finS0.has(g)) return {g,r:row(g,true,true,plantsOf(g,false))};
       if(runS.has(g)) return {g,r:row(g,true,false,plantsOf(g,true))};
       // not started: the plants planned in the app, drawn light (they become the real ones once it starts)
