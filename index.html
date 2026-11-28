@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261128-000004">
+<meta name="app-build" content="20261128-000005">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2400,6 +2400,7 @@ function applyView(){
   if(view==='trucks') renderTrucks();
   if(view==='pumps') renderPumps();
   if(view==='summary' && typeof updatePlanPreview==='function') updatePlanPreview();
+  if(typeof photoKeysSync==='function') setTimeout(photoKeysSync,0);
   if(view==='upcoming' && typeof updateHourlyPreview==='function') updateHourlyPreview();
   if(view==='production') renderProduction();
   if(view==='admin' && IS_ADMIN){ renderAdminWho(); renderPwBox(); loadAdminUsers(); loadAdminLog(); }
@@ -6220,7 +6221,7 @@ function planPhotoRows(){
     qty:(g.required!=null?g.required:g.planReq), tem:String(g.tem||'').replace(/\s+/g,' ').trim(), rate:tgt(g), plants, pumps:pumpsOf(g),
     // a request waiting behind its chain sibling (same client + element) gets no time of its own
     // the time / "after X" is only for requests that have NOT started yet
-    time:started||chainNext(g)?'':((PR.get(g)||{}).time||''), after:started?'':((PR.get(g)||{}).after||''), prev:started?'':(g.fromDay||'')});   // prev: dated the day before (should have started then)   // planned time / "after X", written left of the row (not on finished pours)
+    time:started||chainNext(g)?'':((PR.get(g)||{}).time||''), after:started?'':((PR.get(g)||{}).after||''), prev:started?'':(g.fromDay||''), key:g.esId?String(g.esId).trim():String(g.elem||'').trim().toUpperCase()});   // key: its row in the Daily Plan sheet (ES, else code)   // prev: dated the day before (should have started then)   // planned time / "after X", written left of the row (not on finished pours)
   const pours=(VD.summary||[]).filter(g=>{ const e=String(g.elem||'').trim(); return e&&e!==NOEL&&g.trucks>0; });
   // order: finished by finish time (first to finish on top) → running by start time → not started in plan order
   const ts=g=>(g.loads||[]).map(l=>l.t).filter(t=>t!=null);
@@ -6679,6 +6680,11 @@ function updatePlanPreview(){
   }catch(e){}
 }
 NCM_LOGO.addEventListener('load',()=>{ planPrevKey=''; updatePlanPreview(); });
+// the requests in the WhatsApp photo, shared: PUMPNOTE['PHL'] = "45423 46286 20UKD …" (ES, else the code). The Daily Plan
+// sheet reads it (a 📷 column) so a row that is in the photo is marked there and not deleted by mistake (user 2026-11-28)
+function photoKeysSync(){ if(BOT||!syncBase()||!VD||!VD.summary) return;
+  try{ const v=[...new Set(planPhotoRows().map(r=>r.key).filter(Boolean))].sort().join(' ');   // spaces: the sheet reads it as CSV
+    if((PUMPNOTE['PHL']||'')===v) return; if(v) PUMPNOTE['PHL']=v; else delete PUMPNOTE['PHL']; stSet(KEY_PUMP,PUMPNOTE); syncPush('pump','PHL',v); }catch(e){} }
 /* ---------- 📷 Hourly Plan (Upcoming page) — like the user's "Daily Plan" sheet (2026-11-19) ----------
    One row per request that is pouring or still to come; 24 hour columns from the current hour. Each request takes its
    rate (m³/h) in every hour from its start until its quantity is done (the last hour = what is left). Running = what is
