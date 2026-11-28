@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Concrete Dispatching</title>
 <!-- Bumped on every build; the app compares it against the live copy and self-updates (see checkForUpdate) -->
-<meta name="app-build" content="20261128-000007">
+<meta name="app-build" content="20261128-000008">
 <!-- PWA / mobile: add to home screen as an app -->
 <meta name="theme-color" content="#0d1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3428,8 +3428,11 @@ function renderSummary(){
   const withReq=open.filter(g=>g.required!=null);
   const totDelivAll=open.reduce((s,g)=>s+g.delivered,0);
   const totDeliv=withReq.reduce((s,g)=>s+g.delivered,0);
-  const totReq=withReq.reduce((s,g)=>s+g.required,0);
-  const totRem=withReq.reduce((s,g)=>s+(g.remaining>0?g.remaining:0),0);
+  // Required / Remaining KPIs = the running pours + EVERY upcoming request, even one not started yet (user 2026-11-28)
+  const upQ=g=>{ const q=g.required!=null?g.required:g.planReq; return q>0?q:0; };
+  const upReq=(upcoming||[]).reduce((s,g)=>s+upQ(g),0);
+  const totReq=withReq.reduce((s,g)=>s+g.required,0)+upReq;
+  const totRem=withReq.reduce((s,g)=>s+(g.remaining>0?g.remaining:0),0)+upReq;
   // Overall progress = total DELIVERED ÷ total REQUIRED across all targeted pours (may exceed 100%)
   const targetedAll=started.filter(g=>g.required!=null);
   const totDelivTargeted=targetedAll.reduce((s,g)=>s+g.delivered,0);
